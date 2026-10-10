@@ -1,11 +1,11 @@
 <script setup>
-  
+import { useRoute } from 'vue-router';
+import AppHeader from './components/AppHeader.vue';
+
+const route = useRoute();
 </script>
 
 <template>
-  <div id="app"></div>
+  <AppHeader v-if="route.meta.requiresAuth" />
+  <RouterView />
 </template>
-
-<style scoped>
-  
-</style>

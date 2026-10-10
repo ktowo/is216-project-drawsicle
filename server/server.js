@@ -1,13 +1,17 @@
 // Import
+
 const express = require("express");
 const path = require("path");
 const mongoose = require("mongoose");
 const dotenv = require('dotenv');
 const session = require('express-session');
+const { setupAuth } = require('./setup-auth.js');
 
 // Initialize Server
 const server = express();
 require("node:dns/promises").setServers(["1.1.1.1", "8.8.8.8"]);
+
+setupAuth(server);    
 
 // Load Env variable
 dotenv.config({ path: './.env' });

@@ -1,0 +1,243 @@
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Quicksand:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg: #faf7f0;
+  --surface: #fffdfa;
+  --border: #efe5d3;
+  --text: #2f2d2b;
+  --muted: #8a6e4e;
+  --pink: #ec6a93;
+  --pink-dark: #d9527d;
+  --pink-soft: #fde6ee;
+  --blue: #63b3f5;
+  --danger: #c2414b;
+  --danger-soft: #fdecee;
+  --success: #3f8f5b;
+  --success-soft: #e8f5ec;
+
+  --radius-lg: 22px;
+  --radius: 14px;
+  --shadow: 0 1px 2px rgba(90, 65, 30, 0.05), 0 6px 18px rgba(90, 65, 30, 0.05);
+
+  --font-body: 'Quicksand', system-ui, -apple-system, sans-serif;
+  --font-display: 'Baloo 2', 'Quicksand', system-ui, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  margin: 0;
+  line-height: 1.15;
+}
+
+a {
+  color: var(--pink);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--pink-dark);
+}
+
+button {
+  font: inherit;
+}
+
+/* ---------- Cards ---------- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 14px 22px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.05s;
+}
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.btn-block {
+  width: 100%;
+}
+.btn-primary {
+  background: var(--pink);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(236, 106, 147, 0.25);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--pink-dark);
+  color: #fff;
+}
+.btn-outline {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+.btn-outline:hover {
+  background: #fbf6ec;
+  color: var(--text);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--muted);
+  padding: 8px 12px;
+}
+.btn-ghost:hover {
+  background: #f5eee1;
+}
+
+/* ---------- Form fields ---------- */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.field + .field {
+  margin-top: 22px;
+}
+.field-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.label {
+  font-weight: 500;
+  font-size: 1rem;
+}
+.input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0 16px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.input-wrap:focus-within {
+  border-color: var(--pink);
+  box-shadow: 0 0 0 3px var(--pink-soft);
+}
+.input-icon {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.input,
+.textarea {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--text);
+  padding: 14px 0;
+}
+.input::placeholder,
+.textarea::placeholder {
+  color: #a88d6e;
+}
+.textarea {
+  resize: vertical;
+  min-height: 140px;
+  padding: 14px 0;
+}
+.hint {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* ---------- Messages ---------- */
+.alert {
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+.alert-error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.alert-success {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+/* ---------- Badges ---------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 14px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.badge-admin {
+  background: var(--blue);
+  color: #12324d;
+}
+.badge-member {
+  background: #f2eadb;
+  color: var(--muted);
+}
+.badge-role {
+  background: var(--pink-soft);
+  color: var(--pink-dark);
+  text-transform: capitalize;
+}
+
+/* ---------- Page container ---------- */
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 48px 24px 64px;
+}
+@media (max-width: 640px) {
+  .page {
+    padding: 28px 16px 48px;
+  }
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
