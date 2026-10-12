@@ -31,6 +31,21 @@ function findOwn(ctx, user) {
   return character;
 }
 
+// The events this character was offered in, newest sign-up first
+function usedIn(state, character) {
+  return state.applications
+    .filter((a) => a.offeredCharacters.includes(character.id))
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || b.id.localeCompare(a.id))
+    .map((a) => ({ application: a, event: state.events.find((e) => e.id === a.event) }))
+    .filter((row) => row.event)
+    .map(({ application, event }) => ({
+      eventId: event.id,
+      eventName: event.name,
+      eventStatus: event.status,
+      applicationStatus: application.status,
+    }));
+}
+
 const recentFirst = (a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)) || b.id.localeCompare(a.id);
 
 export function register(router) {
@@ -57,7 +72,8 @@ export function register(router) {
 
   router.get('/characters/:id', (ctx) => {
     const user = ctx.requireAuth();
-    return { character: characterWithUsage(ctx.state, findOwn(ctx, user)) };
+    const character = findOwn(ctx, user);
+    return { character: { ...characterWithUsage(ctx.state, character), usedIn: usedIn(ctx.state, character) } };
   });
 
   router.patch('/characters/:id', (ctx) => {

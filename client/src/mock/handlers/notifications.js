@@ -1,6 +1,6 @@
 // /notifications (server/routes/notification-router.js)
 import { notify, notificationPublic } from '../model.js';
-import { httpError } from '../util.js';
+import { httpError, invalid } from '../util.js';
 
 const notFound = () => httpError(404, 'Notification not found.', 'NOT_FOUND');
 
@@ -10,14 +10,26 @@ const unread = (list) => list.filter((n) => !n.readAt).length;
 // Newest first; ids break ties the way ObjectIds do (they start with the creation time)
 const newestFirst = (a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || b.id.localeCompare(a.id);
 
+// ?before=<ISO date> pages backwards: only notifications strictly older than it
+function readBefore(value) {
+  if (value === undefined || value === '') return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw invalid('before must be a date.');
+  return date.getTime();
+}
+
 export function register(router) {
   router.get('/notifications', (ctx) => {
     const user = ctx.requireAuth();
     const limit = Math.min(Math.max(Number(ctx.query.limit) || 20, 1), 50);
+    const before = readBefore(ctx.query.before);
     const list = mine(ctx, user);
+    const older = before === null ? list : list.filter((n) => new Date(n.createdAt).getTime() < before);
+    const sorted = [...older].sort(newestFirst);
     return {
-      items: [...list].sort(newestFirst).slice(0, limit).map(notificationPublic),
+      items: sorted.slice(0, limit).map(notificationPublic),
       unreadCount: unread(list),
+      hasMore: sorted.length > limit,
     };
   });
 
