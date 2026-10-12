@@ -673,3 +673,94 @@ test('deadline sort uses each event\'s next relevant date, with completed events
     'Done long ago',
   ]);
 });
+
+// ---------- Duplicate ----------
+
+test('duplicating an event copies the settings into a new draft owned by the caller', async () => {
+  const { agent, user } = await h.signUp(app);
+  const source = await openEvent(
+    agent,
+    {
+      tags: 'cosy, winter',
+      rules: 'Be kind.',
+      allowedTypes: ['art', 'writing'],
+      requireApproval: true,
+      publicity: 'private',
+      platform: 'discord',
+      platformName: 'Cozy Critters',
+      platformLink: 'https://discord.gg/cozy',
+      signupDeadline: h.daysFromNow(3).toISOString(),
+      submissionDeadline: h.daysFromNow(10).toISOString(),
+    }
+  );
+  await addParticipant(source.id, (await fakeUser(1)).id);
+
+  const before = Date.now();
+  const res = await agent.post(`/api/events/${source.id}/duplicate`).send({}).expect(201);
+  const copy = res.body.event;
+
+  assert.notEqual(copy.id, source.id);
+  assert.equal(copy.name, 'Copy of Winter Swap');
+  assert.equal(copy.status, 'draft');
+  assert.equal(copy.participantCount, 0);
+  assert.equal(copy.description, source.description);
+  assert.equal(copy.rules, 'Be kind.');
+  assert.deepEqual(copy.tags, ['cosy', 'winter']);
+  assert.deepEqual(copy.allowedTypes, ['art', 'writing']);
+  assert.equal(copy.requireApproval, true);
+  assert.equal(copy.publicity, 'private');
+  assert.equal(copy.platformName, 'Cozy Critters');
+  assert.equal(copy.platformLink, 'https://discord.gg/cozy');
+  assert.equal(copy.minParticipants, 2);
+  assert.equal(copy.maxParticipants, 10);
+  assert.notEqual(copy.inviteCode, source.inviteCode);
+  assert.deepEqual(copy.organizers.map((o) => o.id), [user.id]);
+
+  // Sign-ups close two weeks from now; the time to make gifts stays what it was (7 days)
+  const signup = new Date(copy.signupDeadline).getTime();
+  const day = 24 * 60 * 60 * 1000;
+  assert.ok(Math.abs(signup - (before + 14 * day)) < 60 * 1000);
+  const gap = new Date(copy.submissionDeadline).getTime() - signup;
+  assert.equal(gap, new Date(source.submissionDeadline).getTime() - new Date(source.signupDeadline).getTime());
+
+  // Nothing about the people came along
+  assert.equal(await Application.countDocuments({ event: copy.id }), 0);
+  assert.equal(await EventMember.countDocuments({ event: copy.id, roles: 'participant' }), 0);
+});
+
+test('duplicating takes a name and dates, and checks them like creating does', async () => {
+  const { agent } = await h.signUp(app);
+  const source = await createEvent(agent);
+  const url = `/api/events/${source.id}/duplicate`;
+
+  const signupDeadline = h.daysFromNow(20).toISOString();
+  const submissionDeadline = h.daysFromNow(40).toISOString();
+  const res = await agent.post(url).send({ name: '  Spring Swap ', signupDeadline, submissionDeadline }).expect(201);
+  assert.equal(res.body.event.name, 'Spring Swap');
+  assert.equal(new Date(res.body.event.signupDeadline).toISOString(), signupDeadline);
+  assert.equal(new Date(res.body.event.submissionDeadline).toISOString(), submissionDeadline);
+
+  await agent.post(url).send({ signupDeadline: h.daysFromNow(-1).toISOString() }).expect(400);
+  await agent.post(url).send({ signupDeadline: 'tomorrow-ish' }).expect(400);
+  await agent.post(url).send({ name: 'x'.repeat(500) }).expect(400);
+  // The new sign-up date lands after the old submission date, so the second date must follow it
+  await agent
+    .post(url)
+    .send({ signupDeadline: h.daysFromNow(50).toISOString(), submissionDeadline: h.daysFromNow(45).toISOString() })
+    .expect(400);
+  assert.equal(await Event.countDocuments({}), 2);
+});
+
+test('only organisers can duplicate, and completed events can be duplicated too', async () => {
+  const { agent: organizer } = await h.signUp(app);
+  const { agent: other } = await h.signUp(app);
+  const source = await openEvent(organizer);
+
+  await h.request(app).post(`/api/events/${source.id}/duplicate`).send({}).expect(401);
+  assert.equal((await other.post(`/api/events/${source.id}/duplicate`).send({}).expect(403)).body.code, 'ACCESS_DENIED');
+  await organizer.post(`/api/events/${new ObjectId()}/duplicate`).send({}).expect(404);
+
+  await forceStatus(source.id, 'completed', { completedAt: new Date() });
+  const res = await organizer.post(`/api/events/${source.id}/duplicate`).send({}).expect(201);
+  assert.equal(res.body.event.status, 'draft');
+});

@@ -605,6 +605,9 @@ const COPIED_FIELDS = [
 ];
 const DUPLICATE_SIGNUP_DAYS = 14;
 
+// A date the caller may leave out
+const optionalDate = (value, label) => (value === undefined ? null : readDate(value, label));
+
 function copyName(name) {
   return `Copy of ${name}`.slice(0, LIMITS.eventName).trim();
 }
@@ -616,12 +619,12 @@ router.post('/:eventId/duplicate', ...organizerOnly, asyncHandler(async (req, re
   let name = src.name === undefined ? '' : readText(src.name, 'Name', LIMITS.eventName);
   if (!name) name = copyName(source.name);
   const now = new Date();
-  const signupDeadline = readDate(src.signupDeadline, 'Sign-up deadline') ||
+  const signupDeadline = optionalDate(src.signupDeadline, 'Sign-up deadline') ||
     new Date(now.getTime() + DUPLICATE_SIGNUP_DAYS * 24 * 60 * 60 * 1000);
   if (signupDeadline <= now) throw invalid('The sign-up deadline must be in the future.');
   // Same time for making gifts as the original had
   const gap = source.submissionDeadline.getTime() - source.signupDeadline.getTime();
-  const submissionDeadline = readDate(src.submissionDeadline, 'Submission deadline') ||
+  const submissionDeadline = optionalDate(src.submissionDeadline, 'Submission deadline') ||
     new Date(signupDeadline.getTime() + gap);
 
   const fields = {};
