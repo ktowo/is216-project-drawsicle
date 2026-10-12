@@ -64,7 +64,7 @@ import InfoLayout from '@/components/info/InfoLayout.vue';
     </section>
 
     <section id="cookies">
-      <h2>Cookies and local storage</h2>
+      <h2>Cookies</h2>
       <p>
         Drawisicle sets one cookie: a login cookie that keeps you signed in for up to 7 days. It is marked httpOnly, so
         scripts on the page can't read it, and it is only used to know who you are. We don't use advertising or analytics
