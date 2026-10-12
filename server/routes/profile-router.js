@@ -3,9 +3,14 @@ const mongoose = require('mongoose');
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User.js');
+const Character = require('../models/Character.js');
+const Application = require('../models/Application.js');
+const Submission = require('../models/Submission.js');
+const Notification = require('../models/Notification.js');
 const { USERNAME_RE, SOCIAL_KEYS } = User;
 const { requireAuth } = require('../middleware/auth.js');
 const { uploadImage, looksLikeImage, IMAGE_TYPES } = require('../services/storage.js');
+const { withdrawApplications } = require('../services/accounts.js');
 const { endSession } = require('../utils/session.js');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
 const { CREATION_TYPE_VALUES, LIMITS, normalizeTags } = require('../../shared/constants.mjs');
@@ -157,9 +162,42 @@ router.post('/deactivate', requireAuth, asyncHandler(async (req, res) => {
   user.deactivatedAt = new Date();
   user.sessionVersion = (user.sessionVersion || 0) + 1; // logs out every device
   await user.save();
+  // Logging back in later reactivates the account but doesn't bring these back
+  await withdrawApplications(user);
 
   endSession(res);
   res.json({ ok: true });
+}));
+
+// "Download my data": everything stored about me, as one JSON document
+router.get('/export', requireAuth, asyncHandler(async (req, res) => {
+  const user = req.user;
+  const [characters, applications, submissions, notifications] = await Promise.all([
+    Character.find({ owner: user._id }).sort({ createdAt: 1, _id: 1 }),
+    Application.find({ user: user._id })
+      .sort({ createdAt: -1, _id: -1 })
+      .populate('event', 'name')
+      .populate('offeredCharacters'),
+    Submission.find({ giver: user._id }).sort({ submittedAt: -1, _id: -1 }).populate('event', 'name'),
+    Notification.find({ user: user._id }).sort({ createdAt: -1, _id: -1 }),
+  ]);
+  const mini = user.toMini();
+
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    exportedAt: new Date().toISOString(),
+    user: user.toPublic(),
+    characters: characters.map((c) => c.toPublic()),
+    applications: applications.map((a) => ({
+      ...a.toPublic({
+        user: mini,
+        characters: (a.offeredCharacters || []).filter((c) => c && c.toPublic).map((c) => c.toPublic()),
+      }),
+      eventName: a.event?.name || 'Deleted event',
+    })),
+    submissions: submissions.map((s) => ({ ...s.toPublic(), eventName: s.event?.name || 'Deleted event' })),
+    notifications: notifications.map((n) => n.toPublic()),
+  });
 }));
 
 // Someone's public profile (no email), by id or username. Deactivated accounts are hidden.
