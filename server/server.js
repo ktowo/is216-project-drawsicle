@@ -11,6 +11,7 @@ const { createApp } = require('./app.js');
 const { connectDB, disconnectDB } = require('./db.js');
 const { startReminders, stopReminders } = require('./services/reminders.js');
 const { seedIfEmpty } = require('./scripts/seed.js');
+const { runMigrations } = require('./services/migrations.js');
 
 if (!process.env.JWT_SECRET) {
   if (process.env.NODE_ENV === 'production') {
@@ -31,6 +32,8 @@ async function main() {
     console.error('MongoDB connection failed:', error.message);
     process.exit(1);
   }
+  await runMigrations();
+
   if (db.mode === 'local') {
     console.log(`Local MongoDB running (data in ${db.dbPath})`);
     if (process.env.SEED_DEMO !== 'false') await seedIfEmpty();

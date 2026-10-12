@@ -100,7 +100,7 @@ export function buildDemoData(now = new Date()) {
       socials: { bluesky: 'noor', tumblr: 'noor-writes', discord: 'noor.writes' },
       defaultForm: {
         communityUsername: 'noor.writes',
-        canCreate: ['writing', 'music'],
+        canCreate: ['writing'],
         wantsTypes: ['art', 'writing'],
         likes: 'Birds, travel, golden-hour light.',
         avoid: 'Romance.',
@@ -128,8 +128,8 @@ export function buildDemoData(now = new Date()) {
       socials: { twitter: 'pipsqueak', bluesky: 'pipsqueak', discord: 'pipsqueak' },
       defaultForm: {
         communityUsername: 'pipsqueak',
-        canCreate: ['art', 'music'],
-        wantsTypes: ['art', 'music'],
+        canCreate: ['art'],
+        wantsTypes: ['art'],
         likes: 'Tiny animals, snacks, bright colours.',
         avoid: 'Spiders.',
         cannotDraw: ['humanoid'],
@@ -236,7 +236,7 @@ export function buildDemoData(now = new Date()) {
       [ref('pip', 'tin')]),
   ];
 
-  const ALL_TYPES = ['art', 'adoptable', 'writing', 'music'];
+  const ALL_TYPES = ['art', 'adoptable', 'writing'];
   const event = (fields) => ({
     description: '',
     theme: '',
@@ -392,7 +392,7 @@ export function buildDemoData(now = new Date()) {
       description: 'Flowers, rain and new beginnings. All gifts have been revealed. Thank you, everyone!',
       theme: 'New beginnings',
       season: 'spring',
-      rules: 'Art, writing or music. Be kind!',
+      rules: 'Art or writing. Be kind!',
       tags: ['spring', 'flowers'],
       platform: 'tumblr',
       platformName: 'Bloom Club',
@@ -401,7 +401,7 @@ export function buildDemoData(now = new Date()) {
       submissionDeadline: deadline(-15),
       minParticipants: 3,
       maxParticipants: 20,
-      allowedTypes: ['art', 'writing', 'music'],
+      allowedTypes: ['art', 'writing'],
       inviteCode: 'spring-bloom',
       banner: { seed: 'spring-bloom', title: 'Spring Bloom Exchange' },
       publishedAt: ago(55),
@@ -438,7 +438,7 @@ export function buildDemoData(now = new Date()) {
     application('winter', 'juniper', ['art', 'writing'], ['writing', 'art'], ['lumen', 'wren']),
     application('winter', 'ash', ['art'], ['art'], ['cinder']),
     application('winter', 'remy', ['adoptable', 'art'], ['adoptable', 'art'], ['gloop']),
-    application('winter', 'noor', ['writing', 'music'], ['art', 'writing'], ['saffron'], {
+    application('winter', 'noor', ['writing'], ['art', 'writing'], ['saffron'], {
       notes: 'Happy to be a backup gifter if someone drops out.',
     }),
 
@@ -454,8 +454,8 @@ export function buildDemoData(now = new Date()) {
     application('summer', 'sol', ['art', 'adoptable'], ['art', 'adoptable'], ['ember', 'sunny']),
     application('summer', 'juniper', ['art', 'writing'], ['writing', 'art'], ['wren']),
     application('summer', 'remy', ['adoptable', 'art'], ['adoptable', 'art'], ['gloop', 'marzipan']),
-    application('summer', 'noor', ['writing', 'music'], ['art', 'writing'], ['idris']),
-    application('summer', 'pip', ['art', 'music'], ['art', 'music'], ['pipsqueak']),
+    application('summer', 'noor', ['writing'], ['art', 'writing'], ['idris']),
+    application('summer', 'pip', ['art'], ['art'], ['pipsqueak']),
 
     application('autumn', 'mika', ['art', 'writing'], ['art'], ['biscuit']),
     application('autumn', 'sol', ['art', 'adoptable'], ['art', 'adoptable'], ['ember']),
@@ -466,7 +466,7 @@ export function buildDemoData(now = new Date()) {
     application('spring', 'mika', ['art', 'writing'], ['art'], ['biscuit']),
     application('spring', 'sol', ['art'], ['art'], ['sunny']),
     application('spring', 'remy', ['art'], ['art'], ['marzipan']),
-    application('spring', 'noor', ['writing', 'music'], ['art', 'writing'], ['saffron', 'idris']),
+    application('spring', 'noor', ['writing'], ['art', 'writing'], ['saffron', 'idris']),
     application('spring', 'kit', ['art'], ['art', 'writing'], ['lantern']),
   ];
 

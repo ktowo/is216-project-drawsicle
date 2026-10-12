@@ -62,7 +62,6 @@ export const CREATION_TYPES = [
   { value: 'art', label: 'Art' },
   { value: 'adoptable', label: 'Adoptable' },
   { value: 'writing', label: 'Writing' },
-  { value: 'music', label: 'Music' },
 ];
 export const CREATION_TYPE_VALUES = CREATION_TYPES.map((t) => t.value);
 

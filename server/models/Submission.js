@@ -18,7 +18,7 @@ const submissionSchema = new mongoose.Schema(
       default: [],
       validate: [(v) => v.length <= LIMITS.submissionImages, `Up to ${LIMITS.submissionImages} images.`],
     },
-    // For writing/music hosted elsewhere (Google Docs, SoundCloud...)
+    // For writing or anything hosted elsewhere (Google Docs, Toyhou.se...)
     links: {
       type: [
         {

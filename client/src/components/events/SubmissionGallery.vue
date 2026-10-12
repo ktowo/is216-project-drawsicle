@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { ArrowRight, ExternalLink, FileText, Music, Palette, Gift, Images } from 'lucide-vue-next';
+import { ArrowRight, ExternalLink, FileText, Palette, Gift, Images } from 'lucide-vue-next';
 import ImageLightbox from './ImageLightbox.vue';
 import UserAvatar from '@/components/UserAvatar.vue';
 import { assetUrl } from '@/api';
@@ -11,7 +11,7 @@ const props = defineProps({
   items: { type: Array, default: () => [] },
 });
 
-const TYPE_ICONS = { writing: FileText, music: Music, art: Palette, adoptable: Gift };
+const TYPE_ICONS = { writing: FileText, art: Palette, adoptable: Gift };
 
 const lightboxOpen = ref(false);
 const lightboxIndex = ref(0);

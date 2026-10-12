@@ -78,7 +78,7 @@ Participants:
 - Apply via an event link sent out in their community
 - Fill an event-specific preference form
 - Select which characters they offer
-- Specify what they can draw or create (art, adoptable, writing, music)
+- Specify what they can draw or create (art, adoptable, writing). Music was dropped from the brief on 12 Oct 2026.
 - Provide community usernames for tracking
 
 ### Public Event Listing

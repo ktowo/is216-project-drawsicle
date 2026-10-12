@@ -23,7 +23,7 @@ export const FAQ_GROUPS = [
         id: 'faq-join-event',
         q: 'How do I join an event?',
         a: [
-          "Open the event, read the rules and press Sign up while sign-ups are open. The form asks for your community username, what you can make (art, adoptable, writing or music), what you'd like to receive, which characters you offer, and your likes, things to avoid and anything you can't draw.",
+          "Open the event, read the rules and press Sign up while sign-ups are open. The form asks for your community username, what you can make (art, adoptable or writing), what you'd like to receive, which characters you offer, and your likes, things to avoid and anything you can't draw.",
           'Some events need an organiser to approve you. You will see "pending" until they do, and you get a notification when they decide.',
         ],
       },
@@ -174,7 +174,7 @@ export const FAQ_GROUPS = [
           'These are hard rules. If a pair breaks one, it is never made, whatever the score.',
           { list: [
             'Nobody is matched with themselves.',
-            'The giver can make at least one kind of gift (art, adoptable, writing or music) that the recipient wants.',
+            'The giver can make at least one kind of gift (art, adoptable or writing) that the recipient wants.',
             "If the recipient offered characters, at least one of them has no species or tag that the giver listed under \"can't draw\".",
           ] },
         ],

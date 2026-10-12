@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { generateMatches, scorePair } = require('../../shared/matching.mjs');
 
-const TYPES = ['art', 'adoptable', 'writing', 'music'];
+const TYPES = ['art', 'adoptable', 'writing'];
 const SPECIES = ['dragon', 'cat', 'human', 'robot', 'fox', 'wolf', 'bird', 'mecha'];
 
 function person(id, canCreate = ['art'], wantsTypes = ['art'], extra = {}) {
@@ -84,13 +84,13 @@ test('scorePair: nobody is matched with themselves', () => {
 });
 
 test('scorePair: the giver must make something the recipient asked for', () => {
-  const fit = scorePair(person('a', ['writing']), person('b', ['art'], ['art', 'music']));
+  const fit = scorePair(person('a', ['writing']), person('b', ['art'], ['art', 'adoptable']));
   assert.equal(fit.ok, false);
   assert.match(fit.blockers[0], /anything they asked for/);
 
-  const ok = scorePair(person('a', ['writing', 'music']), person('b', ['art'], ['art', 'music']));
+  const ok = scorePair(person('a', ['writing', 'adoptable']), person('b', ['art'], ['art', 'adoptable']));
   assert.equal(ok.ok, true);
-  assert.match(ok.reasons[0], /music/);
+  assert.match(ok.reasons[0], /adoptables/);
 });
 
 test("scorePair: at least one offered character must avoid the giver's can't-draw list", () => {
@@ -117,10 +117,10 @@ test("scorePair: at least one offered character must avoid the giver's can't-dra
 });
 
 test('scorePair: more type overlap and shared interests score higher, capped at 100', () => {
-  const recipient = person('b', ['art'], ['art', 'writing', 'music'], { likes: 'foxes in autumn forests' });
+  const recipient = person('b', ['art'], ['art', 'writing', 'adoptable'], { likes: 'foxes in autumn forests' });
   const basic = scorePair(person('a', ['art']), recipient);
-  const more = scorePair(person('a', ['art', 'writing', 'music']), recipient);
-  const shared = scorePair(person('a', ['art', 'writing', 'music'], ['art'], { likes: 'Foxes and forests' }), recipient);
+  const more = scorePair(person('a', ['art', 'writing', 'adoptable']), recipient);
+  const shared = scorePair(person('a', ['art', 'writing', 'adoptable'], ['art'], { likes: 'Foxes and forests' }), recipient);
   assert.ok(more.score > basic.score);
   assert.ok(shared.score > more.score);
   assert.ok(shared.reasons.some((r) => /Shared interests: foxes, forests/.test(r)));
@@ -236,18 +236,18 @@ test('generateMatches: people who cannot be placed are reported with a reason', 
     person('a'),
     person('b'),
     person('c'),
-    person('music_only', ['music'], ['music']),
+    person('adoptable_only', ['adoptable'], ['adoptable']),
     person('dragon_fan', ['art'], ['art'], {
       characters: [{ id: 'x', name: 'Ember', species: 'Dragon', tags: [] }],
     }),
   ];
-  // Nobody else draws dragons, and nobody else makes or wants music
+  // Nobody else draws dragons, and nobody else makes or wants adoptables
   for (const p of ['a', 'b', 'c']) people.find((x) => x.id === p).cannotDraw = ['dragon'];
 
   const result = generateMatches(people, { seed: 5 });
   checkResult(people, result);
-  assert.deepEqual(result.unmatched.sort(), ['dragon_fan', 'music_only']);
-  assert.ok(result.warnings.some((w) => /music_only couldn't be matched: nobody else asked for music/.test(w)));
+  assert.deepEqual(result.unmatched.sort(), ['adoptable_only', 'dragon_fan']);
+  assert.ok(result.warnings.some((w) => /adoptable_only couldn't be matched: nobody else asked for adoptables/.test(w)));
   assert.ok(result.warnings.some((w) => /dragon_fan couldn't be matched/.test(w)));
   assert.equal(result.stats.cycles, 1);
   assert.equal(result.pairs.length, 3);
@@ -269,8 +269,8 @@ test('generateMatches: unavoidable mutual pairs are allowed and pointed out', ()
   const people = [
     person('a', ['art'], ['writing']),
     person('b', ['writing'], ['art']),
-    person('c', ['music'], ['adoptable']),
-    person('d', ['adoptable'], ['music']),
+    person('c', ['adoptable'], ['adoptable']),
+    person('d', ['adoptable'], ['adoptable']),
   ];
   const result = generateMatches(people, { seed: 4 });
   assert.equal(checkResult(people, result), 2);
@@ -293,7 +293,7 @@ test('generateMatches: places as many people as possible when the groups are une
 });
 
 test('generateMatches: long lists of unplaced people are summed up', () => {
-  const people = [person('a'), person('b'), person('c'), ...Array.from({ length: 30 }, (_, i) => person(`m${i}`, ['music'], ['writing']))];
+  const people = [person('a'), person('b'), person('c'), ...Array.from({ length: 30 }, (_, i) => person(`m${i}`, ['adoptable'], ['writing']))];
   const result = generateMatches(people, { seed: 1 });
   checkResult(people, result);
   assert.equal(result.unmatched.length, 30);

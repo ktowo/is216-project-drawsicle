@@ -413,7 +413,7 @@ test('submission: rejects bad files, bad links and too many images', async () =>
   await giver.agent.put(url).send({ links: manyLinks }).expect(400);
   await giver.agent.put(url).field('links', '{not json').expect(400);
 
-  const wrongType = await giver.agent.put(url).send({ type: 'music', links: [{ url: 'https://example.com/song' }] }).expect(400);
+  const wrongType = await giver.agent.put(url).send({ type: 'sculpture', links: [{ url: 'https://example.com/piece' }] }).expect(400);
   assert.equal(wrongType.body.code, 'VALIDATION');
   await giver.agent.put(url).send({ title: 'x'.repeat(LIMITS.submissionTitle + 1), links: [{ url: 'https://example.com' }] }).expect(400);
 

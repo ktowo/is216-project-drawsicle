@@ -176,9 +176,9 @@ test('creation types must come from what the event allows', async () => {
   const put = (overrides) =>
     person.agent.put(`/api/events/${event.id}/application`).send(form([person.character.id], overrides));
 
-  const music = await put({ canCreate: ['music'] }).expect(400);
-  assert.equal(music.body.code, 'VALIDATION');
-  assert.match(music.body.error, /only allows: Art, Writing/);
+  const adoptable = await put({ canCreate: ['adoptable'] }).expect(400);
+  assert.equal(adoptable.body.code, 'VALIDATION');
+  assert.match(adoptable.body.error, /only allows: Art, Writing/);
   await put({ wantsTypes: ['art', 'adoptable'] }).expect(400);
   await put({ canCreate: [] }).expect(400);
   await put({ wantsTypes: undefined }).expect(400);

@@ -500,7 +500,7 @@ const counter = (value, max) => `${value.trim().length} / ${max}`;
         <section class="card section" aria-labelledby="sec-links">
           <h2 id="sec-links" class="section-title">Links</h2>
           <p class="hint section-hint">
-            For writing, music or anything hosted elsewhere, like a Google Doc, SoundCloud track or Toyhou.se page.
+            For writing or anything hosted elsewhere, like a Google Doc or a Toyhou.se page.
           </p>
           <p v-if="errors.links" class="field-error top" role="alert">{{ errors.links }}</p>
 

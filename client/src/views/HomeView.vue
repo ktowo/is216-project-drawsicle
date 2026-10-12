@@ -49,7 +49,7 @@ const ARTIST_STEPS = [
   { icon: BookHeart, title: 'Save your characters once', text: 'References, species and notes for artists live in your private library.' },
   { icon: UserRoundPlus, title: 'Sign up', text: 'Pick an event, choose characters to offer and say what you can make.' },
   { icon: Gift, title: 'Get your match', text: "See who you're making a gift for, with their characters and wishes." },
-  { icon: Upload, title: 'Submit your gift', text: 'Upload your art, writing or music before the deadline. Reminders help.' },
+  { icon: Upload, title: 'Submit your gift', text: 'Upload your art or writing before the deadline. Reminders help.' },
   { icon: PartyPopper, title: 'Enjoy the reveal', text: 'When the event wraps up, find out who made your gift.' },
 ];
 

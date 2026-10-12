@@ -87,7 +87,7 @@ erDiagram
         date submissionDeadline "after signupDeadline"
         number minParticipants
         number maxParticipants
-        array allowedTypes "art adoptable writing music"
+        array allowedTypes "art adoptable writing"
         string status "draft open matching active completed"
         string publicity "public | private"
         string inviteCode "organisers only"
@@ -138,7 +138,7 @@ erDiagram
         ObjectId recipient FK
         string title
         string message "note to the recipient"
-        string type "art adoptable writing music"
+        string type "art adoptable writing"
         array images "up to 4 upload URLs"
         array links "up to 5 external links"
         date submittedAt

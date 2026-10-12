@@ -24,7 +24,7 @@ const INTEREST_POINTS = 5;
 const MAX_INTERESTS = 3;
 const BLOCKED = -1;
 
-const TYPE_WORDS = { art: 'art', adoptable: 'adoptables', writing: 'writing', music: 'music' };
+const TYPE_WORDS = { art: 'art', adoptable: 'adoptables', writing: 'writing' };
 
 // Words too common to count as a shared interest
 const STOP_WORDS = new Set(

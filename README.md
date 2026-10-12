@@ -15,7 +15,7 @@ IS216 Web Application Development II project (SMU).
   Docs...) and notes for artists. Reuse characters in every event; ones that were offered in an event can
   be archived but not deleted.
 - **Events for organisers**: name, theme, rules, sign-up and submission deadlines, participant limits,
-  allowed gift types (art, adoptables, writing, music), the community platform, public or invite-only, with
+  allowed gift types (art, adoptables, writing), the community platform, public or invite-only, with
   optional application review. Lifecycle: *Draft → Open → Matching → Active → Completed*.
 - **Sign-ups for participants**: an event-specific form with preset options, characters to offer (or new
   ones added on the spot), what you can make and what you'd like, and things you can't draw.

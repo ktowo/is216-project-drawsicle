@@ -49,7 +49,7 @@ import { auth } from '@/stores/auth';
       </p>
       <h3>Artists</h3>
       <p>
-        Hobby artists, writers and musicians who give and receive gifts. You keep your own characters, choose what you
+        Hobby artists and writers who give and receive gifts. You keep your own characters, choose what you
         offer for each event and see exactly who you are making something for.
       </p>
       <p>You can be both: plenty of people organise one event and join another.</p>

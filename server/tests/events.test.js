@@ -389,7 +389,7 @@ test('sign-up settings lock once sign-ups close, and completed events lock entir
   // Sending back unchanged values (as the edit form does) is fine
   const same = await org.agent
     .patch(`/api/events/${event.id}`)
-    .send({ allowedTypes: ['music', 'writing', 'adoptable', 'art'], requireApproval: false, maxParticipants: 3, publicity: 'public', description: 'Updated' })
+    .send({ allowedTypes: ['writing', 'adoptable', 'art'], requireApproval: false, maxParticipants: 3, publicity: 'public', description: 'Updated' })
     .expect(200);
   assert.equal(same.body.event.description, 'Updated');
 

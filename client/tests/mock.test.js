@@ -226,7 +226,7 @@ describe('a whole exchange in mock mode', () => {
       (
         await fails(`/events/${event.id}/application`, {
           method: 'PUT',
-          body: { canCreate: ['music'], wantsTypes: ['art'], offeredCharacterIds: [await firstCharacterId()] },
+          body: { canCreate: ['sculpture'], wantsTypes: ['art'], offeredCharacterIds: [await firstCharacterId()] },
         })
       ).code
     ).toBe('VALIDATION');

@@ -34,7 +34,7 @@ import InfoLayout from '@/components/info/InfoLayout.vue';
     <section id="your-content">
       <h2>Your content stays yours</h2>
       <p>
-        You own the characters, art, writing, music and text you add. By uploading something you give Drawisicle
+        You own the characters, art, writing and text you add. By uploading something you give Drawisicle
         permission to store it and show it to the people it is meant for (for example, your gift to your recipient and the
         event's organisers) so the site can work. We don't claim any other rights.
       </p>
