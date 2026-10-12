@@ -10,6 +10,7 @@ const User = require('../models/User.js');
 const { userMini } = require('../models/User.js');
 const { requireAuth, optionalAuth, loadEvent, requireEventRole } = require('../middleware/auth.js');
 const {
+  deleteEventCascade,
   organizerMinis,
   participantCount,
   viewerContext,
@@ -203,13 +204,14 @@ const LIST_STATUSES = {
   active: ['active'],
   completed: ['completed'],
   upcoming: ['open', 'matching', 'active'],
-  all: ['open', 'matching', 'active', 'completed'],
+  all: ['open', 'matching', 'active', 'completed', 'cancelled'],
+  cancelled: ['cancelled'],
 };
 
 // "deadline" means each event's next relevant date: sign-ups closing for open events, gifts
 // being due for matching/active ones. Completed events go last, most recently finished first.
 const NEXT_DEADLINE_FIELDS = {
-  isCompleted: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] },
+  isCompleted: { $cond: [{ $in: ['$status', ['completed', 'cancelled']] }, 1, 0] },
   deadlineSortTime: {
     $switch: {
       branches: [
@@ -255,7 +257,7 @@ router.get('/', optionalAuth, asyncHandler(async (req, res) => {
   const limit = Math.min(50, Math.max(1, readPageNumber(queryParam(req, 'limit'), 12)));
   const q = queryParam(req, 'q').slice(0, 100);
 
-  const match = { publicity: 'public', status: { $in: LIST_STATUSES[status] } };
+  const match = { publicity: 'public', status: { $in: LIST_STATUSES[status] }, disabledAt: null };
   if (season) match.season = season;
   if (q) {
     const re = new RegExp(escapeRegex(q), 'i');
@@ -383,7 +385,8 @@ router.get('/mine', requireAuth, asyncHandler(async (req, res) => {
 
   res.json({
     organizing: sortMine(pick(organizingIds)).map((e) => ({ ...e, stats: stats.get(e.id) })),
-    participating: sortMine(pick(participatingIds)),
+    // Disabled events vanish for everyone but their organisers
+    participating: sortMine(pick(participatingIds)).filter((e) => !e.disabled || e.viewer?.isOrganizer),
   });
 }));
 
@@ -515,13 +518,7 @@ router.delete('/:eventId', ...organizerOnly, asyncHandler(async (req, res) => {
     })
   );
 
-  await Promise.all([
-    Application.deleteMany({ event: event._id }),
-    Match.deleteMany({ event: event._id }),
-    Submission.deleteMany({ event: event._id }),
-  ]);
-  await EventMember.deleteMany({ event: event._id });
-  await event.deleteOne();
+  await deleteEventCascade(event);
   res.json({ ok: true });
 }));
 

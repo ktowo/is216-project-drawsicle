@@ -4,6 +4,8 @@
 const mongoose = require('mongoose');
 const Application = require('../models/Application.js');
 const EventMember = require('../models/EventMember.js');
+const Match = require('../models/Match.js');
+const Submission = require('../models/Submission.js');
 const { userMini } = require('../models/User.js');
 
 // User ids of everyone with the 'organizer' role in an event
@@ -59,6 +61,7 @@ async function viewerContext(event, user) {
 // Drafts: organisers only. Private: members, applicants, or the right invite code.
 function canViewEvent(event, ctx, inviteCode) {
   if (ctx.isOrganizer) return true;
+  if (event.disabledAt) return false; // hidden by a site admin
   if (event.status === 'draft') return false;
   if (event.publicity === 'private') {
     return ctx.roles.length > 0 || Boolean(ctx.application) || (Boolean(inviteCode) && inviteCode === event.inviteCode);
@@ -118,7 +121,19 @@ async function serializeEvents(events, user, { counts } = {}) {
   });
 }
 
+// Deletes an event and everything that belongs to it (sign-ups, matches, gifts, roles)
+async function deleteEventCascade(event) {
+  await Promise.all([
+    Application.deleteMany({ event: event._id }),
+    Match.deleteMany({ event: event._id }),
+    Submission.deleteMany({ event: event._id }),
+  ]);
+  await EventMember.deleteMany({ event: event._id });
+  await event.deleteOne();
+}
+
 module.exports = {
+  deleteEventCascade,
   organizerIds,
   organizerMinis,
   participantCount,

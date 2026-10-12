@@ -101,7 +101,9 @@ router.get('/', requireAuth, asyncHandler(async (req, res) => {
         ],
       })
     : [];
-  const eventById = new Map(events.map((e) => [e._id.toString(), e]));
+  // Disabled events only show up for their organisers
+  const visible = events.filter((e) => !e.disabledAt || organizingIds.has(e._id.toString()));
+  const eventById = new Map(visible.map((e) => [e._id.toString(), e]));
 
   // Events I organise: everything still running, plus anything completed in the last 30 days
   const organizing = events

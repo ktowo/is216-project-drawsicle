@@ -53,6 +53,12 @@ async function saveNewUser(user, nameBase) {
   }
 }
 
+// Banned accounts can't sign in by any method
+function bannedBody(user) {
+  const reason = user.banReason ? ` Reason: ${user.banReason}` : '';
+  return { error: `This account has been suspended by the site admins.${reason}`, code: 'ACCOUNT_BANNED' };
+}
+
 // Logging back in within the grace period cancels a deactivation
 function reactivate(user) {
   if (user.status !== 'deactivated') return false;
@@ -129,6 +135,7 @@ router.post('/login', loginLimiter, asyncHandler(async (req, res) => {
     });
   }
   if (!(await bcrypt.compare(password, user.passwordHash))) return wrong();
+  if (user.status === 'banned') return res.status(403).json(bannedBody(user));
 
   const reactivated = reactivate(user);
   applyAdminList(user);
@@ -197,6 +204,7 @@ router.post('/reset-password', authLimiter, asyncHandler(async (req, res) => {
     resetTokenExpires: { $gt: new Date() },
   });
   if (!user) return invalid();
+  if (user.status === 'banned') return res.status(403).json(bannedBody(user));
 
   user.passwordHash = await bcrypt.hash(password, 12);
   user.resetTokenHash = undefined;
@@ -286,6 +294,7 @@ async function signInWithProvider(res, profile) {
     }
     // Accounts from before usernames existed
     if (!user.username) user.username = await User.generateUsername(user.displayName || localPart(user.email));
+    if (user.status === 'banned') return res.redirect(`${clientUrl()}/login?error=account_banned`);
     reactivated = reactivate(user);
     applyAdminList(user);
     if (user.isModified()) await user.save();

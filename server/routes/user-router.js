@@ -12,7 +12,7 @@ const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.j
 const router = Router();
 
 const PROFILE_EVENTS_MAX = 12;
-const LISTED = { publicity: 'public', status: { $ne: 'draft' } };
+const LISTED = { publicity: 'public', status: { $ne: 'draft' }, disabledAt: null };
 
 const notFound = () => httpError(404, "We couldn't find that artist.", 'USER_NOT_FOUND');
 

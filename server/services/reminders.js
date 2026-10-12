@@ -76,7 +76,7 @@ async function matchesWithoutSubmission(eventId) {
 }
 
 async function autoCloseSignups(now, summary) {
-  const events = await Event.find({ status: 'open', signupDeadline: { $lte: now } });
+  const events = await Event.find({ status: 'open', signupDeadline: { $lte: now }, disabledAt: null });
 
   await eachEvent(events, 'closing sign-ups', async (event) => {
     event.setStatus('matching', null);
@@ -126,6 +126,7 @@ async function autoCloseSignups(now, summary) {
 
 async function warnSignupsClosing(now, summary) {
   const events = await Event.find({
+    disabledAt: null, // disabled events are frozen
     status: 'open',
     signupDeadline: { $gt: now, $lte: new Date(now.getTime() + 48 * HOUR) },
     remindersSent: { $ne: KEYS.signupWarning },
@@ -155,6 +156,7 @@ async function warnSignupsClosing(now, summary) {
 
 async function remindGivers(now, summary) {
   const events = await Event.find({
+    disabledAt: null, // disabled events are frozen
     status: 'active',
     submissionDeadline: { $gt: now, $lte: new Date(now.getTime() + 72 * HOUR) },
     remindersSent: { $ne: KEYS.submission24h },
@@ -189,6 +191,7 @@ async function remindGivers(now, summary) {
 
 async function reportOverdue(now, summary) {
   const events = await Event.find({
+    disabledAt: null, // disabled events are frozen
     status: 'active',
     submissionDeadline: { $lte: now },
     remindersSent: { $ne: KEYS.overdue },

@@ -4,7 +4,8 @@
 const Application = require('../models/Application.js');
 const EventMember = require('../models/EventMember.js');
 const Match = require('../models/Match.js');
-const { userMini } = require('../models/User.js');
+const User = require('../models/User.js');
+const { userMini } = User;
 const { organizerIds } = require('./events.js');
 const { notifyMany } = require('./notify.js');
 
@@ -47,4 +48,34 @@ async function withdrawApplications(user) {
   return withdrawn;
 }
 
-module.exports = { withdrawApplications };
+// Strips everything personal from an account but keeps the document, so events, matches
+// and gifts that point at it stay valid. Used by the 30-day purge and by admin deletes.
+// filter narrows the update (e.g. { status: 'deactivated' }); returns true if it changed.
+async function anonymiseUser(userId, filter = {}) {
+  const socials = Object.fromEntries(User.SOCIAL_KEYS.map((key) => [key, '']));
+  const result = await User.updateOne(
+    { _id: userId, ...filter },
+    {
+      $set: {
+        email: `deleted-${userId}@deleted.invalid`,
+        displayName: 'Deleted user',
+        bio: '',
+        socials,
+        defaultForm: { communityUsername: '', canCreate: [], wantsTypes: [], likes: '', avoid: '', cannotDraw: [] },
+      },
+      $unset: {
+        username: 1,
+        avatarUrl: 1,
+        googleId: 1,
+        discordId: 1,
+        passwordHash: 1,
+        resetTokenHash: 1,
+        resetTokenExpires: 1,
+      },
+      $inc: { sessionVersion: 1 },
+    }
+  );
+  return result.modifiedCount > 0;
+}
+
+module.exports = { withdrawApplications, anonymiseUser };
