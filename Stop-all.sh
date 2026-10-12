@@ -133,6 +133,22 @@ stop_port() {
   fi
 }
 
+# Ask the local MongoDB to shut down cleanly before anything is killed: on Windows it would
+# otherwise be killed outright and could lose its last writes. A failure only means the steps
+# below do the stopping, as they always did.
+stop_local_db() {
+  local out
+  [[ -f server/scripts/stop-local-db.js && -d server/node_modules ]] || return 0
+  command -v node >/dev/null 2>&1 || return 0
+  out="$(cd server && LOCAL_DB_PORT="$DB_PORT" node scripts/stop-local-db.js 2>/dev/null)" || true
+  if [[ $out == Shut* ]]; then
+    echo "$out"
+    STOPPED=$((STOPPED + 1))
+  fi
+  return 0
+}
+
+stop_local_db
 stop_recorded client
 stop_recorded server
 

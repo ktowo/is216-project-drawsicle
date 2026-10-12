@@ -27,6 +27,10 @@ if exist "server\.env" (
 set "API_PORT=%API_PORT: =%"
 set "DB_PORT=%DB_PORT: =%"
 
+rem Ask the local MongoDB to shut down cleanly before anything is killed: it would otherwise be
+rem killed outright and could lose its last writes. If that fails, the steps below stop it as before.
+call :stop_local_db
+
 rem The windows Start-all.bat opened, with pnpm, nodemon, node and MongoDB inside them
 tasklist /fi "WINDOWTITLE eq Drawisicle*" /nh 2>nul | findstr /i /c:".exe" >nul
 if not errorlevel 1 (
@@ -68,4 +72,21 @@ for /f "tokens=5" %%p in ('netstat -ano ^| findstr /r /c:"TCP  *[^ ]*:%~1  *[^ ]
     )
   )
 )
+exit /b 0
+
+rem stop_local_db: server\scripts\stop-local-db.js prints a line starting with "Shut" when it stopped the database
+:stop_local_db
+if not exist "server\scripts\stop-local-db.js" exit /b 0
+if not exist "server\node_modules" exit /b 0
+where node >nul 2>nul
+if errorlevel 1 exit /b 0
+set "LOCAL_DB_PORT=%DB_PORT%"
+pushd "server"
+for /f "usebackq delims=" %%l in (`node scripts/stop-local-db.js 2^>nul`) do (
+  echo %%l| findstr /b /c:"Shut" >nul && (
+    echo Shut the local database down cleanly, port %DB_PORT%.
+    set "STOPPED=1"
+  )
+)
+popd
 exit /b 0
