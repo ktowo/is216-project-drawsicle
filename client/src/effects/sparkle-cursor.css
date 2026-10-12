@@ -1,0 +1,48 @@
+/*
+  Pencil cursor, switched on by effects/sparkleCursor.js (mouse/trackpad devices only).
+  !important because buttons and links set their own cursor all over the app.
+  Clickable things get the pencil with a little star; text fields keep the I-beam.
+*/
+html.sparkle-cursor,
+html.sparkle-cursor * {
+  cursor: var(--pencil-cursor), auto !important;
+}
+
+html.sparkle-cursor :is(
+    a[href],
+    button:not(:disabled),
+    summary,
+    select,
+    label[for],
+    [role='button'],
+    [role='tab'],
+    [role='link'],
+    [role='menuitem'],
+    [role='checkbox'],
+    [role='radio'],
+    [role='switch'],
+    [tabindex]:not([tabindex='-1'])
+  ),
+html.sparkle-cursor :is(a[href], button:not(:disabled), [role='button']) * {
+  cursor: var(--pencil-cursor-active), pointer !important;
+}
+
+html.sparkle-cursor :is(
+    input:not([type='checkbox'], [type='radio'], [type='button'], [type='submit'], [type='reset'], [type='range'], [type='file'], [type='color']),
+    textarea,
+    [contenteditable='true']
+  ) {
+  cursor: text !important;
+}
+
+html.sparkle-cursor :disabled,
+html.sparkle-cursor [aria-disabled='true'] {
+  cursor: not-allowed !important;
+}
+
+.sparkle-canvas {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2147483000;
+}
