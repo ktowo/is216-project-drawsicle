@@ -135,7 +135,16 @@ export function buildDemoData(now = new Date()) {
         cannotDraw: ['humanoid'],
       },
     },
-  ].map((u) => ({ ...u, email: `${u.key}@demo.test`, username: u.key, role: 'user' }));
+    {
+      // Site admin for trying the admin tools; not part of any event
+      key: 'ada',
+      role: 'admin',
+      displayName: 'Ada (site admin)',
+      bio: 'Keeps Drawisicle tidy: moderates events and helps with account problems.',
+      socials: { discord: 'ada_admin', bluesky: 'ada-admin' },
+      defaultForm: { communityUsername: 'ada_admin', canCreate: ['art'], wantsTypes: ['art'], likes: '', avoid: '', cannotDraw: [] },
+    },
+  ].map((u) => ({ ...u, email: `${u.key}@demo.test`, username: u.key, role: u.role || 'user' }));
 
   const character = (owner, key, name, species, tags, description, notesForArtists, links, archived = false) => ({
     key,
