@@ -23,7 +23,7 @@ eventMemberSchema.statics.grant = function (userId, eventId, role) {
   return this.findOneAndUpdate(
     { user: userId, event: eventId },
     { $addToSet: { roles: role } },
-    { upsert: true, new: true }
+    { upsert: true, returnDocument: 'after' }
   );
 };
 
@@ -31,7 +31,7 @@ eventMemberSchema.statics.revoke = async function (userId, eventId, role) {
   const member = await this.findOneAndUpdate(
     { user: userId, event: eventId },
     { $pull: { roles: role } },
-    { new: true }
+    { returnDocument: 'after' }
   );
   if (member && member.roles.length === 0) await member.deleteOne();
   return member;
