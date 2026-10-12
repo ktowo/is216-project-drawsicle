@@ -38,6 +38,11 @@ async function connectDB() {
 }
 
 async function disconnectDB() {
+  if (memoryServer && mongoose.connection.readyState === 1) {
+    // On Windows the local MongoDB is killed rather than shut down cleanly, which loses
+    // writes from the last fraction of a second (a seed run is that quick). Flush them first.
+    await mongoose.connection.db.admin().command({ fsync: 1 }).catch(() => {});
+  }
   await mongoose.disconnect();
   if (memoryServer) {
     await memoryServer.stop({ doCleanup: false }); // keep the data folder
