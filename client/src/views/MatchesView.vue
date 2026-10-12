@@ -1,0 +1,526 @@
+<script setup>
+import { ref, computed, watch } from 'vue';
+import { useRoute, useRouter, RouterLink } from 'vue-router';
+import {
+  CalendarSearch,
+  Copy,
+  EyeOff,
+  Gift,
+  Heart,
+  Ban,
+  Send,
+  PencilLine,
+  Sparkles,
+  PartyPopper,
+  UsersRound,
+  TriangleAlert,
+  CircleCheck,
+  Hourglass,
+} from 'lucide-vue-next';
+import PageHeader from '@/components/ui/PageHeader.vue';
+import StatusBadge from '@/components/ui/StatusBadge.vue';
+import DeadlineChip from '@/components/ui/DeadlineChip.vue';
+import EmptyState from '@/components/ui/EmptyState.vue';
+import LoadingBlock from '@/components/ui/LoadingBlock.vue';
+import ErrorBlock from '@/components/ui/ErrorBlock.vue';
+import UserAvatar from '@/components/UserAvatar.vue';
+import CharacterCard from '@/components/characters/CharacterCard.vue';
+import { api, qs } from '@/api';
+import { toast } from '@/stores/toast';
+import { formatDateTime } from '@/utils/format';
+import {
+  eventLink,
+  inviteFrom,
+  isPast,
+  matchUnavailable,
+  platformLabel,
+  typeLabel,
+  copyText,
+} from '@/utils/events';
+
+const route = useRoute();
+const router = useRouter();
+
+const event = ref(null);
+const match = ref(null);
+const loading = ref(true);
+const error = ref('');
+const notFound = ref(false);
+const unavailable = ref(null); // { title, message } when there's no match to show
+
+const invite = computed(() => inviteFrom(route));
+const backTo = computed(() =>
+  invite.value ? { path: eventLink(route.params.id), query: { invite: invite.value } } : eventLink(route.params.id)
+);
+
+let requestId = 0;
+async function load() {
+  const id = ++requestId;
+  const eventId = route.params.id;
+  loading.value = true;
+  error.value = '';
+  notFound.value = false;
+  unavailable.value = null;
+
+  const [eventRes, matchRes] = await Promise.allSettled([
+    api(`/events/${eventId}${qs({ invite: invite.value })}`),
+    api(`/events/${eventId}/my-match`),
+  ]);
+  if (id !== requestId) return;
+
+  const failed = [eventRes, matchRes].find((r) => r.status === 'rejected');
+  if (failed?.reason?.status === 401) {
+    router.replace({ name: 'login', query: { redirect: route.fullPath } });
+    return;
+  }
+
+  if (eventRes.status === 'rejected') {
+    if (eventRes.reason.status === 404) notFound.value = true;
+    else error.value = eventRes.reason.message;
+    event.value = null;
+  } else {
+    event.value = eventRes.value.event;
+    document.title = `Your match: ${event.value.name} · Drawisicle`;
+    if (matchRes.status === 'fulfilled') {
+      match.value = matchRes.value.match;
+    } else {
+      const reason = matchRes.reason;
+      match.value = null;
+      if (reason.status === 403 || reason.status === 404) unavailable.value = matchUnavailable(event.value, reason);
+      else error.value = reason.message;
+    }
+  }
+  loading.value = false;
+}
+
+watch(
+  () => route.params.id,
+  () => {
+    if (route.name === 'event-matches') load();
+  },
+  { immediate: true }
+);
+
+const recipient = computed(() => match.value?.recipient || null);
+const recipientName = computed(() => recipient.value?.displayName || 'your recipient');
+const submission = computed(() => match.value?.submission || null);
+const deadline = computed(() => match.value?.submissionDeadline || event.value?.submissionDeadline);
+const isActive = computed(() => event.value?.status === 'active');
+const isCompleted = computed(() => event.value?.status === 'completed');
+const overdue = computed(() => isActive.value && !submission.value && isPast(deadline.value));
+
+const community = computed(() => {
+  if (!event.value) return '';
+  return event.value.platform === 'other' ? event.value.platformName || 'the community' : platformLabel(event.value.platform);
+});
+
+// Characters were offered for this event, so an "archived" flag from the owner's library means nothing here
+const characters = computed(() => (recipient.value?.characters || []).map((c) => ({ ...c, archived: false })));
+
+async function copyUsername() {
+  const ok = await copyText(recipient.value.communityUsername);
+  if (ok) toast.success('Username copied.');
+  else toast.error("Couldn't copy it. You can select the name and copy it yourself.");
+}
+</script>
+
+<template>
+  <main class="page">
+    <LoadingBlock v-if="loading" label="Loading your match…" />
+
+    <EmptyState
+      v-else-if="notFound"
+      :icon="CalendarSearch"
+      title="Event not found"
+      message="It may have been deleted, or it's a private event that needs an invite link."
+    >
+      <RouterLink to="/events" class="btn btn-primary">Browse events</RouterLink>
+    </EmptyState>
+
+    <template v-else-if="error">
+      <PageHeader title="Your match" :back="backTo" back-label="Back to event" />
+      <ErrorBlock :message="error" @retry="load" />
+    </template>
+
+    <template v-else-if="event">
+      <PageHeader title="Your match" :subtitle="event.name" :back="backTo" back-label="Back to event">
+        <StatusBadge :status="event.status" />
+      </PageHeader>
+
+      <EmptyState v-if="unavailable" :icon="Hourglass" :title="unavailable.title" :message="unavailable.message">
+        <RouterLink :to="backTo" class="btn btn-primary">Back to the event</RouterLink>
+        <RouterLink v-if="event.viewer?.isOrganizer" :to="eventLink(event, '/manage')" class="btn btn-outline">
+          Manage event
+        </RouterLink>
+      </EmptyState>
+
+      <template v-else-if="match && recipient">
+        <section class="card hero" aria-labelledby="recipient-heading">
+          <p class="eyebrow">
+            <Gift :size="18" aria-hidden="true" /> {{ isCompleted ? 'You made a gift for' : "You're making a gift for" }}
+          </p>
+          <div class="who">
+            <UserAvatar :user="recipient" :size="76" class="who-avatar" />
+            <div class="who-text">
+              <h2 id="recipient-heading" class="who-name">{{ recipient.displayName }}</h2>
+              <p v-if="recipient.username" class="who-handle">@{{ recipient.username }}</p>
+              <div v-if="recipient.communityUsername" class="community">
+                <span class="community-label">On {{ community }}:</span>
+                <span class="community-name">{{ recipient.communityUsername }}</span>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs"
+                  :aria-label="`Copy ${recipient.communityUsername}`"
+                  @click="copyUsername"
+                >
+                  <Copy :size="14" aria-hidden="true" /> Copy
+                </button>
+              </div>
+            </div>
+          </div>
+          <p v-if="isCompleted" class="secret">
+            <PartyPopper :size="18" aria-hidden="true" />
+            <span>The gifts have been revealed, so {{ recipient.displayName }} now knows the gift came from you.</span>
+          </p>
+          <p v-else class="secret">
+            <EyeOff :size="18" aria-hidden="true" />
+            <span>
+              Keep it secret! {{ recipient.displayName }} won't know who is making their gift until the reveal.
+            </span>
+          </p>
+        </section>
+
+        <div class="layout">
+          <div class="main-col">
+            <section class="card panel" aria-labelledby="wishes-heading">
+              <h2 id="wishes-heading" class="panel-title">What they asked for</h2>
+
+              <div class="wish">
+                <h3 class="wish-label"><Sparkles :size="17" aria-hidden="true" /> They'd like to receive</h3>
+                <ul v-if="recipient.wantsTypes?.length" class="type-list">
+                  <li v-for="t in recipient.wantsTypes" :key="t" class="type-chip">{{ typeLabel(t) }}</li>
+                </ul>
+                <p v-else class="muted">Anything you can make.</p>
+              </div>
+
+              <div class="wish">
+                <h3 class="wish-label"><Heart :size="17" aria-hidden="true" /> They'd love</h3>
+                <p v-if="recipient.likes" class="prose">{{ recipient.likes }}</p>
+                <p v-else class="muted">They didn't say. Surprise them!</p>
+              </div>
+
+              <div class="wish">
+                <h3 class="wish-label"><Ban :size="17" aria-hidden="true" /> Please avoid</h3>
+                <p v-if="recipient.avoid" class="prose">{{ recipient.avoid }}</p>
+                <p v-else class="muted">Nothing in particular.</p>
+              </div>
+            </section>
+
+            <section class="card panel" aria-labelledby="chars-heading">
+              <h2 id="chars-heading" class="panel-title">Their characters</h2>
+              <p class="muted intro">Make something featuring one or more of these. Check the reference links and notes before you start.</p>
+              <div v-if="characters.length" class="characters">
+                <CharacterCard v-for="c in characters" :key="c.id" :character="c" show-links />
+              </div>
+              <EmptyState
+                v-else
+                :icon="UsersRound"
+                title="No characters to show"
+                message="Their characters aren't available any more. You could ask the organisers, or make something inspired by their wishes."
+              />
+            </section>
+          </div>
+
+          <aside class="side-col">
+            <section class="card panel status-panel" aria-labelledby="gift-heading">
+              <h2 id="gift-heading" class="panel-title small-title">Your gift</h2>
+
+              <div class="status-row">
+                <span class="muted">Status</span>
+                <StatusBadge kind="match" :status="submission ? 'submitted' : 'assigned'" />
+              </div>
+              <div v-if="submission?.late" class="status-row">
+                <span class="muted">Timing</span>
+                <StatusBadge kind="submission" status="late" />
+              </div>
+
+              <dl class="dates">
+                <div>
+                  <dt>Due</dt>
+                  <dd>
+                    <span class="date">{{ formatDateTime(deadline) }}</span>
+                    <DeadlineChip v-if="isActive" :at="deadline" label="Gifts due" past-label="Was due" />
+                  </dd>
+                </div>
+                <div v-if="submission?.submittedAt">
+                  <dt>Submitted</dt>
+                  <dd><span class="date">{{ formatDateTime(submission.submittedAt) }}</span></dd>
+                </div>
+              </dl>
+
+              <p v-if="overdue" class="alert alert-warning note">
+                <TriangleAlert :size="18" aria-hidden="true" />
+                <span>The deadline has passed. You can still send your gift, but it will be marked late.</span>
+              </p>
+              <p v-else-if="submission && isActive" class="alert alert-success note">
+                <CircleCheck :size="18" aria-hidden="true" />
+                <span>Your gift is in. You can still change it until the organisers close the event.</span>
+              </p>
+
+              <div class="actions">
+                <RouterLink
+                  v-if="isActive"
+                  :to="eventLink(event, '/submit')"
+                  class="btn btn-block"
+                  :class="submission ? 'btn-outline' : 'btn-primary'"
+                >
+                  <PencilLine v-if="submission" :size="18" aria-hidden="true" />
+                  <Send v-else :size="18" aria-hidden="true" />
+                  {{ submission ? 'Edit your submission' : 'Submit your gift' }}
+                </RouterLink>
+                <RouterLink v-if="isCompleted" :to="eventLink(event, '/results')" class="btn btn-primary btn-block">
+                  See the reveal
+                </RouterLink>
+              </div>
+              <p v-if="isCompleted" class="muted small">This event has finished, so gifts can no longer be changed.</p>
+            </section>
+          </aside>
+        </div>
+      </template>
+    </template>
+  </main>
+</template>
+
+<style scoped>
+.hero {
+  padding: 28px 32px;
+  background: linear-gradient(135deg, var(--surface) 55%, var(--pink-soft));
+}
+.eyebrow {
+  margin: 0 0 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--pink-dark);
+  font-weight: 700;
+}
+.who {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-width: 0;
+}
+.who-avatar {
+  flex-shrink: 0;
+}
+.who-text {
+  min-width: 0;
+}
+.who-name {
+  font-size: clamp(1.7rem, 4vw, 2.3rem);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.who-handle {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-weight: 600;
+}
+.community {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 10px;
+}
+.community-label {
+  color: var(--muted);
+}
+.community-name {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.secret {
+  margin: 22px 0 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: rgba(255, 253, 250, 0.85);
+  border: 1px dashed var(--pink);
+  color: var(--text);
+  font-weight: 500;
+}
+.secret svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--pink-dark);
+}
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 24px;
+  margin-top: 24px;
+  align-items: start;
+}
+.main-col,
+.side-col {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+.side-col {
+  position: sticky;
+  top: 96px;
+}
+.panel {
+  padding: 26px 28px;
+}
+.panel-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+.small-title {
+  font-size: 1.15rem;
+}
+.muted {
+  margin: 0;
+  color: var(--muted);
+}
+.small {
+  font-size: 0.9rem;
+}
+.intro {
+  margin: -6px 0 18px;
+}
+.wish + .wish {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.wish-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 700;
+}
+.wish-label svg {
+  color: var(--pink-dark);
+}
+.prose {
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+.type-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.type-chip {
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: var(--pink-soft);
+  color: var(--pink-dark);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.characters {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+.status-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.status-panel .panel-title {
+  margin-bottom: 2px;
+}
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.dates {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.dates dt {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.dates dd {
+  margin: 4px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+.date {
+  font-weight: 600;
+}
+.note {
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.note svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+@media (max-width: 960px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .side-col {
+    position: static;
+    order: -1;
+  }
+}
+@media (max-width: 640px) {
+  .hero {
+    padding: 22px 18px;
+  }
+  .who {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .panel {
+    padding: 20px 18px;
+  }
+  .layout,
+  .main-col,
+  .side-col {
+    gap: 16px;
+  }
+  .layout {
+    margin-top: 16px;
+  }
+  .characters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+</style>
