@@ -9,7 +9,7 @@ const { requireAuth, loadEvent, requireEventRole } = require('../middleware/auth
 const { serializeEvent, viewerContext } = require('../services/events.js');
 const { notify } = require('../services/notify.js');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
-const { generateMatches, scorePair } = require('../../shared/matching.mjs');
+const { generateMatches, scorePair, skippedAccountsWarning } = require('../../shared/matching.mjs');
 
 // Mounted at /api/events/:eventId. Every route names its own middleware, because the
 // application and submission routers share this mount point.
@@ -117,12 +117,15 @@ router.post('/matches/generate', ...organizerOnly, asyncHandler(async (req, res)
     throw httpError(409, 'Close sign-ups before generating matches.', 'WRONG_STATUS');
   }
 
-  const applications = (
+  const accepted = (
     await Application.find({ event: event._id, status: 'accepted' })
       .sort({ createdAt: 1 })
-      .populate('user', USER_FIELDS)
+      .populate('user', `${USER_FIELDS} status`)
       .populate('offeredCharacters')
   ).filter((a) => a.user);
+  // Deactivating withdraws sign-ups, but older ones can still be here; they can't make a gift
+  const skipped = accepted.filter((a) => a.user.status === 'deactivated');
+  const applications = accepted.filter((a) => a.user.status !== 'deactivated');
 
   const needed = Math.max(2, event.minParticipants || 2);
   if (applications.length < needed) {
@@ -166,12 +169,15 @@ router.post('/matches/generate', ...organizerOnly, asyncHandler(async (req, res)
     throw err;
   }
 
+  const warnings = [...result.warnings];
+  if (skipped.length) warnings.push(skippedAccountsWarning(skipped.map((a) => userMini(a.user).displayName)));
+
   const { participants, matched, totalScore, averageScore, cycles, seed: usedSeed } = result.stats;
   res.json({
     matches: await adminMatchList(event._id),
     result: {
       unmatched: result.unmatched.map((id) => userMini(appByUser.get(id)?.user)),
-      warnings: result.warnings,
+      warnings,
       stats: { participants, matched, totalScore, averageScore, cycles, seed: usedSeed },
     },
   });
@@ -249,11 +255,13 @@ router.post('/matches/publish', ...organizerOnly, asyncHandler(async (req, res) 
     throw httpError(409, 'Matches can only be published while the event is in matching.', 'WRONG_STATUS');
   }
 
-  const [matches, accepted] = await Promise.all([
+  const [matches, acceptedRows] = await Promise.all([
     Match.find({ event: event._id, published: false }).populate('recipient', USER_FIELDS),
-    Application.find({ event: event._id, status: 'accepted' }).populate('user', USER_FIELDS),
+    Application.find({ event: event._id, status: 'accepted' }).populate('user', `${USER_FIELDS} status`),
   ]);
   if (!matches.length) throw httpError(409, 'Generate matches before publishing them.', 'NO_MATCHES');
+  // Same people generate used: deactivated accounts were left out there
+  const accepted = acceptedRows.filter((a) => a.user?.status !== 'deactivated');
 
   // Everyone accepted right now must give exactly once and receive exactly once
   const gives = new Map();

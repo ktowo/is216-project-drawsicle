@@ -797,3 +797,11 @@ export function generateMatches(participants, { seed = 1 } = {}) {
   }
   return finish(loops);
 }
+
+// Warning added when accepted participants were left out because their accounts are
+// deactivated (the server and the mock both skip them before calling generateMatches).
+export function skippedAccountsWarning(names) {
+  if (names.length === 1) return `${names[0]} was left out because their account is deactivated.`;
+  const list = `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+  return `${list} were left out because their accounts are deactivated.`;
+}
