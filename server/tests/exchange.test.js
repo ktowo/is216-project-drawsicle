@@ -173,6 +173,28 @@ test('generate: people who cannot be placed come back as unmatched', async () =>
   assert.ok(result.warnings.some((w) => /couldn't be matched/.test(w)));
 });
 
+test('generate: accepted people with deactivated accounts are left out, with a warning', async () => {
+  const ctx = await setup({ count: 5 });
+  const gone = ctx.people[1];
+  const alsoGone = ctx.people[3];
+  await User.updateMany({ _id: { $in: [gone.id, alsoGone.id] } }, { $set: { status: 'deactivated' } });
+
+  const { matches, result } = await generate(ctx);
+  const inMatches = new Set(matches.flatMap((m) => [m.giver.id, m.recipient.id]));
+  assert.equal(matches.length, 3);
+  assert.ok(!inMatches.has(gone.id) && !inMatches.has(alsoGone.id));
+  assert.equal(result.stats.participants, 3);
+  assert.ok(result.warnings.includes('Ben Artist and Dev Artist were left out because their accounts are deactivated.'));
+
+  // One person gets the singular wording
+  await User.updateOne({ _id: alsoGone.id }, { $set: { status: 'active' } });
+  const again = await generate(ctx);
+  assert.ok(again.result.warnings.includes('Ben Artist was left out because their account is deactivated.'));
+
+  // Publishing only needs the people generate used
+  await ctx.organizer.agent.post(`/api/events/${ctx.eventId}/matches/publish`).expect(200);
+});
+
 // ---------- Swapping ----------
 
 test('swap: exchanges recipients, refuses self-matches and published matches', async () => {

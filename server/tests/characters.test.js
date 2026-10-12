@@ -221,3 +221,42 @@ test('archive and restore set and clear archivedAt', async () => {
   const list = await agent.get('/api/characters').expect(200);
   assert.deepEqual(list.body.characters.map((c) => c.id), [character.id]);
 });
+
+test('a character lists the events it was offered in, newest sign-up first', async () => {
+  const { agent, user } = await h.signUp(app);
+  const pip = await createCharacter(agent);
+  const unused = await createCharacter(agent, { name: 'Moth' });
+  const Event = require('../models/Event.js');
+
+  const makeEvent = (name, status) =>
+    Event.create({
+      name,
+      status,
+      signupDeadline: h.daysFromNow(5),
+      submissionDeadline: h.daysFromNow(20),
+      createdBy: user.id,
+    });
+  const winter = await makeEvent('Winter Swap', 'completed');
+  const spring = await makeEvent('Spring Swap', 'open');
+  const base = { user: user.id, communityUsername: 'pip_owner', canCreate: ['art'], wantsTypes: ['art'], offeredCharacters: [pip.id] };
+  await Application.create({ ...base, event: winter._id, status: 'accepted', createdAt: h.daysFromNow(-30) });
+  await Application.create({ ...base, event: spring._id, status: 'pending', createdAt: h.daysFromNow(-1) });
+  // The event is gone, so there is nothing to link to
+  await offerInApplication(user.id, pip.id, 'accepted');
+
+  const one = await agent.get(`/api/characters/${pip.id}`).expect(200);
+  assert.deepEqual(one.body.character.usedIn, [
+    { eventId: spring.id, eventName: 'Spring Swap', eventStatus: 'open', applicationStatus: 'pending' },
+    { eventId: winter.id, eventName: 'Winter Swap', eventStatus: 'completed', applicationStatus: 'accepted' },
+  ]);
+  assert.equal(one.body.character.eventCount, 3);
+
+  const none = await agent.get(`/api/characters/${unused.id}`).expect(200);
+  assert.deepEqual(none.body.character.usedIn, []);
+
+  // Only on the single-character route, and only for the owner
+  const list = await agent.get('/api/characters').expect(200);
+  assert.equal(list.body.characters[0].usedIn, undefined);
+  const { agent: other } = await h.signUp(app);
+  await other.get(`/api/characters/${pip.id}`).expect(404);
+});
