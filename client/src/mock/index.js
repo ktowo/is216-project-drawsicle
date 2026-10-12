@@ -9,6 +9,7 @@ import { createRouter, parsePath } from './router.js';
 import { MockHttpError } from './util.js';
 import * as auth from './handlers/auth.js';
 import * as profile from './handlers/profile.js';
+import * as users from './handlers/users.js';
 import * as notifications from './handlers/notifications.js';
 import * as characters from './handlers/characters.js';
 import * as events from './handlers/events.js';
@@ -19,7 +20,7 @@ import * as dashboard from './handlers/dashboard.js';
 
 const router = createRouter();
 // Order matters where paths overlap: events.js adds /events/mine before /events/:eventId
-for (const feature of [auth, profile, notifications, characters, events, applications, matches, submissions, dashboard]) {
+for (const feature of [auth, profile, users, notifications, characters, events, applications, matches, submissions, dashboard]) {
   feature.register(router);
 }
 
