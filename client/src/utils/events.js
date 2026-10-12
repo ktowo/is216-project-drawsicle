@@ -94,6 +94,13 @@ export function viewerActions(event, { invite } = {}) {
 
   const browse = { key: 'browse', label: 'Find an open event', to: { path: '/events', query: { status: 'open' } }, primary: false };
 
+  // Moderated by a site admin: read-only for everyone
+  if (status === 'cancelled' || event.disabled) {
+    return viewer?.isOrganizer
+      ? [{ key: 'manage', label: 'View management page', to: eventLink(event, '/manage'), primary: false }, browse]
+      : [browse];
+  }
+
   if (!viewer) {
     const here = eventLink(event) + (invite ? `?invite=${encodeURIComponent(invite)}` : '');
     if (open && !isFull(event)) {

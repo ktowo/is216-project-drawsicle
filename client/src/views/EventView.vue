@@ -1,4 +1,5 @@
 <script setup>
+import ModerationNotice from '@/components/events/ModerationNotice.vue';
 import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
 import {
@@ -234,6 +235,7 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
 
     <template v-else-if="event">
       <header class="card hero">
+        <ModerationNotice :event="event" />
         <EventBanner :event="event" :height="220" class="hero-banner" />
         <div class="hero-body">
           <div class="badges">
@@ -492,7 +494,7 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
   gap: 6px;
   padding: 4px 12px;
   border-radius: 999px;
-  background: #f2eadb;
+  background: var(--chip);
   color: var(--muted);
   font-size: 0.85rem;
   font-weight: 600;
@@ -631,7 +633,7 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
   gap: 12px;
   padding: 14px 16px;
   border-radius: 14px;
-  background: #f6efe3;
+  background: var(--chip);
 }
 .note-icon {
   flex-shrink: 0;
@@ -646,16 +648,16 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
   font-size: 0.92rem;
 }
 .tone-info {
-  background: #eef5fd;
-  color: #24557f;
+  background: var(--blue-soft);
+  color: var(--blue-ink);
 }
 .tone-success {
   background: var(--success-soft);
   color: var(--success);
 }
 .tone-warning {
-  background: #fdf3e1;
-  color: #8a5a12;
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 .tone-danger {
   background: var(--danger-soft);
@@ -722,7 +724,7 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
 .bar {
   height: 10px;
   border-radius: 999px;
-  background: #f2eadb;
+  background: var(--chip);
   overflow: hidden;
   margin-bottom: 12px;
 }

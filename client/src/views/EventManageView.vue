@@ -1,4 +1,5 @@
 <script setup>
+import ModerationNotice from '@/components/events/ModerationNotice.vue';
 import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
 import { ArrowLeft, CalendarSearch, ExternalLink, Pencil, Lock, Globe, Users } from 'lucide-vue-next';
@@ -150,6 +151,7 @@ const meta = computed(() => {
       </RouterLink>
 
       <header class="card manage-head">
+        <ModerationNotice :event="event" />
         <EventBanner :event="event" :height="112" class="head-banner" />
         <div class="head-body">
           <div class="flex flex-wrap items-center gap-2">
@@ -264,7 +266,7 @@ const meta = computed(() => {
   gap: 6px;
   padding: 4px 12px;
   border-radius: 999px;
-  background: #f5eee1;
+  background: var(--hover);
   color: var(--muted);
   font-size: 0.85rem;
   font-weight: 600;

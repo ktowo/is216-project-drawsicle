@@ -42,6 +42,7 @@ const capacity = computed(() => {
     <div class="card-body">
       <div class="badges">
         <StatusBadge :status="event.status" />
+        <span v-if="event.disabled" class="badge badge-disabled">Disabled by admin</span>
         <span v-if="event.publicity === 'private'" class="private-tag">
           <Lock :size="13" aria-hidden="true" /> Private
         </span>
