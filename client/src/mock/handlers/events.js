@@ -167,6 +167,14 @@ function rejectIfCompleted(event) {
   }
 }
 
+// ---------- Duplicate ----------
+
+const COPIED_FIELDS = [
+  'description', 'theme', 'season', 'rules', 'tags', 'platform', 'platformName', 'platformLink',
+  'minParticipants', 'maxParticipants', 'allowedTypes', 'publicity', 'requireApproval', 'bannerUrl',
+];
+const DUPLICATE_SIGNUP_DAYS = 14;
+
 // ---------- Listing ----------
 
 const LIST_STATUSES = {
@@ -179,8 +187,21 @@ const LIST_STATUSES = {
 };
 
 const byId = (a, b) => a.id.localeCompare(b.id);
+
+// "deadline" means each event's next relevant date: sign-ups closing for open events, gifts
+// being due for matching/active ones. Completed events go last, most recently finished first.
+function nextDeadline(event) {
+  if (event.status === 'open') return toMs(event.signupDeadline);
+  if (event.status === 'completed') return -toMs(event.completedAt || event.updatedAt);
+  return toMs(event.submissionDeadline);
+}
+const isCompleted = (event) => (event.status === 'completed' ? 1 : 0);
+
 const LIST_SORTS = {
-  deadline: (a, b) => toMs(a.event.signupDeadline) - toMs(b.event.signupDeadline) || byId(a.event, b.event),
+  deadline: (a, b) =>
+    isCompleted(a.event) - isCompleted(b.event) ||
+    nextDeadline(a.event) - nextDeadline(b.event) ||
+    byId(a.event, b.event),
   newest: (a, b) => toMs(b.event.createdAt) - toMs(a.event.createdAt) || byId(b.event, a.event),
   popular: (a, b) =>
     b.count - a.count ||
@@ -336,6 +357,50 @@ export function register(router) {
       createdAt: at,
       updatedAt: at,
     };
+    validateEvent(event);
+    ctx.state.events.push(event);
+    grantRole(ctx.state, user.id, event.id, 'organizer');
+    ctx.status = 201;
+    return { event: serializeEvent(ctx.state, event, user) };
+  });
+
+  // Settings copied into a new draft. People, matches, gifts and the invite code are not.
+  router.post('/events/:eventId/duplicate', (ctx) => {
+    const { user, event: source } = organizerEvent(ctx);
+    const src = ctx.body;
+
+    let name = src.name === undefined ? '' : readText(src.name, 'Name', LIMITS.eventName);
+    if (!name) name = `Copy of ${source.name}`.slice(0, LIMITS.eventName).trim();
+    const optionalDate = (value, label) => (value === undefined ? null : readDate(value, label));
+    const signupDeadline =
+      optionalDate(src.signupDeadline, 'Sign-up deadline') ||
+      new Date(ctx.now.getTime() + DUPLICATE_SIGNUP_DAYS * 24 * 60 * 60 * 1000);
+    if (signupDeadline <= ctx.now) throw invalid('The sign-up deadline must be in the future.');
+    // Same time for making gifts as the original had
+    const gap = toMs(source.submissionDeadline) - toMs(source.signupDeadline);
+    const submissionDeadline =
+      optionalDate(src.submissionDeadline, 'Submission deadline') || new Date(signupDeadline.getTime() + gap);
+
+    const at = ctx.now.toISOString();
+    const event = { id: newId() };
+    for (const key of COPIED_FIELDS) {
+      const value = source[key];
+      event[key] = Array.isArray(value) ? [...value] : value;
+    }
+    Object.assign(event, {
+      name,
+      signupDeadline: signupDeadline.toISOString(),
+      submissionDeadline: submissionDeadline.toISOString(),
+      status: 'draft',
+      inviteCode: randomCode(),
+      createdBy: user.id,
+      statusHistory: [{ status: 'draft', at, by: user.id }],
+      publishedAt: null,
+      completedAt: null,
+      remindersSent: [],
+      createdAt: at,
+      updatedAt: at,
+    });
     validateEvent(event);
     ctx.state.events.push(event);
     grantRole(ctx.state, user.id, event.id, 'organizer');
