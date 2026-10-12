@@ -1,6 +1,9 @@
 <script>
 // Shared by every open modal so closing a nested dialog doesn't unlock page scrolling too early
 const scrollLock = { count: 0, overflow: '' };
+// Open modals, the last one is on top. Only the top one answers Esc and Tab, so closing a nested
+// dialog doesn't also close the one behind it.
+const openModals = [];
 </script>
 
 <script setup>
@@ -8,16 +11,21 @@ import { ref, watch, nextTick, onBeforeUnmount, useId } from 'vue';
 import { X } from 'lucide-vue-next';
 
 // Dialog rendered at the end of <body>. Closes on Esc, backdrop click or the x button
-// (the parent decides by listening to `close`). Keeps keyboard focus inside while open.
+// (the parent decides by listening to `close`). Keeps keyboard focus inside while open and
+// gives it back to whatever opened the dialog when it closes.
 const props = defineProps({
   open: { type: Boolean, default: false },
   title: { type: String, default: '' },
   size: { type: String, default: 'md', validator: (v) => ['sm', 'md', 'lg'].includes(v) },
+  // 'alertdialog' is for questions that need an answer (ConfirmDialog); describedby is the id of the text to read out
+  role: { type: String, default: 'dialog', validator: (v) => ['dialog', 'alertdialog'].includes(v) },
+  describedby: { type: String, default: '' },
 });
 const emit = defineEmits(['close']);
 
 const titleId = `modal-title-${useId()}`;
 const panel = ref(null);
+const token = Symbol('modal');
 let previousFocus = null;
 let pressStartedOnBackdrop = false;
 
@@ -41,34 +49,58 @@ function focusables() {
   return panel.value ? [...panel.value.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null) : [];
 }
 
+const isTop = () => openModals[openModals.length - 1] === token;
+
 let locked = false;
 
 async function onOpen() {
+  if (!openModals.includes(token)) openModals.push(token);
   previousFocus = document.activeElement;
   if (!locked) {
     lockScroll();
     locked = true;
   }
   document.addEventListener('keydown', onKeydown);
+  document.addEventListener('focusin', onFocusIn);
   await nextTick();
-  // Prefer the first form control; otherwise the panel itself so screen readers read the title
-  const first = panel.value?.querySelector('input:not([disabled]), textarea:not([disabled]), select:not([disabled])');
+  // Something marked data-autofocus first, then the first form control; otherwise the panel itself
+  // so screen readers read the title
+  const first =
+    panel.value?.querySelector('[data-autofocus]:not([disabled])') ||
+    panel.value?.querySelector('input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), select:not([disabled])');
   (first || panel.value)?.focus();
 }
 
 function onClose() {
   document.removeEventListener('keydown', onKeydown);
+  document.removeEventListener('focusin', onFocusIn);
+  const at = openModals.indexOf(token);
+  if (at !== -1) openModals.splice(at, 1);
   if (locked) {
     unlockScroll();
     locked = false;
   }
+  // Back to what opened the dialog; if that is gone (a row that was deleted, say), to the page's main area
   if (previousFocus && typeof previousFocus.focus === 'function' && document.contains(previousFocus)) {
     previousFocus.focus();
+  } else {
+    const main = document.querySelector('main');
+    if (main) {
+      if (!main.hasAttribute('tabindex')) main.setAttribute('tabindex', '-1');
+      main.focus({ preventScroll: true });
+    }
   }
   previousFocus = null;
 }
 
+// Focus that lands outside the dialog (a script, a click on the page behind) is pulled back in
+function onFocusIn(e) {
+  if (!isTop() || !panel.value || panel.value.contains(e.target)) return;
+  (focusables()[0] || panel.value).focus();
+}
+
 function onKeydown(e) {
+  if (!isTop()) return;
   if (e.key === 'Escape') {
     e.stopPropagation();
     emit('close');
@@ -120,9 +152,10 @@ onBeforeUnmount(() => {
           ref="panel"
           class="modal-panel card"
           :class="`size-${size}`"
-          role="dialog"
+          :role="role"
           aria-modal="true"
           :aria-labelledby="title ? titleId : undefined"
+          :aria-describedby="describedby || undefined"
           tabindex="-1"
         >
           <header class="modal-head">

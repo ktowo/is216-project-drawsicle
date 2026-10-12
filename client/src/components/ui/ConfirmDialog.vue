@@ -1,4 +1,5 @@
 <script setup>
+import { useId } from 'vue';
 import { Loader2 } from 'lucide-vue-next';
 import BaseModal from './BaseModal.vue';
 
@@ -11,8 +12,16 @@ const props = defineProps({
   cancelLabel: { type: String, default: 'Cancel' },
   danger: { type: Boolean, default: false },
   loading: { type: Boolean, default: false },
+  // Keeps the confirm button off until something is true, e.g. a typed name matches
+  confirmDisabled: { type: Boolean, default: false },
 });
 const emit = defineEmits(['confirm', 'cancel']);
+
+const messageId = `confirm-message-${useId()}`;
+
+function confirm() {
+  if (!props.loading && !props.confirmDisabled) emit('confirm');
+}
 
 function cancel() {
   // Don't let Esc or a backdrop click hide a request that is still running
@@ -21,22 +30,36 @@ function cancel() {
 </script>
 
 <template>
-  <BaseModal :open="open" :title="title" size="sm" @close="cancel">
-    <p v-if="message" class="message">{{ message }}</p>
+  <BaseModal
+    :open="open"
+    :title="title"
+    size="sm"
+    role="alertdialog"
+    :describedby="message ? messageId : undefined"
+    @close="cancel"
+  >
+    <p v-if="message" :id="messageId" class="message">{{ message }}</p>
     <div v-if="$slots.default" class="extra" :class="{ spaced: message }">
       <slot />
     </div>
 
     <template #footer>
-      <button type="button" class="btn btn-outline btn-sm" :disabled="loading" @click="cancel">
+      <!-- With nothing else to fill in, focus starts on the safe choice -->
+      <button
+        type="button"
+        class="btn btn-outline btn-sm"
+        :disabled="loading"
+        :data-autofocus="$slots.default ? undefined : ''"
+        @click="cancel"
+      >
         {{ cancelLabel }}
       </button>
       <button
         type="button"
         class="btn btn-sm"
         :class="danger ? 'btn-danger' : 'btn-primary'"
-        :disabled="loading"
-        @click="emit('confirm')"
+        :disabled="loading || confirmDisabled"
+        @click="confirm"
       >
         <Loader2 v-if="loading" :size="16" class="spin" aria-hidden="true" />
         {{ confirmLabel }}
