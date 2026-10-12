@@ -206,6 +206,30 @@ providers{google,discord}, profileComplete, createdAt }`
 organizing: [{ event: EventMini, stats: { applications, pending, accepted, matched, submitted, missing, overdue } }],
 upcoming: [{ eventId, eventName, kind: 'signup'|'submission', at }], counts: { organizing, participating, unreadNotifications } }`
 
+### Site admin: `routes/admin-router.js` (requireAuth + requireAdmin, mounted at /api/admin)
+
+Every change is written to `AuditLog` (actor, action, target, reason).
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | /admin/stats | counts of accounts by status, admins, events by status, disabled events, sign-ups, published matches, gifts; newest accounts and events |
+| GET | /admin/users?q=&status=&role=&page= | every account, including banned and deactivated ones, with `eventsOrganized` |
+| PATCH | /admin/users/:userId | `{ role: 'user' | 'admin' }`; 400 `SELF` for your own account |
+| POST | /admin/users/:userId/ban | `{ reason }` (required): status `banned`, logged out everywhere, open sign-ups withdrawn → `{ user, withdrawnApplications }`. Admins must be demoted first. Login then answers 403 `ACCOUNT_BANNED` with the reason |
+| POST | /admin/users/:userId/unban | `{ reason? }` |
+| DELETE | /admin/users/:userId | anonymises the account in place (like the 30-day purge), archives its characters |
+| GET | /admin/events?q=&status=&moderation=disabled|none&page= | every event, including drafts, private, disabled and cancelled ones, with `createdBy` |
+| POST | /admin/events/:eventId/disable, /enable | `{ reason }` (required to disable). Disabled events 404 for everyone but organisers and admins |
+| POST | /admin/events/:eventId/cancel, /restore | `{ reason }` (required to cancel). Status becomes `cancelled`; restore returns to the status it had |
+| DELETE | /admin/events/:eventId | deletes it with everything that belongs to it |
+| GET | /admin/audit?targetType=&page= | newest first |
+
+**Moderated events.** `loadEvent` enforces it for every event route: a disabled event (`disabledAt`) is 404 for
+everyone except its organisers and admins, and disabled or cancelled events reject every change from non-admins
+with 409 `EVENT_DISABLED` / `EVENT_CANCELLED`. Cancelled events stay listed (`status=cancelled` or `all`); disabled
+ones never are. Event JSON carries `cancelledAt`, `cancelReason` and `disabled` (plus `disabledAt` and
+`disabledReason` for organisers).
+
 ### Health
 
 `GET /health` → `{ ok, db, time }`

@@ -42,6 +42,18 @@ IS216 Web Application Development II project (SMU).
   being made.
 - **Info pages**: About, Help & FAQ (searchable), community guidelines, Privacy and Terms.
 - **Notification history**: the bell shows the latest; the notifications page loads older ones page by page.
+- **Site admin** (`/admin`, accounts with the admin role, e.g. `ada@demo.test` or anyone listed in
+  `ADMIN_EMAILS`):
+  - **Accounts**: search, make or remove admins, ban and unban (with a reason the person sees when they
+    try to log in), and delete accounts.
+  - **Events**: disable or cancel any event, and delete it.
+    - A *cancelled* event keeps its public page with a notice and the reason.
+    - A *disabled* event disappears for everyone except its organisers, who see why.
+    - Both are read-only until an admin restores them.
+  - **Audit log**: every admin action is recorded, with the reason.
+- **Dark mode and the sparkle cursor**: two switches at the top right of every page. The site follows your
+  device's light/dark setting until you pick one. The pencil cursor with sparkles is only for mouse and
+  trackpad users, and turning it off is remembered.
 
 Out of scope for now: messaging, payments, analytics, public galleries, support tickets and custom form
 questions.
@@ -117,6 +129,7 @@ created, so deadlines always look current.
 | noor@demo.test | Noor | | Winter, Summer, Spring |
 | kit@demo.test | Kit | Moth & Lantern Exchange (open, applications reviewed) | Studio Club, Spring |
 | pip@demo.test | Pip | | Moth & Lantern, Summer, Autumn |
+| ada@demo.test | Ada (**site admin**) | | Nothing: use her for the *Admin* page |
 
 Everyone has a bio and two or three social links, so each public profile has something to show, for example
 `/users/mika`, `/users/kit` (organises *Moth & Lantern Exchange*) or `/users/juniper` (organises the
