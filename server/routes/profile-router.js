@@ -1,78 +1,175 @@
 const { Router } = require('express');
 const mongoose = require('mongoose');
 const multer = require('multer');
+const bcrypt = require('bcryptjs');
 const User = require('../models/User.js');
+const { USERNAME_RE, SOCIAL_KEYS } = User;
 const { requireAuth } = require('../middleware/auth.js');
-const { uploadImage, IMAGE_TYPES } = require('../services/storage.js');
+const { uploadImage, looksLikeImage, IMAGE_TYPES } = require('../services/storage.js');
+const { endSession } = require('../utils/session.js');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
+const { CREATION_TYPE_VALUES, LIMITS, normalizeTags } = require('../../shared/constants.mjs');
 
 const router = Router();
-router.use(requireAuth);
+
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 2 * 1024 * 1024 }, // 2 MB
+  limits: { fileSize: AVATAR_MAX_BYTES, files: 1 },
   fileFilter: (req, file, cb) => {
     if (IMAGE_TYPES[file.mimetype]) cb(null, true);
-    else cb(httpError(400, 'Use a PNG, JPG, WebP or GIF image.'));
+    else cb(httpError(400, 'Use a PNG, JPG, WebP or GIF image.', 'UPLOAD_INVALID'));
   },
 });
 
+// Same as upload.single('avatar') but with the avatar's own size in the error
+function avatarUpload(req, res, next) {
+  upload.single('avatar')(req, res, (err) => {
+    if (err?.code === 'LIMIT_FILE_SIZE') return next(httpError(400, 'That image is too big. Max 2 MB.', 'FILE_TOO_LARGE'));
+    next(err);
+  });
+}
+
 const HANDLE_RE = /^[A-Za-z0-9_.-]{0,50}$/;
 const cleanHandle = (h) => String(h ?? '').trim().replace(/^@+/, '');
+const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+const invalid = (message) => httpError(400, message, 'VALIDATION');
 
-// Update my profile. Only these fields can be changed here.
-router.patch('/', asyncHandler(async (req, res) => {
-  const { displayName, bio, socials } = req.body;
+function textField(value, label, max) {
+  if (value === null) return '';
+  if (typeof value !== 'string') throw invalid(`${label} must be text.`);
+  const text = value.trim();
+  if (text.length > max) throw invalid(`${label} is too long (max ${max} characters).`);
+  return text;
+}
+
+function typeList(value, label) {
+  if (!Array.isArray(value) || value.some((t) => !CREATION_TYPE_VALUES.includes(t))) {
+    throw invalid(`${label} must be a list using: ${CREATION_TYPE_VALUES.join(', ')}.`);
+  }
+  return [...new Set(value)];
+}
+
+// Update my profile. Only the fields below can be changed here; anything else in the body is ignored.
+router.patch('/', requireAuth, asyncHandler(async (req, res) => {
+  const { displayName, bio, username, socials, defaultForm, notificationPrefs } = req.body || {};
   const user = req.user;
 
   if (displayName !== undefined) {
-    const name = String(displayName).trim();
-    if (!name) return res.status(400).json({ error: 'Display name cannot be empty.' });
-    if (name.length > 60) return res.status(400).json({ error: 'Display name is too long (max 60).' });
+    const name = textField(displayName, 'Display name', 60);
+    if (!name) throw invalid('Display name cannot be empty.');
     user.displayName = name;
   }
 
-  if (bio !== undefined) {
-    const text = String(bio).trim();
-    if (text.length > 1000) return res.status(400).json({ error: 'Bio is too long (max 1000 characters).' });
-    user.bio = text;
+  if (bio !== undefined) user.bio = textField(bio, 'Bio', 1000);
+
+  if (username !== undefined) {
+    const handle = typeof username === 'string' ? username.trim().toLowerCase() : '';
+    if (!USERNAME_RE.test(handle)) {
+      throw invalid('Usernames are 3-30 lowercase letters, numbers or underscores.');
+    }
+    if (handle !== user.username) {
+      if (await User.exists({ username: handle, _id: { $ne: user._id } })) {
+        throw httpError(409, 'That username is taken.', 'USERNAME_TAKEN');
+      }
+      user.username = handle;
+    }
   }
 
-  if (socials && typeof socials === 'object') {
-    for (const key of ['twitter', 'instagram', 'bluesky']) {
+  if (socials !== undefined) {
+    if (!isPlainObject(socials)) throw invalid('socials must be an object.');
+    for (const key of SOCIAL_KEYS) {
       if (socials[key] === undefined) continue;
       const handle = cleanHandle(socials[key]);
       if (!HANDLE_RE.test(handle)) {
-        return res.status(400).json({ error: `That ${key} handle has characters it can't contain.` });
+        throw invalid(`That ${key} handle is too long or has characters it can't contain.`);
       }
       user.socials[key] = handle;
     }
   }
 
-  await user.save();
+  if (defaultForm !== undefined) {
+    if (!isPlainObject(defaultForm)) throw invalid('defaultForm must be an object.');
+    const form = user.defaultForm;
+    if (defaultForm.communityUsername !== undefined) {
+      form.communityUsername = textField(defaultForm.communityUsername, 'Community username', LIMITS.communityUsername);
+    }
+    if (defaultForm.canCreate !== undefined) form.canCreate = typeList(defaultForm.canCreate, 'What you can make');
+    if (defaultForm.wantsTypes !== undefined) form.wantsTypes = typeList(defaultForm.wantsTypes, 'What you would like');
+    if (defaultForm.likes !== undefined) form.likes = textField(defaultForm.likes, 'Likes', LIMITS.formText);
+    if (defaultForm.avoid !== undefined) form.avoid = textField(defaultForm.avoid, 'Things to avoid', LIMITS.formText);
+    if (defaultForm.cannotDraw !== undefined) {
+      if (typeof defaultForm.cannotDraw !== 'string' && !Array.isArray(defaultForm.cannotDraw)) {
+        throw invalid("Things you can't draw must be a list of tags.");
+      }
+      form.cannotDraw = normalizeTags(defaultForm.cannotDraw);
+    }
+  }
+
+  if (notificationPrefs !== undefined) {
+    if (!isPlainObject(notificationPrefs)) throw invalid('notificationPrefs must be an object.');
+    for (const key of ['emailReminders', 'emailMatches', 'emailEventUpdates']) {
+      if (notificationPrefs[key] === undefined) continue;
+      if (typeof notificationPrefs[key] !== 'boolean') throw invalid(`${key} must be true or false.`);
+      user.notificationPrefs[key] = notificationPrefs[key];
+    }
+  }
+
+  try {
+    await user.save();
+  } catch (err) {
+    if (err?.code === 11000 && (err.keyPattern?.username || err.keyValue?.username)) {
+      throw httpError(409, 'That username is taken.', 'USERNAME_TAKEN');
+    }
+    throw err;
+  }
   res.json({ user: user.toPublic() });
 }));
 
 // Upload a new avatar (form field name: "avatar")
-router.post('/avatar', upload.single('avatar'), asyncHandler(async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'Choose an image to upload.' });
+router.post('/avatar', requireAuth, avatarUpload, asyncHandler(async (req, res) => {
+  if (!req.file) throw invalid('Choose an image to upload.');
+  if (!looksLikeImage(req.file)) throw httpError(400, 'Use a PNG, JPG, WebP or GIF image.', 'UPLOAD_INVALID');
   req.user.avatarUrl = await uploadImage('avatars', req.file);
   await req.user.save();
   res.json({ user: req.user.toPublic() });
 }));
 
-router.delete('/avatar', asyncHandler(async (req, res) => {
+router.delete('/avatar', requireAuth, asyncHandler(async (req, res) => {
   req.user.avatarUrl = undefined;
   await req.user.save();
   res.json({ user: req.user.toPublic() });
 }));
 
-// Someone else's public profile (no email)
+// Deactivate my account. Logging back in within LIMITS.deactivationGraceDays undoes it;
+// after that the reminder job anonymises the account (services/reminders.js).
+router.post('/deactivate', requireAuth, asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id).select('+passwordHash');
+
+  if (user.passwordHash) {
+    const { password } = req.body || {};
+    const ok = typeof password === 'string' && password && (await bcrypt.compare(password, user.passwordHash));
+    if (!ok) return res.status(401).json({ error: 'That password is not right.', code: 'WRONG_PASSWORD' });
+  }
+
+  user.status = 'deactivated';
+  user.deactivatedAt = new Date();
+  user.sessionVersion = (user.sessionVersion || 0) + 1; // logs out every device
+  await user.save();
+
+  endSession(res);
+  res.json({ ok: true });
+}));
+
+// Someone's public profile (no email), by id or username. Deactivated accounts are hidden.
 router.get('/:id', asyncHandler(async (req, res) => {
-  if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: 'User not found.' });
-  const user = await User.findById(req.params.id);
-  if (!user) return res.status(404).json({ error: 'User not found.' });
+  const { id } = req.params;
+  let user = null;
+  if (mongoose.isObjectIdOrHexString(id)) user = await User.findById(id);
+  if (!user && USERNAME_RE.test(id.toLowerCase())) user = await User.findOne({ username: id.toLowerCase() });
+
+  if (!user || user.status === 'deactivated') throw httpError(404, 'User not found.', 'NOT_FOUND');
   res.json({ profile: user.toPublicProfile() });
 }));
 
