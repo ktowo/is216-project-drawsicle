@@ -228,3 +228,23 @@ Each reminder is sent once (`Event.remindersSent`). Emails follow `User.notifica
 `VITE_API_MODE=mock` (`pnpm dev:mock`, `pnpm build:mock`) swaps `api()` for `src/mock/index.js`
 (`mockRequest(path, { method, body, form }) → { status, data }`), which implements the same routes against
 localStorage, seeded from `shared/demo-data.mjs`. It exists so the client can be reviewed on a static host.
+
+## Additions (build-out round)
+
+These extend the API above; the server and the mock implement them the same way.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | /users/:username | (optional auth) public artist profile → `{ profile: { id, username, displayName, avatarUrl, bio, socials, createdAt }, organizing: Event[] (their public, non-draft events, newest first, max 12), stats: { eventsOrganized, exchangesCompleted } }`. `exchangesCompleted` counts completed events where they were an accepted participant. 404 `USER_NOT_FOUND` for unknown or deactivated accounts. Router: `routes/user-router.js` at `/api/users` |
+| GET | /characters/:id | now also returns `character.usedIn: [{ eventId, eventName, eventStatus, applicationStatus }]` (owner only, as before) |
+| GET | /notifications?limit=&before= | `before` is an ISO date cursor (items strictly older than it); response adds `hasMore` |
+| GET | /profile/export | (auth) → `{ exportedAt, user, characters, applications: [Application + eventName], submissions: [Submission + eventName], notifications }` for a "download my data" button |
+| POST | /events/:eventId/duplicate | (org) `{ name?, signupDeadline?, submissionDeadline? }` → 201 `{ event }`: a new draft copying the settings, description, rules, tags, banner and types. Defaults: name "Copy of X", sign-ups close 14 days from now, submission gap kept from the original. The caller becomes its organiser |
+
+Account deactivation also withdraws the person's applications in draft, open and matching events (revoking the participant
+role and deleting unpublished matches in matching events). Generating matches skips accepted applicants whose account is
+deactivated and adds a warning naming them. Logging back in does not restore withdrawn applications.
+
+Client-only helpers (no API): `client/src/utils/calendar.js` builds `.ics` files for deadlines
+(`eventCalendarEntries(event)`, `buildIcs(entries)`, `downloadIcs(filename, entries)`), and
+`client/src/utils/eventTemplates.js` holds event presets (Secret Santa, Valentine swap, seasonal trade, art trade).

@@ -45,6 +45,16 @@ const routes = [
     ],
   },
 
+  // Public artist profiles
+  { path: '/users/:username', name: 'user', component: () => import('../views/UserProfileView.vue'), meta: { title: 'Artist' } },
+
+  // Info pages (linked from the footer)
+  { path: '/about', name: 'about', component: () => import('../views/AboutView.vue'), meta: { title: 'About' } },
+  { path: '/help', name: 'help', component: () => import('../views/HelpView.vue'), meta: { title: 'Help & FAQ' } },
+  { path: '/guidelines', name: 'guidelines', component: () => import('../views/GuidelinesView.vue'), meta: { title: 'Community guidelines' } },
+  { path: '/privacy', name: 'privacy', component: () => import('../views/PrivacyView.vue'), meta: { title: 'Privacy' } },
+  { path: '/terms', name: 'terms', component: () => import('../views/TermsView.vue'), meta: { title: 'Terms' } },
+
   { path: '/forbidden', name: 'forbidden', component: () => import('../views/ForbiddenView.vue'), meta: { title: 'No access' } },
   { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('../views/NotFoundView.vue'), meta: { title: 'Page not found' } },
 ];
