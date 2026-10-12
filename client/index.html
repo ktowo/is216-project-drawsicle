@@ -14,6 +14,16 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
     <title>Drawisicle</title>
+    <script>
+      // Pick light/dark before the page paints, so there's no flash of the wrong theme
+      (function () {
+        try {
+          var p = JSON.parse(localStorage.getItem('drawisicle-preferences') || '{}');
+          var dark = p.theme ? p.theme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+          document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

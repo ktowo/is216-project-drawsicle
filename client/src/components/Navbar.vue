@@ -17,8 +17,10 @@ import {
   CalendarHeart,
   CircleHelp,
   Eye,
+  ShieldCheck,
 } from 'lucide-vue-next';
 import NotificationBell from './NotificationBell.vue';
+import DisplayToggles from './DisplayToggles.vue';
 import UserAvatar from './UserAvatar.vue';
 import { auth, logout } from '@/stores/auth';
 import { notifications } from '@/stores/notifications';
@@ -47,6 +49,7 @@ const loginLink = computed(() =>
 
 // The public page only exists once someone has a username
 const accountLinks = computed(() => [
+  ...(auth.user?.role === 'admin' ? [{ to: '/admin', label: 'Site admin', icon: ShieldCheck }] : []),
   { to: '/profile', label: 'Your profile', icon: UserRound },
   ...(auth.user?.username
     ? [{ to: `/users/${encodeURIComponent(auth.user.username)}`, label: 'View public profile', icon: Eye }]
@@ -198,11 +201,15 @@ watch(
         <template v-if="auth.user">
           <RouterLink to="/dashboard" class="nav-link">Dashboard</RouterLink>
           <RouterLink to="/my-events" class="nav-link">My events</RouterLink>
+          <RouterLink v-if="auth.user.role === 'admin'" to="/admin" class="nav-link admin-link">
+            <ShieldCheck :size="16" aria-hidden="true" /> Admin
+          </RouterLink>
         </template>
         <RouterLink v-else to="/help" class="nav-link">Help</RouterLink>
       </nav>
 
       <div class="right">
+        <DisplayToggles />
         <template v-if="auth.user">
           <RouterLink to="/events/new" class="btn btn-primary btn-sm new-btn desktop-only" title="New event">
             <Plus :size="18" aria-hidden="true" />
@@ -357,7 +364,7 @@ watch(
   position: sticky;
   top: 0;
   z-index: 40;
-  background: rgba(255, 253, 250, 0.92);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
@@ -409,7 +416,7 @@ watch(
   white-space: nowrap;
 }
 .nav-link:hover {
-  background: #f5eee1;
+  background: var(--hover);
   color: var(--text);
 }
 .nav-link.router-link-active,
@@ -442,7 +449,7 @@ watch(
 }
 .user-btn:hover,
 .user-btn[aria-expanded='true'] {
-  background: #f5eee1;
+  background: var(--hover);
 }
 .user-btn:focus-visible {
   border-radius: 999px;
@@ -506,7 +513,7 @@ watch(
   text-align: left;
 }
 .menu-item:hover {
-  background: #faf3e7;
+  background: var(--hover);
   color: var(--text);
 }
 .menu-item.router-link-active {
@@ -530,7 +537,7 @@ watch(
 }
 .hamburger:hover,
 .hamburger[aria-expanded='true'] {
-  background: #f5eee1;
+  background: var(--hover);
 }
 
 .mobile-panel {
@@ -567,7 +574,7 @@ watch(
   cursor: pointer;
 }
 .mobile-link:hover {
-  background: #faf3e7;
+  background: var(--hover);
   color: var(--text);
 }
 .mobile-link.router-link-active,
@@ -655,5 +662,10 @@ watch(
   .chev {
     transition: none;
   }
+}
+.admin-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 </style>
