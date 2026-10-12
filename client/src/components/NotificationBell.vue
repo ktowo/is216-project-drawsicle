@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter, RouterLink } from 'vue-router';
-import { Bell, CheckCheck, ArrowRight } from 'lucide-vue-next';
+import { Bell, CheckCheck, ArrowRight, Loader2, RotateCcw } from 'lucide-vue-next';
 import { auth, refreshUser } from '@/stores/auth';
 import {
   notifications,
@@ -9,9 +9,11 @@ import {
   refreshUnreadCount,
   markRead,
   markAllRead,
+  notificationKind,
+  isInternalLink,
 } from '@/stores/notifications';
 import { toast } from '@/stores/toast';
-import { timeAgo } from '@/utils/format';
+import { timeAgo, formatDateTime } from '@/utils/format';
 
 const POLL_MS = 60000;
 const SHOWN = 8;
@@ -21,15 +23,20 @@ const open = ref(false);
 const root = ref(null);
 const button = ref(null);
 const loadError = ref(false);
+const now = ref(Date.now());
 let timer = null;
 
 const shown = computed(() => notifications.items.slice(0, SHOWN));
 const badge = computed(() => (notifications.unreadCount > 9 ? '9+' : String(notifications.unreadCount)));
+// Unread ones that don't fit in the panel
+const moreUnread = computed(() => {
+  const inPanel = shown.value.filter((n) => !n.read).length;
+  return Math.max(0, notifications.unreadCount - inPanel);
+});
 
-async function toggle() {
-  open.value = !open.value;
-  if (!open.value) return;
+async function refreshPanel() {
   loadError.value = false;
+  now.value = Date.now();
   try {
     await loadNotifications(20);
   } catch {
@@ -37,18 +44,20 @@ async function toggle() {
   }
 }
 
+async function toggle() {
+  open.value = !open.value;
+  if (open.value) await refreshPanel();
+}
+
 function close({ focusButton = false } = {}) {
   open.value = false;
   if (focusButton) button.value?.focus();
 }
 
-// Notification links are in-app paths like /events/123; anything else is ignored
-const isInternal = (link) => typeof link === 'string' && link.startsWith('/') && !link.startsWith('//');
-
 async function openItem(n) {
   close();
   markRead(n.id);
-  if (isInternal(n.link)) router.push(n.link);
+  if (isInternalLink(n.link)) router.push(n.link);
 }
 
 async function onMarkAll() {
@@ -174,28 +183,45 @@ watch(
         </button>
       </div>
 
-      <p v-if="notifications.loading && !notifications.items.length" class="empty">Loading…</p>
-      <p v-else-if="loadError && !notifications.items.length" class="empty">Couldn't load notifications.</p>
-      <p v-else-if="!notifications.items.length" class="empty">You're all caught up.</p>
+      <p v-if="notifications.loading && !notifications.items.length" class="empty" role="status">
+        <Loader2 :size="18" class="spin" aria-hidden="true" /> Loading…
+      </p>
+      <div v-else-if="loadError && !notifications.items.length" class="empty" role="alert">
+        <p>Couldn't load your notifications.</p>
+        <button type="button" class="btn btn-outline btn-xs" @click="refreshPanel">
+          <RotateCcw :size="14" aria-hidden="true" /> Try again
+        </button>
+      </div>
+      <div v-else-if="!notifications.items.length" class="empty">
+        <p class="empty-title">You're all caught up</p>
+        <p>Sign-up decisions, matches and reminders will show up here.</p>
+      </div>
 
       <ul v-else class="list">
         <li v-for="n in shown" :key="n.id">
           <button type="button" class="item" :class="{ unread: !n.read }" @click="openItem(n)">
-            <span class="unread-dot" aria-hidden="true" />
+            <span class="item-icon" :class="`tone-${notificationKind(n.type).tone}`" aria-hidden="true">
+              <component :is="notificationKind(n.type).icon" :size="16" />
+            </span>
             <span class="item-body">
               <span class="item-title">
+                <span v-if="!n.read" class="sr-only">Unread:</span>
                 {{ n.title }}
-                <span v-if="!n.read" class="sr-only">(unread)</span>
               </span>
               <span v-if="n.message" class="item-msg">{{ n.message }}</span>
-              <span class="item-time">{{ timeAgo(n.createdAt) }}</span>
+              <time class="item-time" :datetime="n.createdAt" :title="formatDateTime(n.createdAt)">
+                {{ timeAgo(n.createdAt, now) }}
+              </time>
             </span>
+            <span v-if="!n.read" class="unread-dot" aria-hidden="true" />
           </button>
         </li>
       </ul>
 
       <RouterLink to="/notification" class="see-all" @click="close()">
-        See all notifications <ArrowRight :size="16" aria-hidden="true" />
+        See all notifications
+        <span v-if="moreUnread" class="see-all-count">({{ moreUnread }} more unread)</span>
+        <ArrowRight :size="16" aria-hidden="true" />
       </RouterLink>
     </div>
   </div>
@@ -256,9 +282,20 @@ watch(
 }
 .empty {
   margin: 0;
-  padding: 24px 10px;
+  padding: 24px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   text-align: center;
   color: var(--muted);
+}
+.empty p {
+  margin: 0;
+}
+.empty .empty-title {
+  color: var(--text);
+  font-weight: 700;
 }
 .list {
   list-style: none;
@@ -283,15 +320,46 @@ watch(
 .item:hover {
   background: #faf3e7;
 }
+.item.unread {
+  background: #fff8fa;
+}
+.item.unread:hover {
+  background: #fdeef3;
+}
+.item-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.tone-pink {
+  background: var(--pink-soft);
+  color: var(--pink-dark);
+}
+.tone-info {
+  background: var(--info-soft);
+  color: var(--info);
+}
+.tone-success {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.tone-warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.tone-muted {
+  background: #f3ebdc;
+  color: var(--muted);
+}
 .unread-dot {
   width: 8px;
   height: 8px;
   margin-top: 7px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: transparent;
-}
-.item.unread .unread-dot {
   background: var(--pink);
 }
 .item-body {
@@ -299,6 +367,7 @@ watch(
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  flex: 1;
 }
 .item-title {
   font-weight: 600;
@@ -326,6 +395,10 @@ watch(
   border-top: 1px solid var(--border);
   font-weight: 600;
   font-size: 0.95rem;
+}
+.see-all-count {
+  color: var(--muted);
+  font-weight: 500;
 }
 @media (max-width: 480px) {
   .panel {

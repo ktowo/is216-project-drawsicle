@@ -1,23 +1,116 @@
 import { reactive } from 'vue';
-import { api } from '../api';
+import {
+  Bell,
+  Inbox,
+  CircleCheck,
+  Ban,
+  CalendarHeart,
+  Users,
+  ShieldCheck,
+  Gift,
+  Clock,
+  ImageUp,
+  PartyPopper,
+} from 'lucide-vue-next';
+import { api, qs } from '../api';
 
 // In-app notifications for the logged-in user. The bell and the notifications page share this list.
 export const notifications = reactive({
   items: [],
   unreadCount: 0,
+  // Unread ones older than what we've loaded, so the page can tell "new since you loaded" apart from "further back"
+  unreadBeyond: 0,
   loading: false,
   loaded: false,
+  hasMore: false,
+  loadingMore: false,
 });
 
-export async function loadNotifications(limit = 20) {
+export const PAGE_SIZE = 20;
+
+// ---------- Types: icon, colour and which filter they belong to ----------
+
+export const NOTIFICATION_GROUPS = [
+  { key: 'signups', label: 'Sign-ups' },
+  { key: 'matches', label: 'Matches' },
+  { key: 'reminders', label: 'Reminders' },
+  { key: 'events', label: 'Event updates' },
+];
+
+const KINDS = {
+  application_received: { icon: Inbox, group: 'signups', tone: 'info' },
+  application_accepted: { icon: CircleCheck, group: 'signups', tone: 'success' },
+  application_rejected: { icon: Ban, group: 'signups', tone: 'muted' },
+  match_assigned: { icon: Gift, group: 'matches', tone: 'pink' },
+  submission_received: { icon: ImageUp, group: 'matches', tone: 'info' },
+  gift_revealed: { icon: PartyPopper, group: 'matches', tone: 'pink' },
+  deadline_reminder: { icon: Clock, group: 'reminders', tone: 'warning' },
+  event_status: { icon: CalendarHeart, group: 'events', tone: 'pink' },
+  organizer_added: { icon: Users, group: 'events', tone: 'info' },
+  role_changed: { icon: ShieldCheck, group: 'events', tone: 'info' },
+};
+const OTHER_KIND = { icon: Bell, group: 'events', tone: 'muted' };
+
+// notificationKind('match_assigned') -> { icon, group: 'matches', tone: 'pink' }
+export function notificationKind(type) {
+  return KINDS[type] || OTHER_KIND;
+}
+
+// Notification links are in-app paths like /events/123; anything else is ignored
+export function isInternalLink(link) {
+  return typeof link === 'string' && link.startsWith('/') && !link.startsWith('//');
+}
+
+// ---------- Loading ----------
+
+const loadedUnread = () => notifications.items.filter((n) => !n.read).length;
+
+function noteUnreadBeyond() {
+  notifications.unreadBeyond = notifications.hasMore ? Math.max(0, notifications.unreadCount - loadedUnread()) : 0;
+}
+
+// Newest page. When the page has already loaded further back ("Load more") and the new page
+// overlaps it, the older items are kept so the bell refreshing doesn't throw them away.
+export async function loadNotifications(limit = PAGE_SIZE) {
   notifications.loading = true;
   try {
-    const { items, unreadCount } = await api(`/notifications?limit=${limit}`);
-    notifications.items = items;
-    notifications.unreadCount = unreadCount;
+    const data = await api(`/notifications${qs({ limit })}`);
+    const latest = data.items || [];
+    const current = notifications.items;
+    const oldest = latest[latest.length - 1];
+    const joinAt = oldest && latest.length >= limit ? current.findIndex((n) => n.id === oldest.id) : -1;
+
+    if (joinAt !== -1 && current.length > joinAt + 1) {
+      notifications.items = [...latest, ...current.slice(joinAt + 1)];
+    } else {
+      notifications.items = latest;
+      notifications.hasMore = typeof data.hasMore === 'boolean' ? data.hasMore : latest.length >= limit;
+    }
+    notifications.unreadCount = data.unreadCount ?? 0;
     notifications.loaded = true;
+    noteUnreadBeyond();
   } finally {
     notifications.loading = false;
+  }
+}
+
+// Next page, older than the last one we have (the `before` cursor)
+export async function loadMoreNotifications(limit = PAGE_SIZE) {
+  const last = notifications.items[notifications.items.length - 1];
+  if (!last || notifications.loadingMore) return;
+  notifications.loadingMore = true;
+  try {
+    const data = await api(`/notifications${qs({ limit, before: last.createdAt })}`);
+    const known = new Set(notifications.items.map((n) => n.id));
+    const older = (data.items || []).filter((n) => !known.has(n.id));
+    notifications.items.push(...older);
+    if (typeof data.unreadCount === 'number') notifications.unreadCount = data.unreadCount;
+    // Nothing we didn't already have means we've reached the end, whatever the server says
+    notifications.hasMore =
+      older.length > 0 && (typeof data.hasMore === 'boolean' ? data.hasMore : older.length >= limit);
+    noteUnreadBeyond();
+  } finally {
+    notifications.loadingMore = false;
   }
 }
 
@@ -31,6 +124,8 @@ export async function refreshUnreadCount({ throwErrors = false } = {}) {
     if (throwErrors) throw e;
   }
 }
+
+// ---------- Changes ----------
 
 export async function markRead(id) {
   const item = notifications.items.find((n) => n.id === id);
@@ -48,12 +143,15 @@ export async function markRead(id) {
 
 export async function markAllRead() {
   const previous = notifications.items.map((n) => n.read);
+  const previousBeyond = notifications.unreadBeyond;
   notifications.items.forEach((n) => (n.read = true));
   notifications.unreadCount = 0;
+  notifications.unreadBeyond = 0;
   try {
     await api('/notifications/read-all', { method: 'POST' });
   } catch (e) {
     notifications.items.forEach((n, i) => (n.read = previous[i] ?? n.read));
+    notifications.unreadBeyond = previousBeyond;
     refreshUnreadCount();
     throw e;
   }
@@ -72,6 +170,9 @@ export async function removeNotification(id) {
 export function resetNotifications() {
   notifications.items = [];
   notifications.unreadCount = 0;
+  notifications.unreadBeyond = 0;
   notifications.loading = false;
   notifications.loaded = false;
+  notifications.hasMore = false;
+  notifications.loadingMore = false;
 }
