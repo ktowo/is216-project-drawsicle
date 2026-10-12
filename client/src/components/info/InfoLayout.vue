@@ -23,6 +23,7 @@ const props = defineProps({
 
 const route = useRoute();
 const body = ref(null);
+const jump = ref(null);
 const found = ref([]);
 const activeId = ref('');
 
@@ -78,6 +79,10 @@ onMounted(async () => {
 });
 onBeforeUnmount(() => observer?.disconnect());
 
+function closeJump() {
+  if (jump.value) jump.value.open = false;
+}
+
 const tocLabel = computed(() => `On this page: ${props.title}`);
 </script>
 
@@ -111,6 +116,18 @@ const tocLabel = computed(() => `On this page: ${props.title}`);
       </aside>
 
       <div class="info-main">
+        <!-- Small screens get the same list as a collapsible "Jump to" box -->
+        <details v-if="showToc" ref="jump" class="card toc-mobile">
+          <summary class="toc-summary"><ListTree :size="16" aria-hidden="true" /> Jump to a section</summary>
+          <ul>
+            <li v-for="s in items" :key="`m-${s.id}`">
+              <RouterLink :to="{ path: route.path, hash: `#${s.id}` }" class="toc-link" @click="closeJump">
+                {{ s.title }}
+              </RouterLink>
+            </li>
+          </ul>
+        </details>
+
         <slot name="before" />
 
         <div ref="body" class="card info-body">
@@ -219,6 +236,30 @@ const tocLabel = computed(() => `On this page: ${props.title}`);
   color: var(--pink-dark);
 }
 
+.toc-mobile {
+  display: none;
+  margin-bottom: 16px;
+  padding: 0 16px;
+}
+.toc-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 0;
+  font-weight: 700;
+  cursor: pointer;
+}
+.toc-mobile ul {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 10px;
+}
+.toc-mobile .toc-link {
+  padding: 9px 0;
+  margin-left: 0;
+  border-left: 0;
+}
+
 .info-body {
   padding: 8px 36px;
 }
@@ -318,6 +359,9 @@ const tocLabel = computed(() => `On this page: ${props.title}`);
   }
   .info-toc {
     display: none;
+  }
+  .toc-mobile {
+    display: block;
   }
 }
 @media (max-width: 640px) {
