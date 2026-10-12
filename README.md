@@ -25,7 +25,23 @@ IS216 Web Application Development II project (SMU).
   plus reminders organisers can send themselves.
 - **Submissions and the reveal**: upload images and links, organisers verify them, and once the event is
   completed everyone sees who their Secret Santa was and the whole gallery.
-- **Browse events**: filter by status, season and size, search by name or organiser.
+- **Browse events**: filter by status, season and size, search by name or organiser. The default order
+  is by each event's next deadline: sign-ups closing for open events, gifts due for running ones, and
+  finished events last.
+- **Public artist profiles** at `/users/<username>`: bio, social links (Discord handles come with a copy
+  button), the public events someone organises and how many exchanges they have completed. Organiser
+  names on event pages link there. Deactivated accounts and private details (email, characters,
+  sign-up forms) are never shown.
+- **Event templates and duplicating**: a new event can start from a preset (Secret Santa, Valentine swap,
+  seasonal trade, art trade), and organisers can duplicate any of their events into a fresh draft that keeps
+  the settings, rules, tags and banner but none of the people, matches or gifts.
+- **Calendar export**: an event's deadlines download as an `.ics` file for any calendar app.
+- **Your data**: *Download my data* in the account settings saves one JSON file with your profile,
+  characters, sign-ups, gifts and notifications. Deactivating an account also withdraws its sign-ups in
+  events that haven't published their matches yet; published matches stay, because those gifts are already
+  being made.
+- **Info pages**: About, Help & FAQ (searchable), community guidelines, Privacy and Terms.
+- **Notification history**: the bell shows the latest; the notifications page loads older ones page by page.
 
 Out of scope for now: messaging, payments, analytics, public galleries, support tickets and custom form
 questions.
@@ -66,7 +82,8 @@ What the first run does:
    overwritten.
 3. Starts the API on port 8000. With no `DB` set, the server starts its own MongoDB (port 27018, data in
    `server/.data`). **The very first time, the MongoDB download is about 800 MB on Windows**, so allow a few
-   minutes. It is cached afterwards and later starts take seconds.
+   minutes. It is cached afterwards (in `~/.cache/mongodb-binaries`, or the folder in `MONGOMS_DOWNLOAD_DIR`)
+   and later starts take seconds. The script only warns about the download when nothing is cached yet.
 4. Fills the empty local database with the demo accounts and events below.
 5. Starts the client on port 5173 (Vite, which forwards `/api` and `/uploads` to the API).
 
@@ -81,7 +98,9 @@ instead of starting it twice.
 | `--help` | Show the options |
 
 **Stop everything** (API, client and the local MongoDB) with `Stop-all.bat` or `./Stop-all.sh`. They are
-safe to run twice.
+safe to run twice. The local database is asked to shut down cleanly first
+(`server/scripts/stop-local-db.js`), so the last writes are saved even on Windows, where a database that is
+simply killed can lose them. If the database doesn't answer, the script falls back to stopping the process.
 
 ## Demo accounts
 
@@ -98,6 +117,10 @@ created, so deadlines always look current.
 | noor@demo.test | Noor | | Winter, Summer, Spring |
 | kit@demo.test | Kit | Moth & Lantern Exchange (open, applications reviewed) | Studio Club, Spring |
 | pip@demo.test | Pip | | Moth & Lantern, Summer, Autumn |
+
+Everyone has a bio and two or three social links, so each public profile has something to show, for example
+`/users/mika`, `/users/kit` (organises *Moth & Lantern Exchange*) or `/users/juniper` (organises the
+completed *Spring Bloom Exchange*). Drafts and private events never appear on a profile.
 
 Things to try as Mika: generate and publish matches for *Summer Splash Swap*, upload your gift for Sol in
 *Autumn Leaves Art Trade*, see who drew for you in *Spring Bloom Exchange*, or apply to Kit's *Moth & Lantern
@@ -191,8 +214,9 @@ is216-project/
 │   │   ├── api.js          fetch wrapper (switches to the mock in mock mode)
 │   │   ├── router/         every page route
 │   │   ├── views/          one file per page
-│   │   ├── components/     Navbar, Footer, NotificationBell, ui/, events/, characters/
+│   │   ├── components/     Navbar, Footer, NotificationBell, ui/, events/, characters/, profile/, info/
 │   │   ├── stores/         auth, notifications, toasts
+│   │   ├── utils/          formatting, calendar (.ics) files, event templates, social links
 │   │   ├── assets/         drawisicle.css design system + Tailwind theme
 │   │   └── mock/           the in-browser API used in mock mode
 │   └── tests/              Vitest tests
@@ -202,8 +226,8 @@ is216-project/
 │   ├── routes/             one router per feature
 │   ├── models/             Mongoose models
 │   ├── middleware/auth.js  login and event-role checks
-│   ├── services/           notifications, email, uploads, reminders
-│   ├── scripts/seed.js     demo data
+│   ├── services/           notifications, email, uploads, reminders, account deactivation
+│   ├── scripts/            seed.js (demo data), stop-local-db.js (clean database shutdown for Stop-all)
 │   └── tests/              node:test + supertest
 ├── shared/                 constants, matching algorithm and demo data used by both sides
 ├── docs/ARCHITECTURE.md    conventions, response shapes and every API route
