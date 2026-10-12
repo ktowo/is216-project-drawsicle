@@ -125,9 +125,25 @@ router.post('/', asyncHandler(async (req, res) => {
   res.status(201).json({ character: character.toPublic({ inUse: false, eventCount: 0 }) });
 }));
 
+// The events this character was offered in, newest sign-up first
+async function usedIn(character) {
+  const applications = await Application.find({ offeredCharacters: character._id })
+    .sort({ createdAt: -1, _id: -1 })
+    .populate('event', 'name status');
+  return applications
+    .filter((a) => a.event)
+    .map((a) => ({
+      eventId: a.event._id.toString(),
+      eventName: a.event.name,
+      eventStatus: a.event.status,
+      applicationStatus: a.status,
+    }));
+}
+
 router.get('/:id', asyncHandler(async (req, res) => {
   const character = await findOwnCharacter(req);
-  res.json({ character: await withUsage(character) });
+  const json = await withUsage(character);
+  res.json({ character: { ...json, usedIn: await usedIn(character) } });
 }));
 
 router.patch('/:id', asyncHandler(async (req, res) => {
