@@ -174,7 +174,8 @@ if "%MOCK%"=="0" (
 )
 echo.
 echo Stop with Stop-all.bat
-start "" "%CLIENT_URL%"
+rem Double-clicked: open the app too. From a terminal the address above is enough.
+if "%PAUSE_AT_END%"=="1" start "" "%CLIENT_URL%"
 if "%PAUSE_AT_END%"=="1" pause
 exit /b 0
 
