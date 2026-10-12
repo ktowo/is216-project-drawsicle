@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
+import { assetUrl } from '@/api';
 
 const props = defineProps({
   user: { type: Object, default: null },
@@ -9,10 +10,13 @@ const props = defineProps({
 const imageFailed = ref(false);
 watch(() => props.user?.avatarUrl, () => (imageFailed.value = false));
 
+const src = computed(() => assetUrl(props.user?.avatarUrl || ''));
+
 const initials = computed(() => {
-  const name = (props.user?.displayName || props.user?.email || '?').trim();
+  const name = (props.user?.displayName || props.user?.username || props.user?.email || '?').trim() || '?';
   const words = name.split(/\s+/).filter(Boolean);
-  const letters = words.length > 1 ? words[0][0] + words[1][0] : name.slice(0, 2);
+  // Spread so emoji and accented letters aren't cut in half
+  const letters = words.length > 1 ? [...words[0]][0] + [...words[1]][0] : [...name].slice(0, 2).join('');
   return letters.toUpperCase();
 });
 </script>
@@ -20,13 +24,13 @@ const initials = computed(() => {
 <template>
   <span class="avatar" :style="{ width: `${size}px`, height: `${size}px`, fontSize: `${size * 0.36}px` }">
     <img
-      v-if="user?.avatarUrl && !imageFailed"
-      :src="user.avatarUrl"
+      v-if="src && !imageFailed"
+      :src="src"
       alt=""
       referrerpolicy="no-referrer"
       @error="imageFailed = true"
     />
-    <span v-else>{{ initials }}</span>
+    <span v-else aria-hidden="true">{{ initials }}</span>
   </span>
 </template>
 
@@ -38,7 +42,7 @@ const initials = computed(() => {
   border-radius: 50%;
   background: #f3ebdc;
   color: var(--text);
-  font-weight: 500;
+  font-weight: 600;
   overflow: hidden;
 }
 .avatar img {

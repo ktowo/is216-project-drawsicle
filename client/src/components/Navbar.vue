@@ -1,0 +1,581 @@
+<script setup>
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
+import { useRoute, useRouter, RouterLink } from 'vue-router';
+import {
+  Palette,
+  Plus,
+  Menu,
+  X,
+  ChevronDown,
+  UserRound,
+  BookHeart,
+  Bell,
+  Settings,
+  LogOut,
+  Compass,
+  LayoutDashboard,
+  CalendarHeart,
+} from 'lucide-vue-next';
+import NotificationBell from './NotificationBell.vue';
+import UserAvatar from './UserAvatar.vue';
+import { auth, logout } from '@/stores/auth';
+import { notifications } from '@/stores/notifications';
+import { toast } from '@/stores/toast';
+
+const route = useRoute();
+const router = useRouter();
+
+const userMenuOpen = ref(false);
+const mobileOpen = ref(false);
+const userMenuRoot = ref(null);
+const userMenuButton = ref(null);
+const mobilePanel = ref(null);
+const hamburger = ref(null);
+
+const homeLink = computed(() => (auth.user ? '/dashboard' : '/'));
+
+// Send people back to where they were after logging in (not from the home page itself)
+const loginLink = computed(() =>
+  route.name && route.name !== 'home' && route.name !== 'not-found'
+    ? { name: 'login', query: { redirect: route.fullPath } }
+    : { name: 'login' }
+);
+
+const accountLinks = [
+  { to: '/profile', label: 'Your profile', icon: UserRound },
+  { to: '/characters', label: 'Character library', icon: BookHeart },
+  { to: '/notification', label: 'Notifications', icon: Bell },
+  { to: '/settings/account', label: 'Account settings', icon: Settings },
+];
+
+function closeMenus() {
+  userMenuOpen.value = false;
+  mobileOpen.value = false;
+}
+
+async function doLogout() {
+  closeMenus();
+  await logout();
+  toast.info("You're logged out. See you soon!");
+  router.push('/');
+}
+
+// Every page renders a <main>, but not all of them give it an id, so focus it directly
+function skipToContent() {
+  const main = document.querySelector('main');
+  if (!main) return;
+  if (!main.hasAttribute('tabindex')) main.setAttribute('tabindex', '-1');
+  main.focus();
+}
+
+function onClickOutside(e) {
+  if (userMenuOpen.value && userMenuRoot.value && !userMenuRoot.value.contains(e.target)) {
+    userMenuOpen.value = false;
+  }
+  if (
+    mobileOpen.value &&
+    mobilePanel.value &&
+    !mobilePanel.value.contains(e.target) &&
+    !hamburger.value?.contains(e.target)
+  ) {
+    mobileOpen.value = false;
+  }
+}
+
+function onKeydown(e) {
+  if (e.key !== 'Escape') return;
+  if (userMenuOpen.value) {
+    userMenuOpen.value = false;
+    userMenuButton.value?.focus();
+  }
+  if (mobileOpen.value) {
+    mobileOpen.value = false;
+    hamburger.value?.focus();
+  }
+}
+
+// The mobile panel shouldn't stay open if the window is widened past the breakpoint
+let mediaQuery = null;
+function onBreakpoint(e) {
+  if (e.matches) mobileOpen.value = false;
+}
+
+onMounted(() => {
+  document.addEventListener('click', onClickOutside);
+  document.addEventListener('keydown', onKeydown);
+  mediaQuery = window.matchMedia('(min-width: 768px)');
+  mediaQuery.addEventListener?.('change', onBreakpoint);
+});
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onClickOutside);
+  document.removeEventListener('keydown', onKeydown);
+  mediaQuery?.removeEventListener?.('change', onBreakpoint);
+});
+
+watch(() => route.fullPath, closeMenus);
+
+// Google/Discord sign-in lands on /dashboard?reactivated=1 when it woke up a deactivated
+// account. The navbar is on every page, so it says hello and tidies the URL.
+watch(
+  () => route.query.reactivated,
+  (value) => {
+    if (value !== '1' || !auth.user) return;
+    toast.success('Welcome back, your account is active again.');
+    const query = { ...route.query };
+    delete query.reactivated;
+    router.replace({ query, hash: route.hash });
+  },
+  { immediate: true }
+);
+</script>
+
+<template>
+  <header class="topbar">
+    <a href="#main" class="skip-link" @click.prevent="skipToContent">Skip to content</a>
+    <div class="bar">
+      <RouterLink :to="homeLink" class="brand" aria-label="Drawisicle home">
+        <span class="brand-tile"><Palette :size="24" aria-hidden="true" /></span>
+        <span class="brand-name">Drawisicle</span>
+      </RouterLink>
+
+      <nav class="desktop-nav" aria-label="Main">
+        <RouterLink to="/events" class="nav-link">Browse events</RouterLink>
+        <template v-if="auth.user">
+          <RouterLink to="/dashboard" class="nav-link">Dashboard</RouterLink>
+          <RouterLink to="/my-events" class="nav-link">My events</RouterLink>
+        </template>
+      </nav>
+
+      <div class="right">
+        <template v-if="auth.user">
+          <RouterLink to="/events/new" class="btn btn-primary btn-sm new-btn desktop-only" title="New event">
+            <Plus :size="18" aria-hidden="true" />
+            <span class="new-label">New event</span>
+          </RouterLink>
+
+          <NotificationBell />
+
+          <div ref="userMenuRoot" class="user-menu desktop-only">
+            <button
+              ref="userMenuButton"
+              type="button"
+              class="user-btn"
+              aria-haspopup="true"
+              :aria-expanded="userMenuOpen ? 'true' : 'false'"
+              aria-controls="user-menu-panel"
+              @click="userMenuOpen = !userMenuOpen"
+            >
+              <UserAvatar :user="auth.user" :size="38" />
+              <span class="user-name">{{ auth.user.displayName }}</span>
+              <span class="sr-only">Account menu</span>
+              <ChevronDown :size="16" class="chev" :class="{ flipped: userMenuOpen }" aria-hidden="true" />
+            </button>
+
+            <div v-if="userMenuOpen" id="user-menu-panel" class="menu card">
+              <div class="menu-user">
+                <span class="menu-user-name">{{ auth.user.displayName }}</span>
+                <span v-if="auth.user.username" class="menu-user-handle">@{{ auth.user.username }}</span>
+              </div>
+              <ul class="menu-list">
+                <li v-for="item in accountLinks" :key="item.to">
+                  <RouterLink :to="item.to" class="menu-item" @click="userMenuOpen = false">
+                    <component :is="item.icon" :size="18" aria-hidden="true" />
+                    {{ item.label }}
+                  </RouterLink>
+                </li>
+                <li class="menu-sep" aria-hidden="true" />
+                <li>
+                  <button type="button" class="menu-item" @click="doLogout">
+                    <LogOut :size="18" aria-hidden="true" /> Log out
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </template>
+
+        <template v-else-if="auth.checked">
+          <RouterLink :to="loginLink" class="nav-link desktop-only">Log in</RouterLink>
+          <RouterLink to="/register" class="btn btn-primary btn-sm desktop-only">Sign up</RouterLink>
+        </template>
+
+        <button
+          ref="hamburger"
+          type="button"
+          class="hamburger mobile-only"
+          :aria-expanded="mobileOpen ? 'true' : 'false'"
+          aria-controls="mobile-menu"
+          :aria-label="mobileOpen ? 'Close menu' : 'Open menu'"
+          @click="mobileOpen = !mobileOpen"
+        >
+          <X v-if="mobileOpen" :size="24" aria-hidden="true" />
+          <Menu v-else :size="24" aria-hidden="true" />
+        </button>
+      </div>
+    </div>
+
+    <Transition name="drop">
+      <nav v-if="mobileOpen" id="mobile-menu" ref="mobilePanel" class="mobile-panel" aria-label="Menu">
+        <div v-if="auth.user" class="mobile-user">
+          <UserAvatar :user="auth.user" :size="44" />
+          <div class="mobile-user-text">
+            <span class="menu-user-name">{{ auth.user.displayName }}</span>
+            <span class="menu-user-handle">{{ auth.user.username ? `@${auth.user.username}` : auth.user.email }}</span>
+          </div>
+        </div>
+
+        <ul class="mobile-list">
+          <li>
+            <RouterLink to="/events" class="mobile-link"><Compass :size="20" aria-hidden="true" /> Browse events</RouterLink>
+          </li>
+          <template v-if="auth.user">
+            <li>
+              <RouterLink to="/dashboard" class="mobile-link">
+                <LayoutDashboard :size="20" aria-hidden="true" /> Dashboard
+              </RouterLink>
+            </li>
+            <li>
+              <RouterLink to="/my-events" class="mobile-link">
+                <CalendarHeart :size="20" aria-hidden="true" /> My events
+              </RouterLink>
+            </li>
+            <li>
+              <RouterLink to="/events/new" class="mobile-link">
+                <Plus :size="20" aria-hidden="true" /> New event
+              </RouterLink>
+            </li>
+            <li class="mobile-sep" aria-hidden="true" />
+            <li v-for="item in accountLinks" :key="item.to">
+              <RouterLink :to="item.to" class="mobile-link">
+                <component :is="item.icon" :size="20" aria-hidden="true" />
+                {{ item.label }}
+                <span
+                  v-if="item.to === '/notification' && notifications.unreadCount"
+                  class="count-pill"
+                >
+                  {{ notifications.unreadCount }} new
+                </span>
+              </RouterLink>
+            </li>
+            <li class="mobile-sep" aria-hidden="true" />
+            <li>
+              <button type="button" class="mobile-link" @click="doLogout">
+                <LogOut :size="20" aria-hidden="true" /> Log out
+              </button>
+            </li>
+          </template>
+          <template v-else>
+            <li class="mobile-sep" aria-hidden="true" />
+            <li class="mobile-auth">
+              <RouterLink :to="loginLink" class="btn btn-outline btn-block">Log in</RouterLink>
+              <RouterLink to="/register" class="btn btn-primary btn-block">Sign up</RouterLink>
+            </li>
+          </template>
+        </ul>
+      </nav>
+    </Transition>
+  </header>
+</template>
+
+<style scoped>
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(255, 253, 250, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+}
+.bar {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 28px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text);
+  flex-shrink: 0;
+}
+.brand:hover {
+  color: var(--text);
+}
+.brand-tile {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: var(--pink);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 3px 10px rgba(236, 106, 147, 0.28);
+}
+.brand-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.45rem;
+}
+.desktop-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 12px;
+}
+.nav-link {
+  padding: 8px 13px;
+  border-radius: 12px;
+  color: var(--text);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.nav-link:hover {
+  background: #f5eee1;
+  color: var(--text);
+}
+.nav-link.router-link-active {
+  background: var(--pink-soft);
+  color: var(--pink-dark);
+}
+.right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.new-btn {
+  white-space: nowrap;
+}
+.user-menu {
+  position: relative;
+}
+.user-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 4px 10px 4px 4px;
+  border-radius: 999px;
+}
+.user-btn:hover,
+.user-btn[aria-expanded='true'] {
+  background: #f5eee1;
+}
+.user-btn:focus-visible {
+  border-radius: 999px;
+}
+.user-name {
+  font-weight: 600;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chev {
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+.chev.flipped {
+  transform: rotate(180deg);
+}
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  min-width: 240px;
+  padding: 6px;
+  z-index: 60;
+}
+.menu-user {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+.menu-user-name {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.menu-user-handle {
+  color: var(--muted);
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+.menu-list,
+.mobile-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  background: none;
+  border-radius: 10px;
+  color: var(--text);
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+}
+.menu-item:hover {
+  background: #faf3e7;
+  color: var(--text);
+}
+.menu-item.router-link-active {
+  color: var(--pink-dark);
+}
+.menu-sep,
+.mobile-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 4px;
+}
+.hamburger {
+  border: 0;
+  background: none;
+  color: var(--text);
+  padding: 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.hamburger:hover,
+.hamburger[aria-expanded='true'] {
+  background: #f5eee1;
+}
+
+.mobile-panel {
+  border-top: 1px solid var(--border);
+  padding: 12px 16px 18px;
+  max-height: calc(100vh - 66px);
+  overflow-y: auto;
+}
+.mobile-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px 14px;
+}
+.mobile-user-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.mobile-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 10px;
+  border: 0;
+  background: none;
+  border-radius: 12px;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 1.02rem;
+  text-align: left;
+  cursor: pointer;
+}
+.mobile-link:hover {
+  background: #faf3e7;
+  color: var(--text);
+}
+.mobile-link.router-link-active {
+  background: var(--pink-soft);
+  color: var(--pink-dark);
+}
+.count-pill {
+  margin-left: auto;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--pink);
+  color: #fff;
+  font-size: 0.78rem;
+}
+.mobile-auth {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding-top: 8px;
+}
+
+.mobile-only {
+  display: none;
+}
+
+@media (max-width: 1100px) {
+  .user-name {
+    display: none;
+  }
+  .user-btn {
+    padding-right: 8px;
+  }
+}
+@media (max-width: 960px) {
+  .new-label {
+    display: none;
+  }
+  .new-btn {
+    padding: 9px 11px;
+  }
+  .bar {
+    padding: 12px 20px;
+  }
+  .desktop-nav {
+    margin-left: 4px;
+  }
+}
+@media (max-width: 767.98px) {
+  .desktop-nav,
+  .desktop-only {
+    display: none;
+  }
+  .mobile-only {
+    display: grid;
+  }
+  .bar {
+    padding: 9px 16px;
+    gap: 8px;
+  }
+  .right {
+    gap: 4px;
+  }
+  .brand-tile {
+    width: 40px;
+    height: 40px;
+  }
+  .brand-name {
+    font-size: 1.25rem;
+  }
+}
+
+.drop-enter-active,
+.drop-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.drop-enter-from,
+.drop-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .drop-enter-active,
+  .drop-leave-active,
+  .chev {
+    transition: none;
+  }
+}
+</style>
