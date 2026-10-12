@@ -1,13 +1,16 @@
 <script setup>
-import { computed, ref, watch, nextTick } from 'vue';
-import { useRoute } from 'vue-router';
+import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import Navbar from './components/Navbar.vue';
 import Footer from './components/Footer.vue';
 import ToastHost from './components/ui/ToastHost.vue';
 import DemoBanner from './components/DemoBanner.vue';
-import { isMockMode } from './api';
+import { isMockMode, SESSION_EXPIRED_EVENT } from './api';
+import { auth, setUser } from './stores/auth';
+import { toast } from './stores/toast';
 
 const route = useRoute();
+const router = useRouter();
 // Login/register/reset screens use their own full-page layout
 const showChrome = computed(() => !route.meta.hideChrome);
 
@@ -28,6 +31,17 @@ watch(
     announcement.value = document.title;
   }
 );
+
+// The server says the login ended (changed password on another device, 7 days up): say so and go to log in,
+// coming back to this page afterwards. Only for people who thought they were logged in.
+function onSessionExpired() {
+  if (!auth.user) return;
+  setUser(null);
+  toast.info('Your session ended. Please log in again.');
+  if (route.meta.requiresAuth) router.push({ name: 'login', query: { redirect: route.fullPath } });
+}
+onMounted(() => window.addEventListener(SESSION_EXPIRED_EVENT, onSessionExpired));
+onBeforeUnmount(() => window.removeEventListener(SESSION_EXPIRED_EVENT, onSessionExpired));
 </script>
 
 <template>
