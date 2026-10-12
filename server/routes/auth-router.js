@@ -19,14 +19,17 @@ const isProd = () => process.env.NODE_ENV === 'production';
 const localPart = (email) => email.split('@')[0].slice(0, DISPLAY_NAME_MAX);
 
 // Slows down password guessing: 20 tries per 15 min per IP
-const authLimiter = rateLimit({
+const LIMITER_OPTIONS = {
   windowMs: 15 * 60 * 1000,
   limit: 20,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: { error: 'Too many attempts. Try again in a few minutes.', code: 'RATE_LIMITED' },
   skip: () => process.env.NODE_ENV === 'test',
-});
+};
+const authLimiter = rateLimit(LIMITER_OPTIONS);
+// Logins only count the failed ones, so switching between accounts (the demo has eight) never locks anyone out
+const loginLimiter = rateLimit({ ...LIMITER_OPTIONS, skipSuccessfulRequests: true });
 
 function passwordProblem(pw) {
   if (typeof pw !== 'string' || pw.length < 8) return 'Password must be at least 8 characters.';
@@ -109,7 +112,7 @@ router.post('/register', authLimiter, asyncHandler(async (req, res) => {
   res.status(201).json({ user: user.toPublic() });
 }));
 
-router.post('/login', authLimiter, asyncHandler(async (req, res) => {
+router.post('/login', loginLimiter, asyncHandler(async (req, res) => {
   const email = normEmail(req.body.email);
   const { password } = req.body;
   const wrong = () => res.status(401).json({ error: 'Wrong email or password.', code: 'WRONG_CREDENTIALS' });
