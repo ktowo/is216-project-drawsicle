@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
 import {
   Palette,
@@ -15,6 +15,8 @@ import {
   Compass,
   LayoutDashboard,
   CalendarHeart,
+  CircleHelp,
+  Eye,
 } from 'lucide-vue-next';
 import NotificationBell from './NotificationBell.vue';
 import UserAvatar from './UserAvatar.vue';
@@ -29,8 +31,10 @@ const userMenuOpen = ref(false);
 const mobileOpen = ref(false);
 const userMenuRoot = ref(null);
 const userMenuButton = ref(null);
+const userMenuPanel = ref(null);
 const mobilePanel = ref(null);
 const hamburger = ref(null);
+const header = ref(null);
 
 const homeLink = computed(() => (auth.user ? '/dashboard' : '/'));
 
@@ -41,12 +45,19 @@ const loginLink = computed(() =>
     : { name: 'login' }
 );
 
-const accountLinks = [
+// The public page only exists once someone has a username
+const accountLinks = computed(() => [
   { to: '/profile', label: 'Your profile', icon: UserRound },
+  ...(auth.user?.username
+    ? [{ to: `/users/${encodeURIComponent(auth.user.username)}`, label: 'View public profile', icon: Eye }]
+    : []),
   { to: '/characters', label: 'Character library', icon: BookHeart },
   { to: '/notification', label: 'Notifications', icon: Bell },
   { to: '/settings/account', label: 'Account settings', icon: Settings },
-];
+]);
+
+// Browse events stays lit on event pages, but not on /events/new (that has its own button)
+const browseActive = computed(() => route.name === 'events' || route.name === 'event');
 
 function closeMenus() {
   userMenuOpen.value = false;
@@ -57,7 +68,10 @@ async function doLogout() {
   closeMenus();
   await logout();
   toast.info("You're logged out. See you soon!");
-  router.push('/');
+  await router.push('/');
+  // Already on the home page: the route didn't change, so put focus somewhere sensible
+  await nextTick();
+  skipToContent();
 }
 
 // Every page renders a <main>, but not all of them give it an id, so focus it directly
@@ -68,18 +82,13 @@ function skipToContent() {
   main.focus();
 }
 
+// composedPath() is taken when the click happens. e.target can be an icon that Vue has already swapped
+// out by the time this document-level listener runs, which made the hamburger close itself.
 function onClickOutside(e) {
-  if (userMenuOpen.value && userMenuRoot.value && !userMenuRoot.value.contains(e.target)) {
-    userMenuOpen.value = false;
-  }
-  if (
-    mobileOpen.value &&
-    mobilePanel.value &&
-    !mobilePanel.value.contains(e.target) &&
-    !hamburger.value?.contains(e.target)
-  ) {
-    mobileOpen.value = false;
-  }
+  const path = e.composedPath ? e.composedPath() : [];
+  const inside = (el) => Boolean(el) && (path.length ? path.includes(el) : el.contains(e.target));
+  if (userMenuOpen.value && !inside(userMenuRoot.value)) userMenuOpen.value = false;
+  if (mobileOpen.value && !inside(mobilePanel.value) && !inside(hamburger.value)) mobileOpen.value = false;
 }
 
 function onKeydown(e) {
@@ -92,6 +101,43 @@ function onKeydown(e) {
     mobileOpen.value = false;
     hamburger.value?.focus();
   }
+}
+
+// Arrow keys move through the account menu like a menu; Tab still works as normal
+function menuItems() {
+  return userMenuPanel.value ? [...userMenuPanel.value.querySelectorAll('a[href], button:not([disabled])')] : [];
+}
+async function openUserMenu(focusFirst = false) {
+  userMenuOpen.value = true;
+  if (focusFirst) {
+    await nextTick();
+    menuItems()[0]?.focus();
+  }
+}
+function onUserButtonKeydown(e) {
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    openUserMenu(true);
+  }
+}
+function onMenuKeydown(e) {
+  const items = menuItems();
+  if (!items.length) return;
+  const index = items.indexOf(document.activeElement);
+  let next = null;
+  if (e.key === 'ArrowDown') next = (index + 1) % items.length;
+  else if (e.key === 'ArrowUp') next = (index - 1 + items.length) % items.length;
+  else if (e.key === 'Home') next = 0;
+  else if (e.key === 'End') next = items.length - 1;
+  if (next === null) return;
+  e.preventDefault();
+  items[next].focus();
+}
+
+// Tabbing out of the header closes whatever menu was open
+function onFocusOut(e) {
+  const to = e.relatedTarget;
+  if (to && header.value && !header.value.contains(to)) closeMenus();
 }
 
 // The mobile panel shouldn't stay open if the window is widened past the breakpoint
@@ -130,7 +176,7 @@ watch(
 </script>
 
 <template>
-  <header class="topbar">
+  <header ref="header" class="topbar" @focusout="onFocusOut">
     <a href="#main" class="skip-link" @click.prevent="skipToContent">Skip to content</a>
     <div class="bar">
       <RouterLink :to="homeLink" class="brand" aria-label="Drawisicle home">
@@ -139,11 +185,21 @@ watch(
       </RouterLink>
 
       <nav class="desktop-nav" aria-label="Main">
-        <RouterLink to="/events" class="nav-link">Browse events</RouterLink>
+        <RouterLink
+          to="/events"
+          class="nav-link"
+          :class="{ 'is-active': browseActive }"
+          active-class=""
+          exact-active-class=""
+          :aria-current="browseActive ? 'page' : undefined"
+        >
+          Browse events
+        </RouterLink>
         <template v-if="auth.user">
           <RouterLink to="/dashboard" class="nav-link">Dashboard</RouterLink>
           <RouterLink to="/my-events" class="nav-link">My events</RouterLink>
         </template>
+        <RouterLink v-else to="/help" class="nav-link">Help</RouterLink>
       </nav>
 
       <div class="right">
@@ -160,10 +216,10 @@ watch(
               ref="userMenuButton"
               type="button"
               class="user-btn"
-              aria-haspopup="true"
               :aria-expanded="userMenuOpen ? 'true' : 'false'"
               aria-controls="user-menu-panel"
               @click="userMenuOpen = !userMenuOpen"
+              @keydown="onUserButtonKeydown"
             >
               <UserAvatar :user="auth.user" :size="38" />
               <span class="user-name">{{ auth.user.displayName }}</span>
@@ -171,7 +227,13 @@ watch(
               <ChevronDown :size="16" class="chev" :class="{ flipped: userMenuOpen }" aria-hidden="true" />
             </button>
 
-            <div v-if="userMenuOpen" id="user-menu-panel" class="menu card">
+            <div
+              v-if="userMenuOpen"
+              id="user-menu-panel"
+              ref="userMenuPanel"
+              class="menu card"
+              @keydown="onMenuKeydown"
+            >
               <div class="menu-user">
                 <span class="menu-user-name">{{ auth.user.displayName }}</span>
                 <span v-if="auth.user.username" class="menu-user-handle">@{{ auth.user.username }}</span>
@@ -184,6 +246,11 @@ watch(
                   </RouterLink>
                 </li>
                 <li class="menu-sep" aria-hidden="true" />
+                <li>
+                  <RouterLink to="/help" class="menu-item" @click="userMenuOpen = false">
+                    <CircleHelp :size="18" aria-hidden="true" /> Help
+                  </RouterLink>
+                </li>
                 <li>
                   <button type="button" class="menu-item" @click="doLogout">
                     <LogOut :size="18" aria-hidden="true" /> Log out
@@ -226,7 +293,9 @@ watch(
 
         <ul class="mobile-list">
           <li>
-            <RouterLink to="/events" class="mobile-link"><Compass :size="20" aria-hidden="true" /> Browse events</RouterLink>
+            <RouterLink to="/events" class="mobile-link" :class="{ 'is-active': browseActive }" active-class="" exact-active-class="">
+              <Compass :size="20" aria-hidden="true" /> Browse events
+            </RouterLink>
           </li>
           <template v-if="auth.user">
             <li>
@@ -259,12 +328,18 @@ watch(
             </li>
             <li class="mobile-sep" aria-hidden="true" />
             <li>
+              <RouterLink to="/help" class="mobile-link"><CircleHelp :size="20" aria-hidden="true" /> Help</RouterLink>
+            </li>
+            <li>
               <button type="button" class="mobile-link" @click="doLogout">
                 <LogOut :size="20" aria-hidden="true" /> Log out
               </button>
             </li>
           </template>
           <template v-else>
+            <li>
+              <RouterLink to="/help" class="mobile-link"><CircleHelp :size="20" aria-hidden="true" /> Help</RouterLink>
+            </li>
             <li class="mobile-sep" aria-hidden="true" />
             <li class="mobile-auth">
               <RouterLink :to="loginLink" class="btn btn-outline btn-block">Log in</RouterLink>
@@ -337,7 +412,8 @@ watch(
   background: #f5eee1;
   color: var(--text);
 }
-.nav-link.router-link-active {
+.nav-link.router-link-active,
+.nav-link.is-active {
   background: var(--pink-soft);
   color: var(--pink-dark);
 }
@@ -461,6 +537,7 @@ watch(
   border-top: 1px solid var(--border);
   padding: 12px 16px 18px;
   max-height: calc(100vh - 66px);
+  max-height: calc(100dvh - 66px);
   overflow-y: auto;
 }
 .mobile-user {
@@ -493,7 +570,8 @@ watch(
   background: #faf3e7;
   color: var(--text);
 }
-.mobile-link.router-link-active {
+.mobile-link.router-link-active,
+.mobile-link.is-active {
   background: var(--pink-soft);
   color: var(--pink-dark);
 }

@@ -68,13 +68,10 @@ const history =
 const router = createRouter({
   history,
   routes,
-  // Anchors (/help#matching) stop below the sticky navbar; smooth scrolling unless the visitor asked for less motion
+  // Anchors (/help#matching) stop below the sticky navbar
   scrollBehavior(to, from, saved) {
     if (saved) return saved;
-    if (to.hash) {
-      const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-      return { el: to.hash, top: 92, behavior: calm ? 'auto' : 'smooth' };
-    }
+    if (to.hash) return { el: to.hash, top: 92 };
     return { top: 0 };
   },
 });
