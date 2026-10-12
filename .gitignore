@@ -1,0 +1,9 @@
+# Start-all / Stop-all runtime files (PIDs, logs)
+.run/
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

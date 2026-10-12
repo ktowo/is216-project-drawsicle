@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Quicksand:wght@400;500;600;700&display=swap');
-
 :root {
   --bg: #faf7f0;
   --surface: #fffdfa;
@@ -239,5 +237,160 @@ button {
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* ---------- Additions: focus, sizes, states ---------- */
+:root {
+  --warning: #b7791f;
+  --warning-soft: #fdf3e1;
+  --info: #2f6f9f;
+  --info-soft: #e6f2fc;
+  --focus-ring: 0 0 0 3px rgba(236, 106, 147, 0.35);
+}
+
+/* Visible keyboard focus everywhere, invisible for mouse clicks */
+a:focus-visible,
+button:focus-visible,
+[role='button']:focus-visible,
+[role='checkbox']:focus-visible,
+[role='radio']:focus-visible,
+[role='tab']:focus-visible,
+summary:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: 8px;
+}
+.btn:focus-visible {
+  border-radius: var(--radius);
+}
+
+.btn-sm {
+  padding: 9px 14px;
+  font-size: 0.92rem;
+  gap: 8px;
+}
+.btn-xs {
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  gap: 6px;
+  border-radius: 10px;
+}
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+}
+.btn-danger:hover:not(:disabled) {
+  background: #a8333d;
+  color: #fff;
+}
+.btn-outline.btn-danger-text,
+.btn-ghost.btn-danger-text {
+  color: var(--danger);
+}
+.btn-ghost.btn-danger-text:hover {
+  background: var(--danger-soft);
+}
+.btn-icon {
+  padding: 8px;
+  border-radius: 12px;
+}
+
+.alert-info {
+  background: var(--info-soft);
+  color: var(--info);
+}
+.alert-warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+/* Native <select> styled like .input, inside an .input-wrap */
+.select {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--text);
+  padding: 14px 0;
+  cursor: pointer;
+}
+
+.input-wrap.is-invalid {
+  border-color: var(--danger);
+}
+.input-wrap.is-invalid:focus-within {
+  box-shadow: 0 0 0 3px var(--danger-soft);
+}
+.input-wrap.is-disabled {
+  background: #f7f2e8;
+  color: var(--muted);
+}
+.field-error {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--danger);
+}
+
+.section-title {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 1.3rem;
+}
+.section-sub {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+
+.badge-success {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.badge-warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.badge-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.badge-info {
+  background: var(--info-soft);
+  color: var(--info);
+}
+.badge-muted {
+  background: #f2eadb;
+  color: var(--muted);
+}
+
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: -60px;
+  z-index: 100;
+  background: var(--surface);
+  color: var(--text);
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  font-weight: 600;
+}
+.skip-link:focus {
+  top: 12px;
+}
+/* The skip link focuses <main> itself; no ring around the whole page */
+main:focus {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation-duration: 2s;
+  }
+  .btn {
+    transition: none;
   }
 }
