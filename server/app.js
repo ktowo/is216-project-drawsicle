@@ -10,6 +10,7 @@ const matchRouter = require('./routes/match-router.js');
 const submissionRouter = require('./routes/submission-router.js');
 const dashboardRouter = require('./routes/dashboard-router.js');
 const userRouter = require('./routes/user-router.js');
+const adminRouter = require('./routes/admin-router.js');
 const baseRouter = require('./routes/base-router.js');
 
 // Builds the Express app without connecting to MongoDB or listening,
@@ -36,6 +37,7 @@ function createApp() {
   server.use('/api/events/:eventId', applicationRouter, matchRouter, submissionRouter);
   server.use('/api/dashboard', dashboardRouter);
   server.use('/api/users', userRouter);
+  server.use('/api/admin', adminRouter);
 
   server.use('/api', (req, res) => res.status(404).json({ error: 'Not found.', code: 'NOT_FOUND' }));
 
