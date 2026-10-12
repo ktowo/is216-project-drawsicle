@@ -26,6 +26,7 @@ const PROVIDER_ERRORS = {
   discord_cancelled: 'Discord sign-in was cancelled.',
   discord_failed: "Couldn't sign in with Discord. Please try again.",
   discord_unverified: 'Your Discord account needs a verified email address first.',
+  account_banned: 'This account has been suspended by the site admins.',
   discord_no_email: "Discord didn't share an email address, so we couldn't sign you in.",
   discord_not_configured: "Discord sign-in isn't set up on the server yet.",
 };
@@ -166,8 +167,8 @@ async function submit() {
   margin-bottom: 24px;
   padding: 12px 14px;
   border-radius: 14px;
-  background: var(--info-soft, #e6f2fc);
-  color: var(--info, #2f6f9f);
+  background: var(--info-soft, var(--blue-soft));
+  color: var(--info, var(--blue-ink));
   font-size: 0.92rem;
 }
 .demo-icon {

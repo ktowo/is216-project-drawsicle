@@ -124,6 +124,9 @@ async function handle(path, { method, body, form }) {
 
 export async function mockRequest(path, { method = 'GET', body, form } = {}) {
   await wait();
+  if (path.startsWith('/admin')) {
+    return { status: 501, data: { error: 'The admin tools need the real server, so they are not part of demo mode.', code: 'NOT_IN_DEMO' } };
+  }
   return exclusive(() => handle(path, { method: String(method).toUpperCase(), body, form }));
 }
 

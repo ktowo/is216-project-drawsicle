@@ -71,7 +71,8 @@ export async function api(path, { method = 'GET', body, form } = {}) {
   }
 
   if (!res.ok) {
-    if (res.status === 401 && data.code === 'SESSION_EXPIRED' && typeof window !== 'undefined') {
+    const ended = (res.status === 401 && data.code === 'SESSION_EXPIRED') || data.code === 'ACCOUNT_BANNED';
+    if (ended && typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
     }
     throw new ApiError(
