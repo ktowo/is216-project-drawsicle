@@ -1,14 +1,23 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 
 // Row of tabs/filters. v-model is the active key. Scrolls sideways on narrow screens.
 const props = defineProps({
   modelValue: { type: String, default: '' },
+  // tabs: [{ key, label, count?, id?, controls? }]. id / controls (the id of the panel it shows) are optional.
   tabs: { type: Array, default: () => [] },
+  // Names the group for screen readers, e.g. "Event sections"
+  label: { type: String, default: '' },
 });
 const emit = defineEmits(['update:modelValue']);
 
 const buttons = ref([]);
+
+// Only one tab is in the tab order. If the value matches nothing, that is the first one.
+const tabbableIndex = computed(() => {
+  const at = props.tabs.findIndex((tab) => tab.key === props.modelValue);
+  return at === -1 ? 0 : at;
+});
 
 function select(key) {
   if (key !== props.modelValue) emit('update:modelValue', key);
@@ -31,17 +40,19 @@ function onKeydown(e, index) {
 </script>
 
 <template>
-  <div class="tab-nav" role="tablist">
+  <div class="tab-nav" role="tablist" :aria-label="label || undefined">
     <button
       v-for="(tab, index) in tabs"
       :key="tab.key"
       :ref="(el) => (buttons[index] = el)"
+      :id="tab.id || undefined"
       type="button"
       role="tab"
+      :aria-controls="tab.controls || undefined"
       class="tab"
       :class="{ active: tab.key === modelValue }"
       :aria-selected="tab.key === modelValue ? 'true' : 'false'"
-      :tabindex="tab.key === modelValue || (!modelValue && index === 0) ? 0 : -1"
+      :tabindex="index === tabbableIndex ? 0 : -1"
       @click="select(tab.key)"
       @keydown="onKeydown($event, index)"
     >

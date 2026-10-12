@@ -33,6 +33,9 @@ const visibleSuggestions = computed(() => {
     .slice(0, 8);
 });
 
+// Said out loud by a polite live region, so adding or removing a tag is noticed without sight
+const announcement = ref('');
+
 function add(raw) {
   const additions = String(raw ?? '')
     .split(',')
@@ -44,7 +47,13 @@ function add(raw) {
     if (next.length >= props.max) break;
     if (!next.includes(tag)) next.push(tag);
   }
-  if (next.length !== tags.value.length) emit('update:modelValue', next);
+  if (next.length !== tags.value.length) {
+    const added = next.slice(tags.value.length);
+    announcement.value = `Added ${added.join(', ')}. ${next.length} of ${props.max} tags.`;
+    emit('update:modelValue', next);
+  } else if (next.length >= props.max) {
+    announcement.value = `You can add up to ${props.max} tags.`;
+  }
 }
 
 function commitText() {
@@ -54,6 +63,7 @@ function commitText() {
 }
 
 function remove(index) {
+  announcement.value = `Removed ${tags.value[index]}.`;
   const next = tags.value.filter((_, i) => i !== index);
   emit('update:modelValue', next);
   input.value?.focus();
@@ -66,6 +76,7 @@ function onKeydown(e) {
     commitText();
   } else if (e.key === 'Backspace' && !text.value && tags.value.length) {
     e.preventDefault();
+    announcement.value = `Removed ${tags.value[tags.value.length - 1]}.`;
     emit('update:modelValue', tags.value.slice(0, -1));
   }
 }
@@ -130,6 +141,8 @@ function pickSuggestion(tag) {
         @blur="commitText"
       />
     </div>
+
+    <p class="sr-only" role="status" aria-live="polite">{{ announcement }}</p>
 
     <div v-if="visibleSuggestions.length && !full && !disabled" class="suggestions">
       <span class="suggest-label">Suggestions:</span>

@@ -10,6 +10,9 @@ const props = defineProps({
   multiple: { type: Boolean, default: true },
   disabledValues: { type: Array, default: () => [] },
   disabled: { type: Boolean, default: false },
+  // Names the group for screen readers when there is no visible label to point at
+  // (otherwise pass aria-labelledby, which falls through to the group)
+  label: { type: String, default: '' },
 });
 const emit = defineEmits(['update:modelValue']);
 
@@ -64,7 +67,7 @@ function onKeydown(e, index) {
 </script>
 
 <template>
-  <div class="choice-chips" :role="multiple ? 'group' : 'radiogroup'">
+  <div class="choice-chips" :role="multiple ? 'group' : 'radiogroup'" :aria-label="label || undefined">
     <button
       v-for="(option, index) in options"
       :key="option.value"

@@ -6,13 +6,15 @@ const ICONS = { success: CircleCheck, error: CircleAlert, info: Info };
 </script>
 
 <template>
-  <div class="toast-host" aria-live="polite" aria-relevant="additions">
+  <!-- Polite for success and info; error toasts carry role="alert" so they are read out straight away -->
+  <div class="toast-host" aria-live="polite" aria-relevant="additions" aria-atomic="false">
     <TransitionGroup name="toast" tag="ul" class="toast-list">
       <li
         v-for="t in toastState.items"
         :key="t.id"
         class="toast"
         :class="`toast-${t.type}`"
+        :role="t.type === 'error' ? 'alert' : undefined"
         @mouseenter="pauseToast(t.id)"
         @mouseleave="resumeToast(t.id)"
         @focusin="pauseToast(t.id)"
