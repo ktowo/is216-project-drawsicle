@@ -26,8 +26,8 @@ export function buildDemoData(now = new Date()) {
     {
       key: 'mika',
       displayName: 'Mika',
-      bio: 'Pastel painter and the person behind most of our seasonal exchanges. Dragons, cats and soft lighting.',
-      socials: { discord: 'mika.draws' },
+      bio: 'Pastel painter and the person behind most of our seasonal exchanges. Dragons, cats and soft lighting. Open for gift art year-round, and always happy to be a backup gifter.',
+      socials: { instagram: 'mika.draws', bluesky: 'mika', discord: 'mika.draws' },
       defaultForm: {
         communityUsername: 'mika.draws',
         canCreate: ['art', 'writing'],
@@ -40,8 +40,8 @@ export function buildDemoData(now = new Date()) {
     {
       key: 'sol',
       displayName: 'Sol',
-      bio: 'Mostly digital, mostly foxes. I also make the odd adoptable batch when I have time.',
-      socials: { discord: 'solstice_fox' },
+      bio: 'Mostly digital, mostly foxes. I also make the odd adoptable batch when I have time. Commissions closed, exchanges always open.',
+      socials: { twitter: 'solstice_fox', deviantart: 'solstice-fox', discord: 'solstice_fox' },
       defaultForm: {
         communityUsername: 'solstice_fox',
         canCreate: ['art', 'adoptable'],
@@ -54,8 +54,8 @@ export function buildDemoData(now = new Date()) {
     {
       key: 'juniper',
       displayName: 'Juniper',
-      bio: 'I draw moths and write short stories about them. Organiser of the spring exchange.',
-      socials: { discord: 'juniper.moth' },
+      bio: 'I draw moths and write short stories about them. Organiser of the Spring Bloom Exchange and a regular at every lantern-lit event after it.',
+      socials: { bluesky: 'juniper', tumblr: 'juniper-moth', discord: 'juniper.moth' },
       defaultForm: {
         communityUsername: 'juniper.moth',
         canCreate: ['art', 'writing'],
@@ -68,8 +68,8 @@ export function buildDemoData(now = new Date()) {
     {
       key: 'ash',
       displayName: 'Ash',
-      bio: 'Sci-fi nerd. Robots, dragons and big chunky line art.',
-      socials: { discord: 'ash_unit7' },
+      bio: 'Sci-fi nerd. Robots, dragons and big chunky line art. I keep a running list of city backgrounds I want to draw next.',
+      socials: { twitter: 'ash_unit7', toyhouse: 'ash-unit7', discord: 'ash_unit7' },
       defaultForm: {
         communityUsername: 'ash_unit7',
         canCreate: ['art'],
@@ -82,8 +82,8 @@ export function buildDemoData(now = new Date()) {
     {
       key: 'remy',
       displayName: 'Remy',
-      bio: 'Adoptable designer. Slimes, sweets and pastel everything.',
-      socials: { discord: 'remy.gloop' },
+      bio: 'Adoptable designer. Slimes, sweets and pastel everything. New batches land whenever the snack drawer is full.',
+      socials: { instagram: 'remy.gloop', toyhouse: 'remygloop', discord: 'remy.gloop' },
       defaultForm: {
         communityUsername: 'remy.gloop',
         canCreate: ['adoptable', 'art'],
@@ -97,7 +97,7 @@ export function buildDemoData(now = new Date()) {
       key: 'noor',
       displayName: 'Noor',
       bio: 'Writer and hobby composer. I turn characters into short stories and little piano pieces.',
-      socials: { discord: 'noor.writes' },
+      socials: { bluesky: 'noor', tumblr: 'noor-writes', discord: 'noor.writes' },
       defaultForm: {
         communityUsername: 'noor.writes',
         canCreate: ['writing', 'music'],
@@ -110,8 +110,8 @@ export function buildDemoData(now = new Date()) {
     {
       key: 'kit',
       displayName: 'Kit',
-      bio: 'Moth enthusiast and organiser of the Moth & Lantern exchange.',
-      socials: { discord: 'kit.lantern' },
+      bio: 'Moth enthusiast and organiser of the Moth & Lantern Exchange. I collect lantern designs and cosy autumn evenings.',
+      socials: { instagram: 'kit.lantern', tumblr: 'kit-lantern', discord: 'kit.lantern' },
       defaultForm: {
         communityUsername: 'kit.lantern',
         canCreate: ['art'],
@@ -125,7 +125,7 @@ export function buildDemoData(now = new Date()) {
       key: 'pip',
       displayName: 'Pip',
       bio: 'New to exchanges! Doodles, tiny animals and chiptune music.',
-      socials: { discord: 'pipsqueak' },
+      socials: { twitter: 'pipsqueak', bluesky: 'pipsqueak', discord: 'pipsqueak' },
       defaultForm: {
         communityUsername: 'pipsqueak',
         canCreate: ['art', 'music'],

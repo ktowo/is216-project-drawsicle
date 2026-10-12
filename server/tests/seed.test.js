@@ -197,3 +197,30 @@ test('seedIfEmpty only fills an empty database', async (t) => {
   assert.ok(summary.users > 0);
   assert.deepEqual(lines, [`Loaded demo data: log in as ${demo().DEMO_LOGIN_EMAIL} / ${demo().DEMO_PASSWORD}`]);
 });
+
+test('every demo artist has a profile worth visiting', async (t) => {
+  if (!demoDataAvailable()) return t.skip('shared/demo-data.mjs is missing');
+  await seed({ artDir });
+  const users = await User.find();
+  assert.ok(users.length >= 8);
+
+  for (const user of users) {
+    const res = await h.request(app).get(`/api/users/${user.username}`).expect(200);
+    const { profile } = res.body;
+    assert.ok(profile.bio.length > 40, `${user.username} needs a bio`);
+    const socials = Object.values(profile.socials).filter(Boolean);
+    assert.ok(socials.length >= 2 && socials.length <= 3, `${user.username} should have 2-3 socials`);
+    // The seed keeps the handles in the format the profile form saves them in
+    assert.ok(socials.every((s) => /^[A-Za-z0-9_.-]{1,50}$/.test(s)));
+  }
+
+  // Besides Mika, Kit and Juniper each organise a public event
+  for (const username of ['kit', 'juniper']) {
+    const { body } = await h.request(app).get(`/api/users/${username}`).expect(200);
+    assert.ok(body.stats.eventsOrganized >= 1, `${username} should organise a public event`);
+    assert.ok(body.organizing.every((e) => e.status !== 'draft'));
+  }
+  const mika = await h.request(app).get('/api/users/mika').expect(200);
+  assert.ok(mika.body.stats.eventsOrganized >= 3);
+  assert.ok(mika.body.stats.exchangesCompleted >= 1);
+});
