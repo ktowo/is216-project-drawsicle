@@ -54,14 +54,17 @@ export function startSparkleCursor() {
   let lastX = null;
   let lastY = null;
 
+  // The canvas is sized by CSS (inset: 0), which leaves out the scrollbar; sizing it to
+  // window.innerWidth instead made it poke out and add a sideways scrollbar.
   function resize() {
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
-    width = window.innerWidth;
-    height = window.innerHeight;
+    const nextWidth = canvas.clientWidth;
+    const nextHeight = canvas.clientHeight;
+    if (!nextWidth || !nextHeight || (nextWidth === width && nextHeight === height)) return;
+    width = nextWidth;
+    height = nextHeight;
     canvas.width = Math.round(width * ratio);
     canvas.height = Math.round(height * ratio);
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${height}px`;
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   }
 
@@ -157,12 +160,15 @@ export function startSparkleCursor() {
   }
 
   resize();
+  const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(resize);
+  resizeObserver?.observe(canvas);
   window.addEventListener('resize', resize);
   window.addEventListener('pointermove', onMove, { passive: true });
   window.addEventListener('pointerdown', onDown, { passive: true });
   document.addEventListener('visibilitychange', onVisibility);
 
   return function stopSparkleCursor() {
+    resizeObserver?.disconnect();
     window.removeEventListener('resize', resize);
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerdown', onDown);

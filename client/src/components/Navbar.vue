@@ -152,7 +152,7 @@ function onBreakpoint(e) {
 onMounted(() => {
   document.addEventListener('click', onClickOutside);
   document.addEventListener('keydown', onKeydown);
-  mediaQuery = window.matchMedia('(min-width: 768px)');
+  mediaQuery = window.matchMedia('(min-width: 960px)');
   mediaQuery.addEventListener?.('change', onBreakpoint);
 });
 onBeforeUnmount(() => {
@@ -456,7 +456,7 @@ watch(
 }
 .user-name {
   font-weight: 600;
-  max-width: 160px;
+  max-width: 130px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -601,7 +601,7 @@ watch(
   display: none;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1260px) {
   .user-name {
     display: none;
   }
@@ -609,7 +609,7 @@ watch(
     padding-right: 8px;
   }
 }
-@media (max-width: 960px) {
+@media (max-width: 1080px) {
   .new-label {
     display: none;
   }
@@ -623,7 +623,7 @@ watch(
     margin-left: 4px;
   }
 }
-@media (max-width: 767.98px) {
+@media (max-width: 959.98px) {
   .desktop-nav,
   .desktop-only {
     display: none;
