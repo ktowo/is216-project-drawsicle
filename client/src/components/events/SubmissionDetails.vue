@@ -111,7 +111,7 @@ function markBroken(i) {
   border: 0;
   border-radius: 14px;
   overflow: hidden;
-  background: #f6efe3;
+  background: var(--chip);
   cursor: zoom-in;
   aspect-ratio: 4 / 3;
 }
@@ -171,7 +171,7 @@ function markBroken(i) {
   font-weight: 600;
   padding: 2px 10px;
   border-radius: 999px;
-  background: #f2eadb;
+  background: var(--chip);
   color: var(--muted);
 }
 .message {
@@ -210,7 +210,7 @@ function markBroken(i) {
   color: var(--muted);
 }
 .late {
-  color: var(--warning, #b7791f);
+  color: var(--warning, var(--warning));
   font-weight: 600;
 }
 @media (prefers-reduced-motion: reduce) {

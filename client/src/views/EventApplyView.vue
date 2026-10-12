@@ -555,8 +555,8 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  background: #fdf3e1;
-  color: #8a5a12;
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 .summary {
   outline: none;

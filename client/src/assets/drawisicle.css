@@ -12,6 +12,22 @@
   --danger-soft: #fdecee;
   --success: #3f8f5b;
   --success-soft: #e8f5ec;
+  --warning: #b7791f;
+  --warning-soft: #fdf3e1;
+
+  /* Secondary surfaces and tints (each has a dark-mode value below) */
+  --surface-2: #fbf6ec;
+  --hover: #f5eee1;
+  --chip: #f3ebdc;
+  --border-strong: #e6dccb;
+  --subtle: #a88d6e;
+  --text-soft: #5a4a3a;
+  --pink-tint: #fff7fa;
+  --pink-line: #f4c9ce;
+  --blue-soft: #e6f2fc;
+  --blue-ink: #2f6f9f;
+  --purple-soft: #efe7fb;
+  --purple-ink: #7a55b8;
 
   --radius-lg: 22px;
   --radius: 14px;
@@ -19,6 +35,55 @@
 
   --font-body: 'Quicksand', system-ui, -apple-system, sans-serif;
   --font-display: 'Baloo 2', 'Quicksand', system-ui, sans-serif;
+}
+
+/* Dark mode: set by stores/preferences.js (data-theme on <html>). The Tailwind brand
+   colours from app.css are redefined too, so utility classes follow along. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #191613;
+  --surface: #221e1a;
+  --surface-2: #27221e;
+  --border: #3a332c;
+  --border-strong: #4a4138;
+  --text: #f3ece3;
+  --muted: #c4ab8c;
+  --subtle: #9a8670;
+  --text-soft: #ddd0c1;
+  --pink: #f07fa3;
+  --pink-dark: #ec6a93;
+  --pink-soft: #3d2530;
+  --pink-tint: #2b2026;
+  --pink-line: #5a3343;
+  --blue: #63b3f5;
+  --blue-soft: #1d2c3b;
+  --blue-ink: #9ccdf7;
+  --danger: #f08a92;
+  --danger-soft: #3b2224;
+  --success: #7fcf99;
+  --success-soft: #1e3326;
+  --warning: #e9b45c;
+  --warning-soft: #372b17;
+  --hover: #2e2924;
+  --chip: #332d27;
+  --purple-soft: #2c2438;
+  --purple-ink: #c7b2ee;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 18px rgba(0, 0, 0, 0.25);
+
+  --color-brand: #f07fa3;
+  --color-brand-dark: #ec6a93;
+  --color-brand-soft: #3d2530;
+  --color-cream: #191613;
+  --color-paper: #221e1a;
+  --color-line: #3a332c;
+  --color-ink: #f3ece3;
+  --color-cocoa: #c4ab8c;
+  --color-danger: #f08a92;
+  --color-danger-soft: #3b2224;
+  --color-success: #7fcf99;
+  --color-success-soft: #1e3326;
+  --color-warning: #e9b45c;
+  --color-warning-soft: #372b17;
 }
 
 *,
@@ -105,7 +170,7 @@ button {
   border-color: var(--border);
 }
 .btn-outline:hover {
-  background: #fbf6ec;
+  background: var(--surface-2);
   color: var(--text);
 }
 .btn-ghost {
@@ -114,7 +179,7 @@ button {
   padding: 8px 12px;
 }
 .btn-ghost:hover {
-  background: #f5eee1;
+  background: var(--hover);
 }
 
 /* ---------- Form fields ---------- */
@@ -167,7 +232,7 @@ button {
 }
 .input::placeholder,
 .textarea::placeholder {
-  color: #a88d6e;
+  color: var(--subtle);
 }
 .textarea {
   resize: vertical;
@@ -210,7 +275,7 @@ button {
   color: #12324d;
 }
 .badge-member {
-  background: #f2eadb;
+  background: var(--chip);
   color: var(--muted);
 }
 .badge-role {
@@ -362,7 +427,7 @@ summary:focus-visible {
   color: var(--info);
 }
 .badge-muted {
-  background: #f2eadb;
+  background: var(--chip);
   color: var(--muted);
 }
 
@@ -411,4 +476,10 @@ main:focus {
   .card {
     box-shadow: none;
   }
+}
+
+/* Event hidden by a site admin (only its organisers see it) */
+.badge-disabled {
+  background: var(--warning-soft);
+  color: var(--warning);
 }

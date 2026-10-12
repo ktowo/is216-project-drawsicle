@@ -170,7 +170,7 @@ const SUGGESTIONS = ['deadline', 'matching', 'password', 'private', 'character']
   display: grid;
   place-items: center;
   border: 0;
-  background: #f5eee1;
+  background: var(--hover);
   color: var(--muted);
   border-radius: 999px;
   padding: 5px;

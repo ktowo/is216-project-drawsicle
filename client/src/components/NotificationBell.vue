@@ -244,7 +244,7 @@ watch(
 }
 .icon-btn:hover,
 .icon-btn[aria-expanded='true'] {
-  background: #f5eee1;
+  background: var(--hover);
 }
 .dot {
   position: absolute;
@@ -318,13 +318,13 @@ watch(
   color: var(--text);
 }
 .item:hover {
-  background: #faf3e7;
+  background: var(--hover);
 }
 .item.unread {
-  background: #fff8fa;
+  background: var(--pink-tint);
 }
 .item.unread:hover {
-  background: #fdeef3;
+  background: var(--pink-tint);
 }
 .item-icon {
   width: 32px;
@@ -351,7 +351,7 @@ watch(
   color: var(--warning);
 }
 .tone-muted {
-  background: #f3ebdc;
+  background: var(--chip);
   color: var(--muted);
 }
 .unread-dot {
@@ -382,7 +382,7 @@ watch(
   overflow-wrap: anywhere;
 }
 .item-time {
-  color: #a88d6e;
+  color: var(--subtle);
   font-size: 0.8rem;
 }
 .see-all {

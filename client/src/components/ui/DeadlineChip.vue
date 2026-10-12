@@ -74,12 +74,12 @@ const text = computed(() => `${wording.value} ${timeUntil(date.value, now.value)
   white-space: nowrap;
 }
 .tone-neutral {
-  background: #f2eadb;
+  background: var(--chip);
   color: var(--text);
 }
 .tone-warning {
-  background: var(--warning-soft, #fdf3e1);
-  color: var(--warning, #b7791f);
+  background: var(--warning-soft, var(--warning-soft));
+  color: var(--warning, var(--warning));
 }
 .tone-danger {
   background: var(--danger-soft);

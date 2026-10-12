@@ -91,7 +91,7 @@ defineProps({
   max-width: 100%;
   padding: 1px 8px;
   border-radius: 8px;
-  background: #f5eee1;
+  background: var(--hover);
   color: var(--text);
   font-size: 0.9em;
   overflow-wrap: anywhere;

@@ -105,7 +105,7 @@ async function copyHandle(entry) {
 a.social:hover {
   border-color: var(--pink);
   color: var(--text);
-  background: #fff7fa;
+  background: var(--pink-tint);
 }
 a.social:focus-visible {
   border-radius: 999px;
@@ -143,7 +143,7 @@ a.social:focus-visible {
   display: grid;
   place-items: center;
   border: 0;
-  background: #f5eee1;
+  background: var(--hover);
   color: var(--muted);
   border-radius: 999px;
   padding: 5px;

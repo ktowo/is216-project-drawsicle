@@ -274,7 +274,7 @@ defineExpose({ open: () => input.value?.click() });
   aspect-ratio: 1 / 1;
   border-radius: 14px;
   overflow: hidden;
-  background: #f6efe3;
+  background: var(--chip);
   border: 1px solid var(--border);
 }
 .preview img {
@@ -313,7 +313,7 @@ defineExpose({ open: () => input.value?.click() });
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
 }
 .remove:hover {
-  background: #fff;
+  background: var(--surface);
 }
 .remove:focus-visible,
 .pick:focus-visible {
@@ -330,7 +330,7 @@ defineExpose({ open: () => input.value?.click() });
   padding: 26px 18px;
   border: 2px dashed var(--border);
   border-radius: 18px;
-  background: #fffaf3;
+  background: var(--surface-2);
   transition: border-color 0.15s, background 0.15s;
 }
 .dropzone.dragging {

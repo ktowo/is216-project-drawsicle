@@ -149,7 +149,7 @@ function open(tile) {
   aspect-ratio: 1 / 1;
   padding: 0;
   border: 0;
-  background: #f6efe3;
+  background: var(--chip);
   overflow: hidden;
 }
 button.cover {
@@ -212,7 +212,7 @@ button.cover:hover img {
   font-weight: 600;
   padding: 1px 9px;
   border-radius: 999px;
-  background: #f2eadb;
+  background: var(--chip);
   color: var(--muted);
 }
 .pair {

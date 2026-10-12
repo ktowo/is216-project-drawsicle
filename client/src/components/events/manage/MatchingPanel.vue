@@ -596,8 +596,8 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
   width: 150px;
 }
 .unmatched {
-  border-color: #f4c9ce;
-  background: #fffafa;
+  border-color: var(--pink-line);
+  background: var(--pink-tint);
 }
 .person-chip {
   display: inline-flex;
@@ -618,7 +618,7 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
   top: 8px;
   z-index: 5;
   border-color: var(--pink);
-  background: #fff7fa;
+  background: var(--pink-tint);
 }
 .pair {
   padding: 12px 16px;
@@ -673,14 +673,14 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
   flex: 1;
   height: 8px;
   border-radius: 999px;
-  background: #f2eadb;
+  background: var(--chip);
   overflow: hidden;
 }
 .score-bar > span {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #f6a5bf, var(--pink));
+  background: linear-gradient(90deg, var(--pink-line), var(--pink));
 }
 .why :deep(svg) {
   transition: transform 0.15s;
@@ -689,7 +689,7 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
   margin: 10px 0 2px;
   padding: 10px 14px 10px 32px;
   border-radius: 12px;
-  background: #fbf6ec;
+  background: var(--surface-2);
   font-size: 0.92rem;
   color: var(--text);
 }

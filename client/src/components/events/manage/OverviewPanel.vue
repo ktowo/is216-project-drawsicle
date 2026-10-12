@@ -479,7 +479,7 @@ const reminderOpen = ref(false);
 
 <style scoped>
 .next-step {
-  background: linear-gradient(135deg, #fffdfa 0%, #fff4f7 100%);
+  background: linear-gradient(135deg, var(--surface) 0%, var(--pink-tint) 100%);
 }
 .eyebrow {
   margin: 0 0 6px;

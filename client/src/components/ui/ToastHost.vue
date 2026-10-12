@@ -101,7 +101,7 @@ const ICONS = { success: CircleCheck, error: CircleAlert, info: Info };
   cursor: pointer;
 }
 .toast-close:hover {
-  background: #f5eee1;
+  background: var(--hover);
   color: var(--text);
 }
 

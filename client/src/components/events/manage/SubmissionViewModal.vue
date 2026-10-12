@@ -109,7 +109,7 @@ function imageHref(url) {
   display: block;
   border-radius: 14px;
   overflow: hidden;
-  background: #f3ebdc;
+  background: var(--chip);
   border: 1px solid var(--border);
 }
 .image-link img {
@@ -129,7 +129,7 @@ function imageHref(url) {
   margin: 0;
   padding: 14px 16px;
   border-radius: 14px;
-  background: #fbf6ec;
+  background: var(--surface-2);
   white-space: pre-line;
   overflow-wrap: anywhere;
 }

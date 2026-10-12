@@ -383,7 +383,7 @@ onMounted(loadOpenEvents);
   max-width: 54ch;
   font-size: 1.15rem;
   line-height: 1.6;
-  color: #5a4a3a;
+  color: var(--text-soft);
 }
 .hero-cta {
   display: flex;
@@ -485,7 +485,7 @@ onMounted(loadOpenEvents);
   margin-top: 18px;
   padding: 12px;
   border-radius: 16px;
-  background: #fbf6ec;
+  background: var(--surface-2);
 }
 .art-tile {
   width: 40px;
@@ -493,8 +493,8 @@ onMounted(loadOpenEvents);
   border-radius: 12px;
   display: grid;
   place-items: center;
-  background: #efe7fb;
-  color: #7a55b8;
+  background: var(--purple-soft);
+  color: var(--purple-ink);
   font-family: var(--font-display);
   font-weight: 800;
   font-size: 1.2rem;
@@ -517,7 +517,7 @@ onMounted(loadOpenEvents);
 .art-tags span {
   padding: 2px 10px;
   border-radius: 999px;
-  background: #f3ebdc;
+  background: var(--chip);
   color: var(--muted);
   font-size: 0.8rem;
   font-weight: 600;
@@ -556,7 +556,7 @@ onMounted(loadOpenEvents);
   padding: 10px 16px;
   border-radius: 999px;
   background: var(--text);
-  color: #fff;
+  color: var(--bg);
   font-weight: 600;
   font-size: 0.9rem;
   box-shadow: 0 10px 24px rgba(47, 45, 43, 0.25);
@@ -736,7 +736,7 @@ onMounted(loadOpenEvents);
 .skeleton-banner,
 .skeleton-line {
   display: block;
-  background: linear-gradient(90deg, #f3ebdc 0%, #faf4ea 50%, #f3ebdc 100%);
+  background: linear-gradient(90deg, var(--chip) 0%, #faf4ea 50%, var(--chip) 100%);
   background-size: 200% 100%;
   animation: shimmer 1.4s ease-in-out infinite;
 }
@@ -823,11 +823,11 @@ onMounted(loadOpenEvents);
   margin-top: 26px;
 }
 .cta-primary {
-  background: #fff;
+  background: var(--surface);
   color: var(--pink-dark);
 }
 .cta-primary:hover {
-  background: #fff4f8;
+  background: var(--pink-tint);
   color: var(--pink-dark);
 }
 .cta-secondary {

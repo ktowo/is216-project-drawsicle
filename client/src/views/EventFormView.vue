@@ -1473,7 +1473,7 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
   width: 42px;
   height: 24px;
   border-radius: 999px;
-  background: #e6dccb;
+  background: var(--border-strong);
   position: relative;
   transition: background 0.15s;
   flex-shrink: 0;
@@ -1485,7 +1485,7 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--surface);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
   transition: transform 0.15s;
 }
@@ -1523,11 +1523,11 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
   transition: border-color 0.15s, background 0.15s;
 }
 .choice:hover {
-  background: #fbf6ec;
+  background: var(--surface-2);
 }
 .choice.on {
   border-color: var(--pink);
-  background: #fff7fa;
+  background: var(--pink-tint);
 }
 .choice.locked {
   cursor: not-allowed;
@@ -1548,7 +1548,7 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
   width: 38px;
   height: 38px;
   border-radius: 12px;
-  background: #f5eee1;
+  background: var(--hover);
   color: var(--muted);
   flex-shrink: 0;
 }

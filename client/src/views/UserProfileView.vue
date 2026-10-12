@@ -352,7 +352,7 @@ function goToLookup() {
   width: 112px;
   height: 112px;
   border-radius: 50%;
-  background: #f3ebdc;
+  background: var(--chip);
 }
 .sk-lines {
   flex: 1;
@@ -365,7 +365,7 @@ function goToLookup() {
   display: block;
   height: 14px;
   border-radius: 8px;
-  background: #f3ebdc;
+  background: var(--chip);
 }
 .sk-line.w40 {
   width: 40%;

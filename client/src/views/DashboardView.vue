@@ -411,7 +411,7 @@ async function sendTestNotification() {
   gap: 14px 18px;
   margin-top: 24px;
   padding: 18px 22px;
-  background: linear-gradient(135deg, #fffdfa 0%, #fff4f7 100%);
+  background: linear-gradient(135deg, var(--surface) 0%, var(--pink-tint) 100%);
   border-color: #f6cfdc;
 }
 .nudge-icon {
@@ -522,7 +522,7 @@ async function sendTestNotification() {
   margin: 0 -12px;
   padding-left: 12px;
   padding-right: 12px;
-  background: #fffafa;
+  background: var(--pink-tint);
   box-shadow: inset 3px 0 0 var(--danger);
 }
 .org-thumb {
@@ -572,14 +572,14 @@ async function sendTestNotification() {
   flex: 1;
   height: 8px;
   border-radius: 999px;
-  background: #f2eadb;
+  background: var(--chip);
   overflow: hidden;
 }
 .bar > span {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #f6a5bf, var(--pink));
+  background: linear-gradient(90deg, var(--pink-line), var(--pink));
 }
 .bar > span.full {
   background: var(--success);
@@ -647,7 +647,7 @@ async function sendTestNotification() {
   transition: background 0.15s, border-color 0.15s;
 }
 .quick-link:hover {
-  background: #fbf6ec;
+  background: var(--surface-2);
   color: var(--text);
   border-color: #e6d9c2;
 }

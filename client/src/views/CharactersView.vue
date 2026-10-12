@@ -385,7 +385,7 @@ const emptyCopy = computed(() => {
   cursor: pointer;
 }
 .clear-btn:hover {
-  background: #f5eee1;
+  background: var(--hover);
   color: var(--text);
 }
 .result-note {

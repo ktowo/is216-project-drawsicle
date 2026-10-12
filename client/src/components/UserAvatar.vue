@@ -48,7 +48,7 @@ const initials = computed(() => {
   place-items: center;
   flex-shrink: 0;
   border-radius: 50%;
-  background: #f3ebdc;
+  background: var(--chip);
   color: var(--text);
   font-weight: 600;
   overflow: hidden;

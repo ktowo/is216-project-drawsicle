@@ -221,14 +221,14 @@ function updateNew(index, value) {
 }
 .alert-warning {
   margin: 0;
-  background: var(--color-warning-soft, #fdf3e1);
-  color: var(--color-warning, #b7791f);
+  background: var(--color-warning-soft, var(--warning-soft));
+  color: var(--color-warning, var(--warning));
 }
 .new-character {
   border: 1.5px solid var(--border);
   border-radius: 18px;
   padding: 18px 20px 20px;
-  background: #fffaf3;
+  background: var(--surface-2);
 }
 .new-head {
   display: flex;

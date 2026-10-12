@@ -404,7 +404,7 @@ const summary = computed(() => {
   cursor: pointer;
 }
 .clear-search:hover {
-  background: #f5eee1;
+  background: var(--hover);
 }
 .chips {
   display: flex;

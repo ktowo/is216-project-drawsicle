@@ -71,7 +71,7 @@ defineProps({
   color: var(--warning);
 }
 .tone-danger {
-  border-color: #f4c9ce;
+  border-color: var(--pink-line);
 }
 .tone-danger .value {
   color: var(--danger);

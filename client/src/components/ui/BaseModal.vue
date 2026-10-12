@@ -232,7 +232,7 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 .close-btn:hover {
-  background: #f5eee1;
+  background: var(--hover);
   color: var(--text);
 }
 .modal-body {

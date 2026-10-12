@@ -400,7 +400,7 @@ async function confirmDelete() {
   flex-basis: 240px;
 }
 .danger-zone {
-  border-color: #f4c9ce;
+  border-color: var(--pink-line);
 }
 .break-anywhere {
   overflow-wrap: anywhere;

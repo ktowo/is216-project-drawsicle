@@ -64,7 +64,7 @@ const emit = defineEmits(['toggle']);
 }
 .faq.open {
   border-color: #f3c3d3;
-  background: #fffafc;
+  background: var(--pink-tint);
 }
 /* Headings inside the info page get their own big margins; reset them for the question row */
 .faq-q {

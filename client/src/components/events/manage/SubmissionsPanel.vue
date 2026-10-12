@@ -266,7 +266,7 @@ li.row:first-child {
   display: none;
 }
 .row.overdue {
-  background: #fffafa;
+  background: var(--pink-tint);
   box-shadow: inset 3px 0 0 var(--danger);
 }
 .people {
@@ -316,7 +316,7 @@ li.row:first-child {
   width: 38px;
   height: 22px;
   border-radius: 999px;
-  background: #e6dccb;
+  background: var(--border-strong);
   position: relative;
   transition: background 0.15s;
   flex-shrink: 0;
@@ -328,7 +328,7 @@ li.row:first-child {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--surface);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
   transition: transform 0.15s;
 }
@@ -354,7 +354,7 @@ li.row:first-child {
   }
   .row.head {
     padding: 12px 18px;
-    background: #fbf6ec;
+    background: var(--surface-2);
     font-size: 0.8rem;
     font-weight: 700;
     color: var(--muted);

@@ -137,14 +137,14 @@ function onKeydown(e) {
   gap: 10px;
 }
 .character-card.archived {
-  background: #fbf8f1;
+  background: var(--surface-2);
 }
 .selectable {
   cursor: pointer;
   user-select: none;
 }
 .selectable:hover:not(.disabled) {
-  border-color: #e9c6d3;
+  border-color: var(--pink-line);
 }
 .selected {
   border-color: var(--pink);
@@ -245,7 +245,7 @@ function onKeydown(e) {
 .tag {
   padding: 2px 10px;
   border-radius: 999px;
-  background: #f3ebdc;
+  background: var(--chip);
   color: var(--muted);
   font-size: 0.82rem;
   font-weight: 600;
@@ -273,14 +273,14 @@ function onKeydown(e) {
   max-width: 220px;
 }
 .ref-link:hover {
-  background: #fbd5e2;
+  background: var(--pink-line);
 }
 .notes {
   display: flex;
   gap: 8px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: #fbf6ec;
+  background: var(--surface-2);
   color: var(--text);
   font-size: 0.9rem;
 }

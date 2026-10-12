@@ -78,7 +78,7 @@ const describedby = computed(
   border-radius: 8px;
 }
 .reveal:hover {
-  background: #f5eee1;
+  background: var(--hover);
 }
 .field-error,
 .hint {

@@ -80,7 +80,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
   position: relative;
   display: grid;
   place-items: center;
-  background: #f6efe3;
+  background: var(--chip);
   border-radius: 16px;
   min-height: 240px;
   overflow: hidden;
@@ -107,7 +107,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
   box-shadow: var(--shadow);
 }
 .nav:hover {
-  background: #fff;
+  background: var(--surface);
   color: var(--pink-dark);
 }
 .nav:focus-visible {

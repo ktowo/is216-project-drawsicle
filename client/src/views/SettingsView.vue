@@ -107,7 +107,7 @@ watch(() => route.name, () => nextTick(revealActive));
   white-space: nowrap;
 }
 .side-link:hover {
-  background: #f5eee1;
+  background: var(--hover);
   color: var(--text);
 }
 .side-link.active {

@@ -448,7 +448,7 @@ li.row:first-child {
   }
   .row.head {
     padding: 12px 18px;
-    background: #fbf6ec;
+    background: var(--surface-2);
     font-size: 0.8rem;
     font-weight: 700;
     color: var(--muted);

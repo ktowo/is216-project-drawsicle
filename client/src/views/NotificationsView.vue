@@ -500,7 +500,7 @@ async function togglePref(key) {
   cursor: pointer;
 }
 .newer:hover {
-  background: #fbd5e2;
+  background: var(--pink-line);
 }
 .types {
   display: flex;
@@ -522,7 +522,7 @@ async function togglePref(key) {
   cursor: pointer;
 }
 .type-chip:hover {
-  border-color: #e9c6d3;
+  border-color: var(--pink-line);
 }
 .type-chip.on {
   background: var(--pink-soft);
@@ -536,13 +536,13 @@ async function togglePref(key) {
   min-width: 20px;
   padding: 0 6px;
   border-radius: 999px;
-  background: #f3ebdc;
+  background: var(--chip);
   color: var(--muted);
   font-size: 0.75rem;
   text-align: center;
 }
 .type-chip.on .type-count {
-  background: #fff;
+  background: var(--surface);
   color: var(--pink-dark);
 }
 .list-alert {
@@ -569,7 +569,7 @@ async function togglePref(key) {
 .day-count {
   padding: 0 7px;
   border-radius: 999px;
-  background: #f3ebdc;
+  background: var(--chip);
   font-size: 0.72rem;
   letter-spacing: 0;
 }
@@ -589,7 +589,7 @@ async function togglePref(key) {
   border-top: 0;
 }
 .row.unread {
-  background: #fff8fa;
+  background: var(--pink-tint);
 }
 .row-main {
   flex: 1;
@@ -609,7 +609,7 @@ async function togglePref(key) {
   cursor: pointer;
 }
 .row-main.clickable:hover {
-  background: #faf3e7;
+  background: var(--hover);
 }
 .row-main:focus-visible {
   border-radius: 14px;
@@ -640,7 +640,7 @@ async function togglePref(key) {
   color: var(--warning);
 }
 .tone-muted {
-  background: #f3ebdc;
+  background: var(--chip);
   color: var(--muted);
 }
 .unread .icon::after {
@@ -677,7 +677,7 @@ async function togglePref(key) {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  color: #a88d6e;
+  color: var(--subtle);
   font-size: 0.82rem;
 }
 .open-hint {
@@ -778,7 +778,7 @@ async function togglePref(key) {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--surface);
   box-shadow: 0 1px 3px rgba(60, 40, 20, 0.25);
   transition: transform 0.15s;
 }

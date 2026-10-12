@@ -156,7 +156,7 @@ async function remove() {
   position: relative;
   border-radius: 16px;
   overflow: hidden;
-  background: #f3ebdc;
+  background: var(--chip);
 }
 .preview-img {
   display: block;

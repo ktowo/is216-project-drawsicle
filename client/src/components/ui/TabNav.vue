@@ -68,7 +68,7 @@ function onKeydown(e, index) {
   gap: 4px;
   padding: 4px;
   border-radius: 16px;
-  background: #f3ebdc;
+  background: var(--chip);
   overflow-x: auto;
   scrollbar-width: none;
   max-width: 100%;
