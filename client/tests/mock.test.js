@@ -2,6 +2,7 @@
 // Run: cd client && pnpm exec vitest run tests/mock.test.js
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN_EMAIL, DEMO_PASSWORD } from '@shared/demo-data.mjs';
+import { getState } from '../src/mock/db.js';
 import { mockRequest, resetMockData, setMockLatency } from '../src/mock/index.js';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -449,5 +450,251 @@ describe('accounts', () => {
   it('answers unknown routes with a JSON 404', async () => {
     const res = await mockRequest('/nothing/here');
     expect(res).toEqual({ status: 404, data: { error: 'Not found.', code: 'NOT_FOUND' } });
+  });
+});
+
+describe('build-out additions', () => {
+  it("sorts the listing by each event's next deadline, with completed events last", async () => {
+    const { events } = await ok('/events?sort=deadline');
+    // Autumn's gifts are due in 5 days, Moth's sign-ups close in 6, Winter's in 10, Summer's gifts in 25
+    expect(events.map((e) => e.name)).toEqual([
+      'Autumn Leaves Art Trade',
+      'Moth & Lantern Exchange',
+      'Winter Secret Santa 2026',
+      'Summer Splash Swap',
+      'Spring Bloom Exchange',
+    ]);
+    expect((await ok('/events')).events.map((e) => e.name)).toEqual(events.map((e) => e.name));
+  });
+
+  it('shows public artist profiles by username, any case, or id', async () => {
+    const { profile, organizing, stats } = await ok('/users/Kit');
+    expect(profile).toMatchObject({ username: 'kit', displayName: 'Kit' });
+    expect(profile.bio).toMatch(/Moth/);
+    expect(Object.values(profile.socials).filter(Boolean).length).toBeGreaterThanOrEqual(2);
+    expect(profile).not.toHaveProperty('email');
+    expect(profile.createdAt).toBeTruthy();
+    expect(organizing.map((e) => e.name)).toEqual(['Moth & Lantern Exchange']);
+    expect(organizing[0].viewer).toBeNull();
+    expect(stats).toEqual({ eventsOrganized: 1, exchangesCompleted: 1 });
+
+    expect((await ok('/users/@KIT')).profile.id).toBe(profile.id);
+    expect((await ok(`/users/${profile.id}`)).profile.username).toBe('kit');
+
+    // Mika's draft and private events stay out
+    const mika = await ok('/users/mika');
+    expect(mika.organizing.map((e) => e.name)).not.toContain('Valentine Doodle Swap');
+    expect(mika.organizing.map((e) => e.name)).not.toContain('Studio Club Swap');
+    expect(mika.stats.eventsOrganized).toBe(mika.organizing.length);
+    const juniper = await ok('/users/juniper');
+    expect(juniper.organizing.map((e) => e.name)).toEqual(['Spring Bloom Exchange']);
+
+    const missing = await mockRequest('/users/nobody_here');
+    expect(missing).toMatchObject({ status: 404, data: { code: 'USER_NOT_FOUND' } });
+    expect((await fails('/users/!!')).code).toBe('USER_NOT_FOUND');
+
+    await loginAs('mika');
+    await ok('/profile/deactivate', { method: 'POST', body: { password: DEMO_PASSWORD } });
+    expect((await fails('/users/mika')).code).toBe('USER_NOT_FOUND');
+  });
+
+  it('lists where a character was offered, on the single-character route only', async () => {
+    await loginAs('mika');
+    const { characters } = await ok('/characters');
+    const biscuit = characters.find((c) => c.name === 'Biscuit');
+    expect(characters[0]).not.toHaveProperty('usedIn');
+
+    const { character } = await ok(`/characters/${biscuit.id}`);
+    expect(character.usedIn.map((u) => u.eventName).sort()).toEqual([
+      'Autumn Leaves Art Trade',
+      'Spring Bloom Exchange',
+      'Summer Splash Swap',
+    ]);
+    expect(character.usedIn).toHaveLength(character.eventCount);
+    expect(character.usedIn.find((u) => u.eventName === 'Spring Bloom Exchange')).toMatchObject({
+      eventStatus: 'completed',
+      applicationStatus: 'accepted',
+    });
+
+    const created = await ok('/characters', { method: 'POST', body: { name: 'Noodle' } });
+    expect((await ok(`/characters/${created.character.id}`)).character.usedIn).toEqual([]);
+  });
+
+  it('pages notifications backwards with a before cursor', async () => {
+    await loginAs('mika');
+    const first = await ok('/notifications?limit=2');
+    expect(first.items).toHaveLength(2);
+    expect(first.hasMore).toBe(true);
+
+    const last = first.items.at(-1);
+    const second = await ok(`/notifications?limit=2&before=${encodeURIComponent(last.createdAt)}`);
+    expect(second.items).toHaveLength(2);
+    expect(second.hasMore).toBe(false);
+    expect(second.unreadCount).toBe(first.unreadCount);
+    const seen = new Set(first.items.map((n) => n.id));
+    for (const n of second.items) {
+      expect(seen.has(n.id)).toBe(false);
+      expect(new Date(n.createdAt) < new Date(last.createdAt)).toBe(true);
+    }
+
+    expect((await ok('/notifications')).hasMore).toBe(false);
+    expect((await fails('/notifications?before=yesterday')).code).toBe('VALIDATION');
+  });
+
+  it('exports everything stored about me and nothing about anyone else', async () => {
+    expect((await fails('/profile/export')).code).toBe('AUTH_REQUIRED');
+    await loginAs('mika');
+    const data = await ok('/profile/export');
+    expect(Object.keys(data).sort()).toEqual([
+      'applications',
+      'characters',
+      'exportedAt',
+      'notifications',
+      'submissions',
+      'user',
+    ]);
+    expect(data.user.email).toBe('mika@demo.test');
+    expect(data.user).not.toHaveProperty('password');
+    expect(data.characters.length).toBeGreaterThan(0);
+    expect(data.characters.every((c) => c.ownerId === data.user.id)).toBe(true);
+    expect(data.applications.length).toBeGreaterThan(0);
+    expect(data.applications.every((a) => a.userId === data.user.id && a.eventName)).toBe(true);
+    expect(data.applications[0].offeredCharacters.length).toBeGreaterThan(0);
+    expect(data.submissions.map((s) => s.eventName)).toEqual(['Spring Bloom Exchange']);
+    expect(data.notifications).toHaveLength(4);
+    // Newest first
+    const dates = data.applications.map((a) => a.createdAt);
+    expect(dates).toEqual([...dates].sort().reverse());
+  });
+
+  it('duplicates an event into a new draft for organisers only', async () => {
+    const moth = await eventByName('Moth & Lantern Exchange');
+    expect((await fails(`/events/${moth.id}/duplicate`, { method: 'POST' })).code).toBe('AUTH_REQUIRED');
+
+    await loginAs('sol');
+    expect((await fails(`/events/${moth.id}/duplicate`, { method: 'POST', body: {} })).status).toBe(403);
+
+    await loginAs('kit');
+    const before = Date.now();
+    const res = await mockRequest(`/events/${moth.id}/duplicate`, { method: 'POST' });
+    expect(res.status).toBe(201);
+    const copy = res.data.event;
+    expect(copy).toMatchObject({
+      name: 'Copy of Moth & Lantern Exchange',
+      status: 'draft',
+      participantCount: 0,
+      requireApproval: moth.requireApproval,
+      allowedTypes: moth.allowedTypes,
+      tags: moth.tags,
+      viewer: { isOrganizer: true },
+    });
+    expect(copy.id).not.toBe(moth.id);
+    expect(copy.organizers.map((o) => o.displayName)).toEqual(['Kit']);
+    expect(copy.inviteCode).toBeTruthy();
+    const signup = new Date(copy.signupDeadline).getTime();
+    expect(Math.abs(signup - (before + 14 * DAY))).toBeLessThan(60 * 1000);
+    expect(new Date(copy.submissionDeadline).getTime() - signup).toBe(
+      new Date(moth.submissionDeadline).getTime() - new Date(moth.signupDeadline).getTime()
+    );
+    expect((await ok('/events/mine')).organizing.map((e) => e.name)).toContain(copy.name);
+    // Drafts never show in the public listing
+    expect((await ok('/events?q=Copy')).events).toHaveLength(0);
+
+    const named = await ok(`/events/${moth.id}/duplicate`, {
+      method: 'POST',
+      body: {
+        name: '  Moth Week  ',
+        signupDeadline: new Date(Date.now() + 20 * DAY).toISOString(),
+        submissionDeadline: new Date(Date.now() + 40 * DAY).toISOString(),
+      },
+    });
+    expect(named.event.name).toBe('Moth Week');
+
+    const bad = async (body) => (await fails(`/events/${moth.id}/duplicate`, { method: 'POST', body })).code;
+    expect(await bad({ signupDeadline: new Date(Date.now() - DAY).toISOString() })).toBe('VALIDATION');
+    expect(await bad({ signupDeadline: 'soon' })).toBe('VALIDATION');
+    expect(await bad({ name: 'x'.repeat(500) })).toBe('VALIDATION');
+    // The new sign-up date lands after the old gift date, so the gift date must follow it
+    expect(
+      await bad({
+        signupDeadline: new Date(Date.now() + 50 * DAY).toISOString(),
+        submissionDeadline: new Date(Date.now() + 45 * DAY).toISOString(),
+      })
+    ).toBe('VALIDATION');
+  });
+
+  it('withdraws unmatched sign-ups on deactivation and tells the organiser', async () => {
+    await loginAs('mika');
+    const summer = await eventByName('Summer Splash Swap');
+    await ok(`/events/${summer.id}/matches/generate`, { method: 'POST', body: { seed: 3 } });
+    expect((await ok(`/events/${summer.id}/matches`)).matches).toHaveLength(6);
+    await logout();
+
+    // Sol is in Summer (matching), Winter and Moth (open) and the published Autumn and Spring trades
+    await loginAs('sol');
+    expect((await ok('/profile/export')).applications.map((a) => a.status)).not.toContain('withdrawn');
+    await ok('/profile/deactivate', { method: 'POST', body: { password: DEMO_PASSWORD } });
+
+    const state = getState();
+    const sol = state.users.find((u) => u.username === 'sol');
+    const statusIn = (name) => {
+      const event = state.events.find((e) => e.name === name);
+      return state.applications.find((a) => a.event === event.id && a.user === sol.id).status;
+    };
+    expect(statusIn('Summer Splash Swap')).toBe('withdrawn');
+    expect(statusIn('Winter Secret Santa 2026')).toBe('withdrawn');
+    expect(statusIn('Autumn Leaves Art Trade')).toBe('accepted');
+    expect(statusIn('Spring Bloom Exchange')).toBe('accepted');
+    const rolesIn = (name) => {
+      const event = state.events.find((e) => e.name === name);
+      return state.members.find((m) => m.user === sol.id && m.event === event.id)?.roles;
+    };
+    expect(rolesIn('Summer Splash Swap')).toBeUndefined();
+    expect(rolesIn('Winter Secret Santa 2026')).toBeUndefined();
+    expect(rolesIn('Autumn Leaves Art Trade')).toEqual(['participant']);
+
+    await loginAs('mika');
+    // The draft matches were made with Sol in them, so they are gone
+    expect((await ok(`/events/${summer.id}/matches`)).matches).toHaveLength(0);
+    const { items } = await ok('/notifications?limit=10');
+    const told = items.filter((n) => n.type === 'application_withdrawn');
+    expect(told).toHaveLength(1);
+    expect(told[0]).toMatchObject({
+      title: 'Sol left Summer Splash Swap',
+      link: `/events/${summer.id}/manage?tab=matching`,
+    });
+    expect(told[0].message).toMatch(/Generate the matches again/);
+
+    // Logging back in does not restore the withdrawn sign-ups
+    await logout();
+    await loginAs('sol');
+    expect(statusIn('Summer Splash Swap')).toBe('withdrawn');
+    // Summer, Winter and Moth
+    expect((await ok('/profile/export')).applications.filter((a) => a.status === 'withdrawn')).toHaveLength(3);
+  });
+
+  it('leaves deactivated accounts out when generating matches, with a warning', async () => {
+    await loginAs('mika');
+    const summer = await eventByName('Summer Splash Swap');
+    // Older data can still have accepted sign-ups from accounts that have since gone
+    const userNamed = (username) => getState().users.find((u) => u.username === username);
+    userNamed('pip').status = 'deactivated';
+    userNamed('noor').status = 'deactivated';
+
+    const { matches, result } = await ok(`/events/${summer.id}/matches/generate`, { method: 'POST', body: { seed: 5 } });
+    const people = new Set(matches.flatMap((m) => [m.giver.displayName, m.recipient.displayName]));
+    expect(people.has('Pip')).toBe(false);
+    expect(people.has('Noor')).toBe(false);
+    expect(result.stats.participants).toBe(4);
+    expect(result.warnings.join(' ')).toMatch(/^(Noor and Pip|Pip and Noor) were left out because their accounts are deactivated.$/);
+    // Publishing only needs the people generate used
+    expect((await mockRequest(`/events/${summer.id}/matches/publish`, { method: 'POST' })).status).toBe(200);
+
+    resetMockData();
+    await loginAs('mika');
+    userNamed('pip').status = 'deactivated';
+    const again = await eventByName('Summer Splash Swap');
+    const one = await ok(`/events/${again.id}/matches/generate`, { method: 'POST', body: { seed: 5 } });
+    expect(one.result.warnings).toContain('Pip was left out because their account is deactivated.');
   });
 });
