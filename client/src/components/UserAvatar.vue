@@ -5,6 +5,9 @@ import { assetUrl } from '@/api';
 const props = defineProps({
   user: { type: Object, default: null },
   size: { type: Number, default: 40 },
+  // Spoken name when the avatar is shown on its own, without the person's name beside it.
+  // Left empty it is decorative, which is right next to a visible name.
+  label: { type: String, default: '' },
 });
 
 const imageFailed = ref(false);
@@ -22,7 +25,12 @@ const initials = computed(() => {
 </script>
 
 <template>
-  <span class="avatar" :style="{ width: `${size}px`, height: `${size}px`, fontSize: `${size * 0.36}px` }">
+  <span
+    class="avatar"
+    :role="label ? 'img' : undefined"
+    :aria-label="label || undefined"
+    :style="{ width: `${size}px`, height: `${size}px`, fontSize: `${size * 0.36}px` }"
+  >
     <img
       v-if="src && !imageFailed"
       :src="src"
