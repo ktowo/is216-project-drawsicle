@@ -724,7 +724,7 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
 </script>
 
 <template>
-  <main class="page narrow">
+  <main class="page" :class="step === 'template' ? 'narrow' : 'wide'">
     <LoadingBlock v-if="loading" label="Loading event…" />
 
     <EmptyState
@@ -1609,6 +1609,303 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
   .unsaved {
     margin-left: 0;
     text-align: center;
+  }
+}
+
+.wide {
+  max-width: 1200px;
+}
+
+/* ---------- Template picker ---------- */
+.templates {
+  margin-top: 28px;
+}
+.templates .section-title {
+  font-family: var(--font-body);
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0;
+}
+.templates .section-sub {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+.tpl-grid {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 14px;
+}
+.tpl-grid > li {
+  display: flex;
+}
+.tpl-card {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 18px 18px 16px;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+.tpl-card:hover {
+  border-color: var(--pink);
+  transform: translateY(-2px);
+}
+.tpl-card:focus-visible {
+  outline: none;
+  border-color: var(--pink);
+  box-shadow: 0 0 0 3px var(--pink-soft);
+}
+.tpl-card.blank {
+  border-style: dashed;
+  box-shadow: none;
+  background: transparent;
+}
+.tpl-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--pink-soft);
+  color: var(--pink-dark);
+  margin-bottom: 4px;
+}
+.tpl-card.blank .tpl-icon {
+  background: var(--chip);
+  color: var(--muted);
+}
+.tpl-name {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.tpl-blurb {
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+.tpl-facts {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--subtle);
+}
+.tpl-go {
+  margin-top: auto;
+  padding-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  color: var(--pink);
+}
+
+/* ---------- "Starting from ..." note ---------- */
+.tpl-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 18px 0 22px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.tpl-note :deep(svg) {
+  color: var(--pink);
+  flex-shrink: 0;
+}
+.link-btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--pink);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.link-btn:hover {
+  color: var(--pink-dark);
+}
+
+/* ---------- Form + sidebar ---------- */
+.form-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-areas: 'form aside';
+  gap: 28px;
+  align-items: start;
+}
+.form-layout > .event-form {
+  grid-area: form;
+}
+.form-aside {
+  grid-area: aside;
+  position: sticky;
+  top: 88px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.section-nav,
+.preview {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 16px;
+}
+.aside-title {
+  margin: 0 0 8px;
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nav-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 0;
+  border-left: 3px solid transparent;
+  border-radius: 0 10px 10px 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: left;
+  cursor: pointer;
+}
+.nav-item:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.nav-item.current {
+  border-left-color: var(--pink);
+  background: var(--pink-tint);
+  color: var(--text);
+}
+.nav-item.invalid {
+  color: var(--danger);
+}
+.nav-error {
+  flex-shrink: 0;
+}
+.aside-save {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ---------- Live preview ---------- */
+.preview-frame {
+  margin-top: 12px;
+  pointer-events: none;
+}
+.preview-facts {
+  margin: 14px 0 0;
+  display: grid;
+  gap: 10px;
+}
+.preview-facts > div {
+  display: grid;
+  gap: 2px;
+}
+.preview-facts dt {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.preview-facts dd {
+  margin: 0;
+  font-weight: 600;
+}
+.preview-tags {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Narrower screens: no preview, and the section links become a scrollable row */
+@media (max-width: 1023px) {
+  .form-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'aside' 'form';
+    gap: 16px;
+  }
+  .form-aside {
+    position: sticky;
+    top: 72px;
+    z-index: 5;
+    gap: 0;
+  }
+  .preview,
+  .aside-title,
+  .aside-save {
+    display: none;
+  }
+  .section-nav {
+    padding: 6px;
+    background: color-mix(in srgb, var(--surface) 94%, transparent);
+    backdrop-filter: blur(6px);
+  }
+  .nav-list {
+    flex-direction: row;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .nav-item {
+    width: auto;
+    white-space: nowrap;
+    border-left: 0;
+    border-radius: 999px;
+    padding: 6px 14px;
+  }
+  .nav-item.current {
+    background: var(--pink-soft);
   }
 }
 </style>
