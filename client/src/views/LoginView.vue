@@ -181,7 +181,7 @@ async function submit() {
 .demo-text code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.85rem;
-  background: rgba(255, 255, 255, 0.7);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
   padding: 1px 5px;
   border-radius: 6px;
   word-break: break-all;

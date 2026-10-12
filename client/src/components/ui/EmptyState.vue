@@ -29,7 +29,7 @@ defineProps({
   padding: 44px 20px;
   border: 1.5px dashed var(--border);
   border-radius: var(--radius-lg);
-  background: rgba(255, 253, 250, 0.6);
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
 }
 .icon-tile {
   width: 60px;

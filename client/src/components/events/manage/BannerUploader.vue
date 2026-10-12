@@ -171,7 +171,7 @@ async function remove() {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  background: rgba(255, 253, 250, 0.72);
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
   color: var(--text);
   font-weight: 600;
 }

@@ -307,7 +307,7 @@ defineExpose({ open: () => input.value?.click() });
   place-items: center;
   border-radius: 50%;
   border: 0;
-  background: rgba(255, 253, 250, 0.94);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
   color: var(--danger);
   cursor: pointer;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);

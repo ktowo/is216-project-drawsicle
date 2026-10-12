@@ -347,7 +347,7 @@ async function copyUsername() {
   gap: 10px;
   padding: 12px 16px;
   border-radius: 14px;
-  background: rgba(255, 253, 250, 0.85);
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
   border: 1px dashed var(--pink);
   color: var(--text);
   font-weight: 500;

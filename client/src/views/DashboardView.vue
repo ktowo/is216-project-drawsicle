@@ -412,7 +412,7 @@ async function sendTestNotification() {
   margin-top: 24px;
   padding: 18px 22px;
   background: linear-gradient(135deg, var(--surface) 0%, var(--pink-tint) 100%);
-  border-color: #f6cfdc;
+  border-color: var(--pink-line);
 }
 .nudge-icon {
   display: grid;
@@ -649,7 +649,7 @@ async function sendTestNotification() {
 .quick-link:hover {
   background: var(--surface-2);
   color: var(--text);
-  border-color: #e6d9c2;
+  border-color: var(--border-strong);
 }
 .quick-icon {
   display: grid;

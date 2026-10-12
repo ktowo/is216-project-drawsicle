@@ -53,7 +53,7 @@ defineProps({
   font-size: 7rem;
   font-weight: 800;
   line-height: 1;
-  color: var(--pink-soft);
+  color: color-mix(in srgb, var(--pink) 28%, transparent);
   user-select: none;
 }
 .icon-tile {

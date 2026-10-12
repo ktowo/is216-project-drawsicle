@@ -99,7 +99,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
   height: 42px;
   border-radius: 50%;
   border: 1px solid var(--border);
-  background: rgba(255, 253, 250, 0.92);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
   color: var(--text);
   display: grid;
   place-items: center;

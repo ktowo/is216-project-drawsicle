@@ -63,7 +63,7 @@ const emit = defineEmits(['toggle']);
   margin-top: 10px;
 }
 .faq.open {
-  border-color: #f3c3d3;
+  border-color: var(--pink-line);
   background: var(--pink-tint);
 }
 /* Headings inside the info page get their own big margins; reset them for the question row */
@@ -131,7 +131,7 @@ const emit = defineEmits(['toggle']);
   text-decoration: none !important;
 }
 .related-link:hover {
-  background: #fbd3e1;
+  background: var(--pink-soft);
 }
 @media (prefers-reduced-motion: reduce) {
   .faq,

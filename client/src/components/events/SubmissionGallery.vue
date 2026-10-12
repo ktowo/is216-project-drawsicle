@@ -173,7 +173,7 @@ button.cover:hover img {
   display: grid;
   place-items: center;
   color: var(--muted);
-  background: linear-gradient(135deg, #fbf3e6, var(--pink-soft));
+  background: linear-gradient(135deg, var(--surface-2), var(--pink-soft));
 }
 .more {
   position: absolute;

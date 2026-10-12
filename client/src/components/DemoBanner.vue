@@ -92,7 +92,7 @@ async function reset() {
   position: relative;
   z-index: 41;
   background: var(--pink-soft);
-  border-bottom: 1px solid #f7c6d6;
+  border-bottom: 1px solid var(--pink-line);
   color: var(--text);
   font-size: 0.88rem;
 }

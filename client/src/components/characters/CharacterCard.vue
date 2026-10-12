@@ -15,8 +15,9 @@ const props = defineProps({
 });
 const emit = defineEmits(['toggle']);
 
-const TILE_COLOURS = ['#fde6ee', '#e6f2fc', '#e8f5ec', '#fdf3e1', '#efe7fb', '#fbeee0'];
-const TILE_TEXT = ['#d9527d', '#2f6f9f', '#3f8f5b', '#b7791f', '#7a55b8', '#b0612a'];
+// Theme variables, so the tiles follow dark mode
+const TILE_COLOURS = ['var(--pink-soft)', 'var(--info-soft)', 'var(--success-soft)', 'var(--warning-soft)', 'var(--purple-soft)', 'var(--orange-soft)'];
+const TILE_TEXT = ['var(--pink-dark)', 'var(--info)', 'var(--success)', 'var(--warning)', 'var(--purple-ink)', 'var(--orange-ink)'];
 
 // Same name always gets the same colour
 const tileIndex = computed(() => {

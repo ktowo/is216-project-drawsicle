@@ -151,10 +151,10 @@ onMounted(loadOpenEvents);
           <div class="art-card art-back">
             <p class="art-label">Sign-ups (example)</p>
             <ul class="art-list">
-              <li><span class="dot" style="background: #fde6ee; color: #d9527d">M</span> Mika <Check :size="14" /></li>
-              <li><span class="dot" style="background: #e6f2fc; color: #2f6f9f">J</span> Juno <Check :size="14" /></li>
-              <li><span class="dot" style="background: #e8f5ec; color: #3f8f5b">R</span> Rowan <Check :size="14" /></li>
-              <li><span class="dot" style="background: #fdf3e1; color: #b7791f">S</span> Sol <Check :size="14" /></li>
+              <li><span class="dot" style="background: var(--pink-soft); color: var(--pink-dark)">M</span> Mika <Check :size="14" /></li>
+              <li><span class="dot" style="background: var(--info-soft); color: var(--info)">J</span> Juno <Check :size="14" /></li>
+              <li><span class="dot" style="background: var(--success-soft); color: var(--success)">R</span> Rowan <Check :size="14" /></li>
+              <li><span class="dot" style="background: var(--warning-soft); color: var(--warning)">S</span> Sol <Check :size="14" /></li>
             </ul>
           </div>
 
@@ -736,7 +736,7 @@ onMounted(loadOpenEvents);
 .skeleton-banner,
 .skeleton-line {
   display: block;
-  background: linear-gradient(90deg, var(--chip) 0%, #faf4ea 50%, var(--chip) 100%);
+  background: linear-gradient(90deg, var(--chip) 0%, var(--hover) 50%, var(--chip) 100%);
   background-size: 200% 100%;
   animation: shimmer 1.4s ease-in-out infinite;
 }
@@ -770,7 +770,7 @@ onMounted(loadOpenEvents);
   padding: 18px 22px;
   border-radius: var(--radius-lg);
   border: 1.5px dashed var(--border);
-  background: rgba(255, 253, 250, 0.6);
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
 }
 .events-note p {
   margin: 0;

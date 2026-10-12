@@ -757,7 +757,7 @@ async function togglePref(key) {
   height: 30px;
   border-radius: 999px;
   border: 0;
-  background: #e3d6c1;
+  background: var(--border-strong);
   cursor: pointer;
   transition: background 0.15s;
 }

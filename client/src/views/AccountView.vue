@@ -429,7 +429,7 @@ async function deactivate() {
   margin-top: 18px;
 }
 .danger-zone {
-  border-color: #f2c7cc;
+  border-color: var(--pink-line);
 }
 .danger-zone .section-title {
   color: var(--danger);
