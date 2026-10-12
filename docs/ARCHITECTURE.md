@@ -12,7 +12,7 @@ is216-project/
 │       ├── stores/              reactive() stores: auth.js, notifications.js, toast.js
 │       ├── views/               one file per page (XxxView.vue)
 │       ├── components/          Navbar, Footer, NotificationBell, ...; ui/ (generic), events/ (event pages)
-│       ├── utils/format.js      date/number formatting
+│       ├── utils/               format.js (dates, numbers), calendar.js (.ics files), eventTemplates.js (event presets), social.js (profile links)
 │       └── mock/                in-browser copy of the API (VITE_API_MODE=mock, for static hosting)
 ├── server/          Express 5 + Mongoose 9 (CommonJS)
 │   ├── server.js                loads .env, connects DB, seeds demo data, starts reminders, listens on :8000
@@ -22,8 +22,9 @@ is216-project/
 │   ├── middleware/auth.js       requireAuth, optionalAuth, requireAdmin, loadEvent, requireEventRole, getEventRoles
 │   ├── models/                  User, EventMember, Notification, Character, Event, Application, Match, Submission
 │   ├── routes/*-router.js       one router per feature
-│   ├── services/                notify, mailer, storage (uploads), reminders (deadline job)
+│   ├── services/                notify, mailer, storage (uploads), reminders (deadline job), events (serialising), accounts (deactivation)
 │   ├── scripts/seed.js          demo data (shared/demo-data.mjs)
+│   ├── scripts/stop-local-db.js asks the local MongoDB to shut down cleanly (used by Stop-all)
 │   └── tests/*.test.js          node:test + supertest against a throwaway MongoDB
 ├── shared/          ES modules used by both sides (the server require()s them)
 │   ├── constants.mjs            statuses, transitions, platforms, creation types, limits, tag helpers
@@ -65,7 +66,8 @@ Event         { id, name, description, theme, season, rules, tags[], platform, p
                 viewer: null | { roles: string[], isOrganizer: bool, applicationStatus: null|'pending'|'accepted'|'rejected'|'withdrawn' },
                 inviteCode? }                // organisers only
 Character     { id, ownerId, name, description, species, tags[], referenceLinks: [{label,url}], notesForArtists,
-                archived, archivedAt, createdAt, updatedAt, inUse?, eventCount? }
+                archived, archivedAt, createdAt, updatedAt, inUse?, eventCount?,
+                usedIn? }                    // GET /characters/:id only: [{ eventId, eventName, eventStatus, applicationStatus }]
 Application   { id, eventId, userId, user: UserMini|null, status, communityUsername, canCreate[], wantsTypes[],
                 offeredCharacterIds[], offeredCharacters: Character[]|null, likes, avoid, cannotDraw[], notes,
                 reviewedAt, createdAt, updatedAt }
@@ -74,6 +76,7 @@ MatchAdmin    { id, giver: UserMini, recipient: UserMini, score, reasons[], stat
 Submission    { id, eventId, matchId, title, message, type, images: url[], links: [{label,url}],
                 submittedAt, late, verified, verifiedAt, updatedAt }
 Notification  { id, type, title, message, link, read, createdAt }
+ArtistProfile { id, username, displayName, avatarUrl, bio, socials{...}, createdAt }   // no email
 ```
 
 Models carry `toPublic()` / `toMini()` methods producing these (see `server/models`).
@@ -99,7 +102,7 @@ members (any role or any application) or anyone who passes `?invite=<inviteCode>
 
 All routes are under `/api`. (auth) = must be logged in, (org) = event organiser, (part) = accepted participant.
 
-### Accounts: `routes/auth-router.js`, `routes/profile-router.js`, `routes/notification-router.js`
+### Accounts: `routes/auth-router.js`, `routes/profile-router.js`, `routes/user-router.js`, `routes/notification-router.js`
 
 | Method | Path | Notes |
 | --- | --- | --- |
@@ -114,14 +117,21 @@ All routes are under `/api`. (auth) = must be logged in, (org) = event organiser
 | GET | /auth/discord, /auth/discord/callback | optional (DISCORD_CLIENT_ID/SECRET), scope `identify email` |
 | PATCH | /profile | (auth) any of `{ displayName, bio, username, socials{...}, defaultForm{...}, notificationPrefs{...} }` → `{ user }`; 409 `USERNAME_TAKEN` |
 | POST/DELETE | /profile/avatar | (auth) multipart `avatar` |
-| POST | /profile/deactivate | (auth) `{ password? }` → `{ ok }`; sets status `deactivated`, logs out. Anonymised after 30 days |
-| GET | /profile/:id | public profile |
-| GET | /notifications?limit= | (auth) → `{ items: Notification[], unreadCount }` |
+| POST | /profile/deactivate | (auth) `{ password? }` → `{ ok }`; sets status `deactivated`, logs out, withdraws sign-ups (see below). Anonymised after 30 days |
+| GET | /profile/export | (auth) → `{ exportedAt, user, characters, applications: [Application + eventName], submissions: [Submission + eventName], notifications }`, for a "download my data" button |
+| GET | /profile/:id | public profile (`ArtistProfile` without `createdAt`), by id or username |
+| GET | /users/:username | (optional auth) public artist profile → `{ profile: ArtistProfile, organizing: Event[] (their public, non-draft events, newest first, max 12), stats: { eventsOrganized, exchangesCompleted } }`. The username matches in any case, with or without a leading `@`; an id works too. `exchangesCompleted` counts completed events where they were an accepted participant. 404 `USER_NOT_FOUND` for unknown or deactivated accounts |
+| GET | /notifications?limit=&before= | (auth) → `{ items: Notification[], unreadCount, hasMore }`, newest first. `before` is an ISO date cursor (items strictly older than it); 400 `VALIDATION` if it isn't a date. `hasMore` says whether an older page exists |
 | GET | /notifications/unread-count | (auth) |
 | PATCH | /notifications/:id/read | (auth) |
 | POST | /notifications/read-all | (auth) |
 | DELETE | /notifications/:id | (auth) → `{ ok }` |
 | GET | /memberships/mine | (auth) my roles per event |
+
+Deactivating an account also withdraws the person's applications in draft, open and matching events: the participant role is
+revoked, and in a matching event the unpublished matches are deleted and the organisers are told (`application_withdrawn`) to
+generate them again. Published matches (active and completed events) stay, because those gifts are already being made.
+Rejected applications are left alone, and logging back in does not restore withdrawn sign-ups.
 
 `user` (from `User.toPublic()`): `{ id, email, username, role, status, displayName, avatarUrl, bio,
 socials{twitter,instagram,bluesky,discord,deviantart,toyhouse,tumblr}, defaultForm{communityUsername, canCreate[],
@@ -134,7 +144,7 @@ providers{google,discord}, profileComplete, createdAt }`
 | --- | --- | --- |
 | GET | /characters?archived=false\|true\|all | default `false` → `{ characters: Character[] }` (with `inUse`, `eventCount`), newest first |
 | POST | /characters | → 201 `{ character }` |
-| GET | /characters/:id | → `{ character }` |
+| GET | /characters/:id | → `{ character }`, which also has `usedIn` (the events it was offered in, newest sign-up first) |
 | PATCH | /characters/:id | → `{ character }` |
 | DELETE | /characters/:id | → `{ ok }`, or 409 `CHARACTER_IN_USE` if any application offered it (archive instead) |
 | POST | /characters/:id/archive | → `{ character }` (archived characters can't be offered in new sign-ups) |
@@ -144,7 +154,7 @@ providers{google,discord}, profileComplete, createdAt }`
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| GET | /events | public, non-draft events. Query: `status` (open, matching, active, completed, or `upcoming` = open+matching+active; default all non-draft), `season`, `q` (name, theme, description, organiser name/username), `minParticipants`, `maxParticipants` (filter on participantCount), `sort` (`deadline` default, `newest`, `popular`), `page`, `limit` (≤ 50, default 12) → `{ events: Event[], total, page, pages }` |
+| GET | /events | public, non-draft events. Query: `status` (open, matching, active, completed, or `upcoming` = open+matching+active; default all non-draft), `season`, `q` (name, theme, description, organiser name/username), `minParticipants`, `maxParticipants` (filter on participantCount), `sort` (`deadline` default, `newest`, `popular`). `deadline` orders by each event's next relevant date, computed in the query: open events by sign-up deadline, matching and active ones by submission deadline, then completed events last (most recently completed first), `page`, `limit` (≤ 50, default 12) → `{ events: Event[], total, page, pages }` |
 | GET | /events/mine | (auth) → `{ organizing: Event[] (+ stats{applications,pending,accepted,submitted}), participating: Event[] }` with `viewer` filled in |
 | POST | /events | (auth) → 201 `{ event }`; starts as draft; creator becomes organiser |
 | GET | /events/:eventId?invite= | (optional auth) → `{ event }` (visibility rules above) |
@@ -152,6 +162,7 @@ providers{google,discord}, profileComplete, createdAt }`
 | DELETE | /events/:eventId | (org) → `{ ok }`; deletes applications, matches, submissions, memberships |
 | POST | /events/:eventId/status | (org) `{ status }` → `{ event }` (lifecycle table); 400 `INVALID_TRANSITION` / `USE_PUBLISH` |
 | POST | /events/:eventId/invite/regenerate | (org) → `{ inviteCode }` |
+| POST | /events/:eventId/duplicate | (org) `{ name?, signupDeadline?, submissionDeadline? }` (all optional) → 201 `{ event }`: a new draft copying the settings, description, rules, tags, banner and allowed types. Defaults: name "Copy of X", sign-ups close 14 days from now, and the time between the two deadlines is kept. People, matches, gifts and the invite code are not copied. The caller becomes its organiser. 400 `VALIDATION` for a past sign-up date or crossed dates |
 | POST/DELETE | /events/:eventId/banner | (org) multipart `banner` → `{ event }` |
 | GET | /events/:eventId/organizers | (anyone who can see the event) → `{ organizers: UserMini[] }` |
 | POST | /events/:eventId/organizers | (org) `{ identifier }` (email or username) → `{ organizers }`; 404 `USER_NOT_FOUND` |
@@ -171,7 +182,7 @@ providers{google,discord}, profileComplete, createdAt }`
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| POST | /matches/generate | (org) event must be `matching` with ≥ `minParticipants` (and ≥ 2) accepted. `{ seed? }` → `{ matches: MatchAdmin[], result: { unmatched: UserMini[], warnings: string[], stats: { totalScore, averageScore, cycles, seed } } }`. Replaces unpublished matches |
+| POST | /matches/generate | (org) event must be `matching` with ≥ `minParticipants` (and ≥ 2) accepted. `{ seed? }` → `{ matches: MatchAdmin[], result: { unmatched: UserMini[], warnings: string[], stats: { participants, matched, totalScore, averageScore, cycles, seed } } }`. Replaces unpublished matches. Accepted applicants whose account is deactivated are left out, with a warning naming them (publishing only checks the people generate used) |
 | GET | /matches | (org) → `{ matches: MatchAdmin[], published: bool }` |
 | POST | /matches/swap | (org, before publish) `{ matchIdA, matchIdB }` swaps recipients → `{ matches }`; 400 `SELF_MATCH` |
 | POST | /matches/publish | (org) → `{ event, matches }`; event becomes active, each giver gets `match_assigned` |
@@ -229,22 +240,12 @@ Each reminder is sent once (`Event.remindersSent`). Emails follow `User.notifica
 (`mockRequest(path, { method, body, form }) → { status, data }`), which implements the same routes against
 localStorage, seeded from `shared/demo-data.mjs`. It exists so the client can be reviewed on a static host.
 
-## Additions (build-out round)
+Every route above, including the profile, export, duplicate, usage and paging additions, exists in the mock with the same
+shapes, error codes and rules, and `client/tests/mock.test.js` checks them. Demo data (`shared/demo-data.mjs`) gives every
+demo artist a bio and two or three social handles so the public profile pages have something to show.
 
-These extend the API above; the server and the mock implement them the same way.
+## Client-only helpers
 
-| Method | Path | Notes |
-| --- | --- | --- |
-| GET | /users/:username | (optional auth) public artist profile → `{ profile: { id, username, displayName, avatarUrl, bio, socials, createdAt }, organizing: Event[] (their public, non-draft events, newest first, max 12), stats: { eventsOrganized, exchangesCompleted } }`. `exchangesCompleted` counts completed events where they were an accepted participant. 404 `USER_NOT_FOUND` for unknown or deactivated accounts. Router: `routes/user-router.js` at `/api/users` |
-| GET | /characters/:id | now also returns `character.usedIn: [{ eventId, eventName, eventStatus, applicationStatus }]` (owner only, as before) |
-| GET | /notifications?limit=&before= | `before` is an ISO date cursor (items strictly older than it); response adds `hasMore` |
-| GET | /profile/export | (auth) → `{ exportedAt, user, characters, applications: [Application + eventName], submissions: [Submission + eventName], notifications }` for a "download my data" button |
-| POST | /events/:eventId/duplicate | (org) `{ name?, signupDeadline?, submissionDeadline? }` → 201 `{ event }`: a new draft copying the settings, description, rules, tags, banner and types. Defaults: name "Copy of X", sign-ups close 14 days from now, submission gap kept from the original. The caller becomes its organiser |
-
-Account deactivation also withdraws the person's applications in draft, open and matching events (revoking the participant
-role and deleting unpublished matches in matching events). Generating matches skips accepted applicants whose account is
-deactivated and adds a warning naming them. Logging back in does not restore withdrawn applications.
-
-Client-only helpers (no API): `client/src/utils/calendar.js` builds `.ics` files for deadlines
-(`eventCalendarEntries(event)`, `buildIcs(entries)`, `downloadIcs(filename, entries)`), and
-`client/src/utils/eventTemplates.js` holds event presets (Secret Santa, Valentine swap, seasonal trade, art trade).
+No API behind these: `client/src/utils/calendar.js` builds `.ics` files for deadlines (`eventCalendarEntries(event)`,
+`buildIcs(entries)`, `downloadIcs(filename, entries)`); `client/src/utils/eventTemplates.js` holds event presets (Secret Santa,
+Valentine swap, seasonal trade, art trade); `client/src/utils/social.js` turns saved social handles into profile links.
