@@ -1,7 +1,19 @@
 // /profile and /memberships (server/routes/profile-router.js, membership-router.js)
 import { CREATION_TYPE_VALUES, EVENT_ROLES, LIMITS, normalizeTags } from '@shared/constants.mjs';
 import { checkImage, filesFrom, imageToDataUrl, looksLikeImage } from '../files.js';
-import { findUser, membership, notify, userMini, userProfile, userPublic } from '../model.js';
+import { withdrawApplications } from '../accounts.js';
+import {
+  applicationJson,
+  characterPublic,
+  findUser,
+  membership,
+  notificationPublic,
+  notify,
+  submissionPublic,
+  userMini,
+  userProfile,
+  userPublic,
+} from '../model.js';
 import { httpError, invalid, isPlainObject } from '../util.js';
 import { isId, newId } from '../db.js';
 
@@ -132,8 +144,39 @@ export function register(router) {
     user.deactivatedAt = ctx.now.toISOString();
     user.sessionVersion = (user.sessionVersion || 0) + 1;
     user.updatedAt = user.deactivatedAt;
+    // Logging back in later reactivates the account but doesn't bring these back
+    withdrawApplications(ctx.state, user, ctx.now);
     ctx.endSession();
     return { ok: true };
+  });
+
+  // "Download my data": everything stored about me, as one JSON document
+  router.get('/profile/export', (ctx) => {
+    const user = ctx.requireAuth();
+    const { state } = ctx;
+    const eventName = (id) => state.events.find((e) => e.id === id)?.name || 'Deleted event';
+    const byDate = (field) => (a, b) => String(b[field]).localeCompare(String(a[field])) || b.id.localeCompare(a.id);
+
+    return {
+      exportedAt: ctx.now.toISOString(),
+      user: userPublic(user),
+      characters: state.characters
+        .filter((c) => c.owner === user.id)
+        .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)) || a.id.localeCompare(b.id))
+        .map((c) => characterPublic(c)),
+      applications: state.applications
+        .filter((a) => a.user === user.id)
+        .sort(byDate('createdAt'))
+        .map((a) => ({ ...applicationJson(state, a), eventName: eventName(a.event) })),
+      submissions: state.submissions
+        .filter((s) => s.giver === user.id)
+        .sort(byDate('submittedAt'))
+        .map((s) => ({ ...submissionPublic(s), eventName: eventName(s.event) })),
+      notifications: state.notifications
+        .filter((n) => n.user === user.id)
+        .sort(byDate('createdAt'))
+        .map(notificationPublic),
+    };
   });
 
   // Someone's public profile (no email), by id or username. Deactivated accounts are hidden.

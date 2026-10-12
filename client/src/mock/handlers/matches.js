@@ -1,5 +1,5 @@
 // /events/:eventId/matches and /my-match (server/routes/match-router.js)
-import { generateMatches, scorePair } from '@shared/matching.mjs';
+import { generateMatches, scorePair, skippedAccountsWarning } from '@shared/matching.mjs';
 import { newId } from '../db.js';
 import {
   characterPublic,
@@ -60,9 +60,12 @@ export function register(router) {
     const { state } = ctx;
     if (event.status !== 'matching') throw httpError(409, 'Close sign-ups before generating matches.', 'WRONG_STATUS');
 
-    const applications = state.applications
+    const accepted = state.applications
       .filter((a) => a.event === event.id && a.status === 'accepted' && findUser(state, a.user))
       .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+    // Deactivating withdraws sign-ups, but older ones can still be here; they can't make a gift
+    const skipped = accepted.filter((a) => findUser(state, a.user).status === 'deactivated');
+    const applications = accepted.filter((a) => findUser(state, a.user).status !== 'deactivated');
     const needed = Math.max(2, event.minParticipants || 2);
     if (applications.length < needed) {
       throw httpError(
@@ -101,12 +104,15 @@ export function register(router) {
       });
     }
 
+    const warnings = [...result.warnings];
+    if (skipped.length) warnings.push(skippedAccountsWarning(skipped.map((a) => miniOf(state, a.user).displayName)));
+
     const { participants, matched, totalScore, averageScore, cycles, seed: usedSeed } = result.stats;
     return {
       matches: adminList(state, event.id),
       result: {
         unmatched: result.unmatched.map((id) => miniOf(state, id)),
-        warnings: result.warnings,
+        warnings,
         stats: { participants, matched, totalScore, averageScore, cycles, seed: usedSeed },
       },
     };
@@ -178,8 +184,11 @@ export function register(router) {
     }
 
     const matches = state.matches.filter((m) => m.event === event.id && !m.published);
-    const accepted = state.applications.filter((a) => a.event === event.id && a.status === 'accepted');
     if (!matches.length) throw httpError(409, 'Generate matches before publishing them.', 'NO_MATCHES');
+    // Same people generate used: deactivated accounts were left out there
+    const accepted = state.applications.filter(
+      (a) => a.event === event.id && a.status === 'accepted' && findUser(state, a.user)?.status !== 'deactivated'
+    );
 
     // Everyone accepted right now must give exactly once and receive exactly once
     const gives = new Map();
