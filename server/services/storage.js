@@ -11,6 +11,24 @@ const IMAGE_TYPES = {
   'image/gif': 'gif',
 };
 
+// The browser picks the mimetype from the file name, so check the first bytes really are that kind of image
+function looksLikeImage(file) {
+  const b = file?.buffer;
+  if (!b || b.length < 12) return false;
+  switch (file.mimetype) {
+    case 'image/png':
+      return b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    case 'image/jpeg':
+      return b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+    case 'image/gif':
+      return ['GIF87a', 'GIF89a'].includes(b.toString('latin1', 0, 6));
+    case 'image/webp':
+      return b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WEBP';
+    default:
+      return false;
+  }
+}
+
 let containerClient = null;
 
 function getContainer() {
@@ -45,4 +63,4 @@ async function uploadImage(folder, file) {
   return `/uploads/${name}`;
 }
 
-module.exports = { uploadImage, LOCAL_UPLOAD_DIR, IMAGE_TYPES };
+module.exports = { uploadImage, looksLikeImage, LOCAL_UPLOAD_DIR, IMAGE_TYPES };
