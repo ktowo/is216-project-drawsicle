@@ -23,6 +23,7 @@ import {
   Compass,
   CalendarHeart,
   RotateCcw,
+  CircleHelp,
 } from 'lucide-vue-next';
 import EventCard from '@/components/events/EventCard.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
@@ -57,6 +58,7 @@ const FEATURES = [
     icon: WandSparkles,
     title: 'Matching that respects what you can draw',
     text: "Nobody gets a character with a species or tag they've said they can't draw, and everyone gives and receives once.",
+    link: { to: '/help#matching', label: 'How matching works' },
   },
   {
     icon: BookHeart,
@@ -117,23 +119,37 @@ onMounted(loadOpenEvents);
             draw, and keeps everyone on track until the reveal.
           </p>
           <div class="hero-cta">
-            <RouterLink :to="auth.user ? '/events/new' : '/register'" class="btn btn-primary">
-              {{ auth.user ? 'Create an event' : 'Sign up free' }}
-              <ArrowRight :size="18" aria-hidden="true" />
-            </RouterLink>
-            <RouterLink to="/events" class="btn btn-outline">
-              <Compass :size="18" aria-hidden="true" /> Browse events
-            </RouterLink>
+            <template v-if="auth.user">
+              <RouterLink to="/dashboard" class="btn btn-primary">
+                <LayoutDashboard :size="18" aria-hidden="true" /> Go to your dashboard
+              </RouterLink>
+              <RouterLink to="/events/new" class="btn btn-outline">
+                <CalendarPlus :size="18" aria-hidden="true" /> Create an event
+              </RouterLink>
+            </template>
+            <template v-else>
+              <RouterLink to="/register" class="btn btn-primary">
+                Sign up free
+                <ArrowRight :size="18" aria-hidden="true" />
+              </RouterLink>
+              <RouterLink to="/events" class="btn btn-outline">
+                <Compass :size="18" aria-hidden="true" /> Browse events
+              </RouterLink>
+            </template>
           </div>
           <p v-if="!auth.user" class="hero-note">
             Already have an account? <RouterLink to="/login">Log in</RouterLink>
+          </p>
+          <p v-else class="hero-note">
+            Welcome back, {{ auth.user.displayName }}. <RouterLink to="/events">Browse events</RouterLink> to find
+            one to join.
           </p>
         </div>
 
         <!-- Illustration built from plain markup, so it stays crisp and needs no image files -->
         <div class="hero-art" aria-hidden="true">
           <div class="art-card art-back">
-            <p class="art-label">Sign-ups</p>
+            <p class="art-label">Sign-ups (example)</p>
             <ul class="art-list">
               <li><span class="dot" style="background: #fde6ee; color: #d9527d">M</span> Mika <Check :size="14" /></li>
               <li><span class="dot" style="background: #e6f2fc; color: #2f6f9f">J</span> Juno <Check :size="14" /></li>
@@ -161,13 +177,13 @@ onMounted(loadOpenEvents);
               <span>fluffy</span><span>pastel</span><span>wings</span>
             </div>
             <div class="art-foot">
-              <span class="art-deadline"><Clock :size="13" /> Due in 6 days</span>
+              <span class="art-deadline"><Clock :size="13" /> Reminder before it is due</span>
               <span class="art-ok"><Check :size="13" /> You can draw this</span>
             </div>
           </div>
 
           <div class="art-pill">
-            <Shuffle :size="15" /> 24 artists matched in one click
+            <Shuffle :size="15" /> Matched in one click
           </div>
         </div>
       </div>
@@ -227,6 +243,9 @@ onMounted(loadOpenEvents);
           <span class="feature-icon" aria-hidden="true"><component :is="f.icon" :size="22" /></span>
           <h3 class="feature-title">{{ f.title }}</h3>
           <p class="feature-text">{{ f.text }}</p>
+          <RouterLink v-if="f.link" :to="f.link.to" class="feature-link">
+            {{ f.link.label }} <ArrowRight :size="14" aria-hidden="true" />
+          </RouterLink>
         </li>
       </ul>
     </section>
@@ -307,6 +326,9 @@ onMounted(loadOpenEvents);
             {{ auth.user ? 'Go to your dashboard' : 'Browse events' }}
           </RouterLink>
         </div>
+        <p class="cta-note">
+          <CircleHelp :size="16" aria-hidden="true" /> Questions? <RouterLink to="/help">Read the help &amp; FAQ</RouterLink>
+        </p>
       </div>
     </section>
   </main>
@@ -686,6 +708,14 @@ onMounted(loadOpenEvents);
   color: var(--muted);
   line-height: 1.55;
 }
+.feature-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  font-weight: 700;
+  font-size: 0.93rem;
+}
 
 /* Open events */
 .event-grid {
@@ -808,6 +838,25 @@ onMounted(loadOpenEvents);
 .cta-secondary:hover {
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
+}
+.cta-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 22px 0 0;
+  font-size: 0.95rem;
+  opacity: 0.95;
+}
+.cta-note a {
+  color: #fff;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.cta-note a:focus-visible {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.7);
 }
 .cta-band .btn:focus-visible {
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.7);
