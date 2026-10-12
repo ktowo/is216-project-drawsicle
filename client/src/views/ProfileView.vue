@@ -1,288 +1,658 @@
 <script setup>
-import { ref, reactive, computed } from 'vue';
-import { Save, Upload, Trash2, Loader2, Check } from 'lucide-vue-next';
-import UserAvatar from '../components/UserAvatar.vue';
-import { auth, setUser } from '../stores/auth';
-import { api } from '../api';
+import { ref, reactive, computed, nextTick } from 'vue';
+import { Save, Upload, Trash2, Loader2, AtSign, Smile } from 'lucide-vue-next';
+import PageHeader from '@/components/ui/PageHeader.vue';
+import FormField from '@/components/ui/FormField.vue';
+import ChoiceChips from '@/components/ui/ChoiceChips.vue';
+import TagInput from '@/components/ui/TagInput.vue';
+import UserAvatar from '@/components/UserAvatar.vue';
+import { auth, setUser } from '@/stores/auth';
+import { toast } from '@/stores/toast';
+import { api } from '@/api';
+import { prepareImage } from '@/utils/images';
+import { CREATION_TYPES, LIMITS, normalizeTags } from '@shared/constants.mjs';
 
+// Same rules as server/routes/profile-router.js
+const NAME_MAX = 60;
 const BIO_MAX = 1000;
+const USERNAME_RE = /^[a-z0-9_]{3,30}$/;
+const HANDLE_RE = /^[A-Za-z0-9_.-]{0,50}$/;
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 
-const form = reactive({
-  displayName: auth.user.displayName,
-  bio: auth.user.bio,
-  socials: { ...auth.user.socials },
-});
+const SOCIALS = [
+  { key: 'twitter', label: 'X / Twitter', placeholder: 'handle' },
+  { key: 'instagram', label: 'Instagram', placeholder: 'handle' },
+  { key: 'bluesky', label: 'Bluesky', placeholder: 'name.bsky.social' },
+  { key: 'discord', label: 'Discord', placeholder: 'username' },
+  { key: 'deviantart', label: 'DeviantArt', placeholder: 'username' },
+  { key: 'toyhouse', label: 'Toyhou.se', placeholder: 'username' },
+  { key: 'tumblr', label: 'Tumblr', placeholder: 'blog name' },
+];
 
-const saving = ref(false);
-const saved = ref(false);
-const error = ref('');
+const cleanHandle = (value) => String(value ?? '').trim().replace(/^@+/, '');
 
-const uploading = ref(false);
-const avatarError = ref('');
-const fileInput = ref(null);
+// ---------- Public profile ----------
 
-const bioCount = computed(() => form.bio.length);
+function profileFromUser(user) {
+  return {
+    displayName: user?.displayName || '',
+    username: user?.username || '',
+    bio: user?.bio || '',
+    socials: Object.fromEntries(SOCIALS.map((s) => [s.key, user?.socials?.[s.key] || ''])),
+  };
+}
 
-async function save() {
-  error.value = '';
-  saved.value = false;
-  if (!form.displayName.trim()) {
-    error.value = 'Display name cannot be empty.';
+const profile = reactive(profileFromUser(auth.user));
+const profileSaved = ref(JSON.stringify(profile));
+const profileErrors = ref({});
+const profileError = ref('');
+const savingProfile = ref(false);
+const profileDirty = computed(() => JSON.stringify(profile) !== profileSaved.value);
+
+const PROFILE_IDS = {
+  displayName: 'profile-display-name',
+  username: 'profile-username',
+  bio: 'profile-bio',
+};
+const socialId = (key) => `profile-social-${key}`;
+
+function validateProfile() {
+  const errors = {};
+  const name = profile.displayName.trim();
+  if (!name) errors.displayName = 'Display name cannot be empty.';
+  else if (name.length > NAME_MAX) errors.displayName = `Keep it under ${NAME_MAX} characters.`;
+
+  const handle = profile.username.trim().toLowerCase();
+  // Very old accounts may not have a username yet; leaving it empty keeps it that way
+  if (handle || auth.user?.username) {
+    if (!USERNAME_RE.test(handle)) errors.username = 'Use 3-30 lowercase letters, numbers or underscores.';
+  }
+
+  if (profile.bio.trim().length > BIO_MAX) errors.bio = `Keep your bio under ${BIO_MAX} characters.`;
+
+  for (const { key } of SOCIALS) {
+    if (!HANDLE_RE.test(cleanHandle(profile.socials[key]))) {
+      errors[`socials.${key}`] = 'Up to 50 letters, numbers, dots, dashes or underscores.';
+    }
+  }
+  return errors;
+}
+
+// The server's 400 messages name the field they're about
+function fieldForServerError(message = '') {
+  if (message.startsWith('Usernames')) return 'username';
+  if (message.startsWith('Display name')) return 'displayName';
+  if (message.startsWith('Bio')) return 'bio';
+  const social = /^That (\w+) handle/.exec(message);
+  if (social && SOCIALS.some((s) => s.key === social[1])) return `socials.${social[1]}`;
+  return null;
+}
+
+function focusField(key) {
+  const id = key.startsWith('socials.') ? socialId(key.slice(8)) : PROFILE_IDS[key];
+  nextTick(() => document.getElementById(id)?.focus());
+}
+
+async function saveProfile() {
+  profileError.value = '';
+  const errors = validateProfile();
+  profileErrors.value = errors;
+  const first = Object.keys(errors)[0];
+  if (first) {
+    focusField(first);
     return;
   }
 
-  saving.value = true;
+  const body = {
+    displayName: profile.displayName.trim(),
+    bio: profile.bio.trim(),
+    socials: Object.fromEntries(SOCIALS.map((s) => [s.key, cleanHandle(profile.socials[s.key])])),
+  };
+  const handle = profile.username.trim().toLowerCase();
+  if (handle) body.username = handle;
+
+  savingProfile.value = true;
   try {
-    const { user } = await api('/profile', { method: 'PATCH', body: form });
+    const { user } = await api('/profile', { method: 'PATCH', body });
     setUser(user);
-    form.socials = { ...user.socials }; // shows handles without the "@" the server stripped
-    saved.value = true;
-    setTimeout(() => (saved.value = false), 2500);
+    // Shows what the server kept (lowercase username, handles without "@")
+    Object.assign(profile, profileFromUser(user));
+    profileSaved.value = JSON.stringify(profile);
+    toast.success('Profile saved.');
   } catch (e) {
-    error.value = e.message;
+    const field = e.code === 'USERNAME_TAKEN' ? 'username' : e.status === 400 ? fieldForServerError(e.message) : null;
+    if (field) {
+      profileErrors.value = {
+        [field]: e.code === 'USERNAME_TAKEN' ? 'That username is taken. Try another one.' : e.message,
+      };
+      focusField(field);
+    } else {
+      profileError.value = e.message;
+    }
   } finally {
-    saving.value = false;
+    savingProfile.value = false;
   }
 }
 
+// ---------- Avatar ----------
+
+const fileInput = ref(null);
+const avatarBusy = ref(''); // 'upload' | 'remove' | ''
+const avatarError = ref('');
+
 async function onFileChosen(e) {
   const file = e.target.files?.[0];
-  e.target.value = ''; // allow choosing the same file again later
+  e.target.value = ''; // lets the same file be picked again after an error
   if (!file) return;
 
   avatarError.value = '';
-  if (file.size > 2 * 1024 * 1024) {
-    avatarError.value = 'That image is too big. Max 2 MB.';
-    return;
-  }
-
-  const data = new FormData();
-  data.append('avatar', file);
-  uploading.value = true;
+  avatarBusy.value = 'upload';
   try {
-    const { user } = await api('/profile/avatar', { method: 'POST', form: data });
+    // Shrinks big photos in the browser first; avatars never need more than 800px
+    const image = await prepareImage(file, { maxSide: 800 });
+    if (image.size > AVATAR_MAX_BYTES) throw new Error('That image is too big. Profile pictures can be up to 2 MB.');
+    const form = new FormData();
+    form.append('avatar', image);
+    const { user } = await api('/profile/avatar', { method: 'POST', form });
     setUser(user);
+    toast.success('Profile picture updated.');
   } catch (err) {
-    avatarError.value = err.message;
+    avatarError.value = err.message || "Couldn't upload that image.";
   } finally {
-    uploading.value = false;
+    avatarBusy.value = '';
   }
 }
 
 async function removeAvatar() {
   avatarError.value = '';
+  avatarBusy.value = 'remove';
   try {
     const { user } = await api('/profile/avatar', { method: 'DELETE' });
     setUser(user);
+    toast.success('Profile picture removed.');
   } catch (err) {
     avatarError.value = err.message;
+  } finally {
+    avatarBusy.value = '';
   }
 }
+
+// ---------- Sign-up form defaults ----------
+
+function defaultsFromUser(user) {
+  const d = user?.defaultForm || {};
+  return {
+    communityUsername: d.communityUsername || '',
+    canCreate: [...(d.canCreate || [])],
+    wantsTypes: [...(d.wantsTypes || [])],
+    likes: d.likes || '',
+    avoid: d.avoid || '',
+    cannotDraw: [...(d.cannotDraw || [])],
+  };
+}
+
+const defaults = reactive(defaultsFromUser(auth.user));
+const defaultsSaved = ref(JSON.stringify(defaults));
+const defaultsErrors = ref({});
+const defaultsError = ref('');
+const savingDefaults = ref(false);
+const defaultsDirty = computed(() => JSON.stringify(defaults) !== defaultsSaved.value);
+
+const DEFAULT_IDS = {
+  communityUsername: 'defaults-community',
+  likes: 'defaults-likes',
+  avoid: 'defaults-avoid',
+  cannotDraw: 'defaults-cannot-draw',
+};
+
+function validateDefaults() {
+  const errors = {};
+  if (defaults.communityUsername.trim().length > LIMITS.communityUsername) {
+    errors.communityUsername = `Keep this under ${LIMITS.communityUsername} characters.`;
+  }
+  if (defaults.likes.trim().length > LIMITS.formText) errors.likes = `Keep this under ${LIMITS.formText} characters.`;
+  if (defaults.avoid.trim().length > LIMITS.formText) errors.avoid = `Keep this under ${LIMITS.formText} characters.`;
+  if (defaults.cannotDraw.length > LIMITS.tags) errors.cannotDraw = `Up to ${LIMITS.tags} tags.`;
+  return errors;
+}
+
+async function saveDefaults() {
+  defaultsError.value = '';
+  const errors = validateDefaults();
+  defaultsErrors.value = errors;
+  const first = Object.keys(errors)[0];
+  if (first) {
+    nextTick(() => document.getElementById(DEFAULT_IDS[first])?.focus());
+    return;
+  }
+
+  savingDefaults.value = true;
+  try {
+    const { user } = await api('/profile', {
+      method: 'PATCH',
+      body: {
+        defaultForm: {
+          communityUsername: defaults.communityUsername.trim(),
+          canCreate: defaults.canCreate,
+          wantsTypes: defaults.wantsTypes,
+          likes: defaults.likes.trim(),
+          avoid: defaults.avoid.trim(),
+          cannotDraw: normalizeTags(defaults.cannotDraw),
+        },
+      },
+    });
+    setUser(user);
+    Object.assign(defaults, defaultsFromUser(user));
+    defaultsSaved.value = JSON.stringify(defaults);
+    toast.success('Sign-up defaults saved.');
+  } catch (e) {
+    defaultsError.value = e.message;
+  } finally {
+    savingDefaults.value = false;
+  }
+}
+
+const count = (value) => String(value || '').length;
 </script>
 
 <template>
-  <main v-if="auth.user" class="page">
-    <header class="profile-head">
-      <UserAvatar :user="auth.user" :size="128" />
-      <div>
-        <h1>Your profile</h1>
-        <p class="email">{{ auth.user.email }}</p>
-      </div>
-    </header>
+  <div v-if="auth.user" class="profile-view">
+    <PageHeader title="Your profile" subtitle="How you appear to organisers and other artists." />
 
-    <form class="card profile-card" novalidate @submit.prevent="save">
-      <h2 class="section-title">Artist details</h2>
-      <p class="section-sub">How you appear to organizers and other participants.</p>
+    <form class="card panel" novalidate aria-labelledby="profile-heading" @submit.prevent="saveProfile">
+      <h2 id="profile-heading" class="section-title">Public profile</h2>
+      <p class="section-sub">Your display name, username and picture show up on events you join or run.</p>
 
-      <div class="field">
-        <span class="label">Profile picture</span>
-        <div class="avatar-row">
-          <UserAvatar :user="auth.user" :size="64" />
+      <div class="avatar-block">
+        <UserAvatar :user="auth.user" :size="88" />
+        <div class="avatar-text">
+          <p class="avatar-title">Profile picture</p>
+          <p class="hint">PNG, JPG, WebP or GIF. Big photos are shrunk before uploading.</p>
           <div class="avatar-actions">
-            <button type="button" class="btn btn-outline small" :disabled="uploading" @click="fileInput.click()">
-              <Loader2 v-if="uploading" :size="16" class="spin" />
-              <Upload v-else :size="16" />
-              {{ uploading ? 'Uploading…' : 'Upload image' }}
+            <button
+              type="button"
+              class="btn btn-outline btn-sm"
+              :disabled="Boolean(avatarBusy)"
+              @click="fileInput?.click()"
+            >
+              <Loader2 v-if="avatarBusy === 'upload'" :size="16" class="spin" aria-hidden="true" />
+              <Upload v-else :size="16" aria-hidden="true" />
+              {{ avatarBusy === 'upload' ? 'Uploading…' : auth.user.avatarUrl ? 'Change picture' : 'Upload picture' }}
             </button>
-            <button v-if="auth.user.avatarUrl" type="button" class="btn btn-ghost small" @click="removeAvatar">
-              <Trash2 :size="16" /> Remove
+            <button
+              v-if="auth.user.avatarUrl"
+              type="button"
+              class="btn btn-ghost btn-sm btn-danger-text"
+              :disabled="Boolean(avatarBusy)"
+              @click="removeAvatar"
+            >
+              <Loader2 v-if="avatarBusy === 'remove'" :size="16" class="spin" aria-hidden="true" />
+              <Trash2 v-else :size="16" aria-hidden="true" />
+              Remove
             </button>
           </div>
           <input
             ref="fileInput"
             type="file"
             accept="image/png,image/jpeg,image/webp,image/gif"
-            hidden
+            class="sr-only"
+            tabindex="-1"
+            aria-hidden="true"
             @change="onFileChosen"
           />
-        </div>
-        <span class="hint">PNG, JPG, WebP or GIF, up to 2 MB.</span>
-        <p v-if="avatarError" class="alert alert-error">{{ avatarError }}</p>
-      </div>
-
-      <div class="field">
-        <label for="displayName" class="label">Display name</label>
-        <div class="input-wrap">
-          <input id="displayName" v-model="form.displayName" class="input" maxlength="60" autocomplete="nickname" />
+          <p v-if="avatarError" class="alert alert-error avatar-error" role="alert">{{ avatarError }}</p>
         </div>
       </div>
 
-      <div class="field">
-        <div class="field-head">
-          <label for="bio" class="label">Bio</label>
-          <span class="hint">{{ bioCount }}/{{ BIO_MAX }}</span>
-        </div>
-        <div class="input-wrap">
-          <textarea
-            id="bio"
-            v-model="form.bio"
-            class="textarea"
-            :maxlength="BIO_MAX"
-            placeholder="Tell organizers about your art…"
-          />
-        </div>
+      <div class="grid-2">
+        <FormField
+          label="Display name"
+          :for-id="PROFILE_IDS.displayName"
+          :error="profileErrors.displayName"
+          required
+        >
+          <template #default="{ describedby, invalid }">
+            <div class="input-wrap">
+              <Smile :size="18" class="input-icon" aria-hidden="true" />
+              <input
+                :id="PROFILE_IDS.displayName"
+                v-model="profile.displayName"
+                class="input"
+                :maxlength="NAME_MAX"
+                autocomplete="nickname"
+                :aria-invalid="invalid ? 'true' : undefined"
+                :aria-describedby="describedby"
+              />
+            </div>
+          </template>
+        </FormField>
+
+        <FormField
+          label="Username"
+          :for-id="PROFILE_IDS.username"
+          :error="profileErrors.username"
+          hint="3-30 lowercase letters, numbers or underscores."
+        >
+          <template #default="{ describedby, invalid }">
+            <div class="input-wrap">
+              <AtSign :size="18" class="input-icon" aria-hidden="true" />
+              <input
+                :id="PROFILE_IDS.username"
+                v-model="profile.username"
+                class="input"
+                maxlength="30"
+                autocomplete="username"
+                autocapitalize="none"
+                spellcheck="false"
+                :aria-invalid="invalid ? 'true' : undefined"
+                :aria-describedby="describedby"
+                @blur="profile.username = profile.username.trim().toLowerCase()"
+              />
+            </div>
+          </template>
+        </FormField>
       </div>
 
-      <div class="socials">
-        <div class="field">
-          <label for="twitter" class="label">Twitter / X</label>
+      <FormField label="Bio" :for-id="PROFILE_IDS.bio" :error="profileErrors.bio" class="spaced">
+        <template #aside>
+          <span class="hint">{{ count(profile.bio) }}/{{ BIO_MAX }}</span>
+        </template>
+        <template #default="{ describedby, invalid }">
           <div class="input-wrap">
-            <input id="twitter" v-model="form.socials.twitter" class="input" placeholder="@handle" maxlength="51" />
+            <textarea
+              :id="PROFILE_IDS.bio"
+              v-model="profile.bio"
+              class="textarea"
+              rows="4"
+              :maxlength="BIO_MAX"
+              placeholder="What do you like to draw? Which communities are you part of?"
+              :aria-invalid="invalid ? 'true' : undefined"
+              :aria-describedby="describedby"
+            />
           </div>
-        </div>
-        <div class="field">
-          <label for="instagram" class="label">Instagram</label>
-          <div class="input-wrap">
-            <input id="instagram" v-model="form.socials.instagram" class="input" placeholder="@handle" maxlength="51" />
-          </div>
-        </div>
-        <div class="field">
-          <label for="bluesky" class="label">Bluesky</label>
-          <div class="input-wrap">
-            <input id="bluesky" v-model="form.socials.bluesky" class="input" placeholder="@handle" maxlength="51" />
-          </div>
-        </div>
-      </div>
+        </template>
+      </FormField>
 
-      <p v-if="error" class="alert alert-error" role="alert">{{ error }}</p>
+      <fieldset class="socials">
+        <legend class="label">Social links</legend>
+        <p class="hint socials-hint">Just the handle, without the @. Leave any you don't use empty.</p>
+        <div class="socials-grid">
+          <FormField
+            v-for="s in SOCIALS"
+            :key="s.key"
+            :label="s.label"
+            :for-id="socialId(s.key)"
+            :error="profileErrors[`socials.${s.key}`]"
+          >
+            <template #default="{ describedby, invalid }">
+              <div class="input-wrap">
+                <span class="at" aria-hidden="true">@</span>
+                <input
+                  :id="socialId(s.key)"
+                  v-model="profile.socials[s.key]"
+                  class="input"
+                  maxlength="51"
+                  autocapitalize="none"
+                  spellcheck="false"
+                  :placeholder="s.placeholder"
+                  :aria-invalid="invalid ? 'true' : undefined"
+                  :aria-describedby="describedby"
+                />
+              </div>
+            </template>
+          </FormField>
+        </div>
+      </fieldset>
+
+      <p v-if="profileError" class="alert alert-error form-alert" role="alert">{{ profileError }}</p>
 
       <div class="actions">
-        <span v-if="saved" class="saved"><Check :size="18" /> Saved</span>
-        <button class="btn btn-primary" :disabled="saving">
-          <Loader2 v-if="saving" :size="20" class="spin" />
-          <Save v-else :size="20" />
+        <span v-if="profileDirty" class="unsaved">Unsaved changes</span>
+        <button type="submit" class="btn btn-primary" :disabled="savingProfile">
+          <Loader2 v-if="savingProfile" :size="18" class="spin" aria-hidden="true" />
+          <Save v-else :size="18" aria-hidden="true" />
           Save profile
         </button>
       </div>
     </form>
-  </main>
+
+    <form class="card panel" novalidate aria-labelledby="defaults-heading" @submit.prevent="saveDefaults">
+      <h2 id="defaults-heading" class="section-title">Sign-up form defaults</h2>
+      <p class="section-sub">
+        We fill these in for you whenever you sign up for an event. You can still change them for each event.
+      </p>
+
+      <FormField
+        label="Community username"
+        :for-id="DEFAULT_IDS.communityUsername"
+        :error="defaultsErrors.communityUsername"
+        hint="The name organisers know you by, e.g. your Discord or DeviantArt username."
+      >
+        <template #default="{ describedby, invalid }">
+          <div class="input-wrap">
+            <input
+              :id="DEFAULT_IDS.communityUsername"
+              v-model="defaults.communityUsername"
+              class="input"
+              :maxlength="LIMITS.communityUsername"
+              autocapitalize="none"
+              spellcheck="false"
+              :aria-invalid="invalid ? 'true' : undefined"
+              :aria-describedby="describedby"
+            />
+          </div>
+        </template>
+      </FormField>
+
+      <div class="grid-2 spaced">
+        <FormField label="What you can make" for-id="defaults-can-create" group>
+          <ChoiceChips
+            v-model="defaults.canCreate"
+            :options="CREATION_TYPES"
+            aria-labelledby="defaults-can-create-label"
+          />
+        </FormField>
+        <FormField label="What you'd like to receive" for-id="defaults-wants" group>
+          <ChoiceChips v-model="defaults.wantsTypes" :options="CREATION_TYPES" aria-labelledby="defaults-wants-label" />
+        </FormField>
+      </div>
+
+      <div class="grid-2 spaced">
+        <FormField label="Things you'd love to get" :for-id="DEFAULT_IDS.likes" :error="defaultsErrors.likes">
+          <template #aside>
+            <span class="hint">{{ count(defaults.likes) }}/{{ LIMITS.formText }}</span>
+          </template>
+          <template #default="{ describedby, invalid }">
+            <div class="input-wrap">
+              <textarea
+                :id="DEFAULT_IDS.likes"
+                v-model="defaults.likes"
+                class="textarea short"
+                rows="3"
+                :maxlength="LIMITS.formText"
+                placeholder="Cosy scenes, soft colours, my moth OC…"
+                :aria-invalid="invalid ? 'true' : undefined"
+                :aria-describedby="describedby"
+              />
+            </div>
+          </template>
+        </FormField>
+        <FormField label="Things to avoid" :for-id="DEFAULT_IDS.avoid" :error="defaultsErrors.avoid">
+          <template #aside>
+            <span class="hint">{{ count(defaults.avoid) }}/{{ LIMITS.formText }}</span>
+          </template>
+          <template #default="{ describedby, invalid }">
+            <div class="input-wrap">
+              <textarea
+                :id="DEFAULT_IDS.avoid"
+                v-model="defaults.avoid"
+                class="textarea short"
+                rows="3"
+                :maxlength="LIMITS.formText"
+                placeholder="Anything you'd rather not receive"
+                :aria-invalid="invalid ? 'true' : undefined"
+                :aria-describedby="describedby"
+              />
+            </div>
+          </template>
+        </FormField>
+      </div>
+
+      <FormField
+        label="Things you can't draw"
+        :for-id="DEFAULT_IDS.cannotDraw"
+        :error="defaultsErrors.cannotDraw"
+        hint="Species or tags, e.g. mecha, horses. You won't be matched with characters that have them."
+        class="spaced"
+      >
+        <template #default="{ describedby }">
+          <TagInput
+            :id="DEFAULT_IDS.cannotDraw"
+            v-model="defaults.cannotDraw"
+            :max="LIMITS.tags"
+            placeholder="Type and press Enter"
+            :aria-describedby="describedby"
+          />
+        </template>
+      </FormField>
+
+      <p v-if="defaultsError" class="alert alert-error form-alert" role="alert">{{ defaultsError }}</p>
+
+      <div class="actions">
+        <span v-if="defaultsDirty" class="unsaved">Unsaved changes</span>
+        <button type="submit" class="btn btn-primary" :disabled="savingDefaults">
+          <Loader2 v-if="savingDefaults" :size="18" class="spin" aria-hidden="true" />
+          <Save v-else :size="18" aria-hidden="true" />
+          Save defaults
+        </button>
+      </div>
+    </form>
+  </div>
 </template>
 
 <style scoped>
-.profile-head {
+.profile-view {
   display: flex;
-  align-items: center;
-  gap: 32px;
+  flex-direction: column;
+  gap: 24px;
 }
-.profile-head h1 {
-  font-size: clamp(1.9rem, 4vw, 2.4rem);
-  font-weight: 800;
+.profile-view :deep(.page-header) {
+  margin-bottom: 4px;
 }
-.email {
-  margin: 6px 0 0;
-  color: var(--muted);
-  font-size: 1.15rem;
-  word-break: break-all;
-}
-.profile-card {
-  max-width: 900px;
-  margin-top: 44px;
-  padding: 44px 48px;
-}
-.section-title {
-  font-family: var(--font-body);
-  font-weight: 600;
-  font-size: 1.45rem;
+.panel {
+  padding: 32px;
 }
 .section-sub {
-  margin: 8px 0 34px;
-  color: var(--muted);
-  font-size: 1.1rem;
+  margin-bottom: 26px;
 }
-.field {
-  margin-top: 26px;
-}
-.section-sub + .field {
-  margin-top: 0;
-}
-.avatar-row {
+.avatar-block {
   display: flex;
-  align-items: center;
-  gap: 18px;
+  align-items: flex-start;
+  gap: 20px;
+  padding-bottom: 26px;
+  margin-bottom: 26px;
+  border-bottom: 1px solid var(--border);
+}
+.avatar-text {
+  min-width: 0;
+  flex: 1;
+}
+.avatar-title {
+  margin: 0;
+  font-weight: 600;
+}
+.avatar-text .hint {
+  margin: 4px 0 0;
 }
 .avatar-actions {
   display: flex;
-  gap: 8px;
   flex-wrap: wrap;
-}
-.small {
-  padding: 9px 14px;
-  font-size: 0.92rem;
   gap: 8px;
+  margin-top: 12px;
+}
+.avatar-error {
+  margin: 12px 0 0;
+}
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+}
+.grid-2 > .field + .field {
+  margin-top: 0;
+}
+.spaced {
+  margin-top: 22px;
+}
+.textarea {
+  min-height: 110px;
+}
+.textarea.short {
+  min-height: 96px;
 }
 .socials {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 28px;
-  margin-top: 26px;
-}
-.socials .field {
-  margin-top: 0;
+  border: 0;
+  margin: 26px 0 0;
+  padding: 0;
   min-width: 0;
 }
-.alert {
+.socials legend {
+  padding: 0;
+}
+.socials-hint {
+  margin: 4px 0 14px;
+}
+.socials-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 22px;
+}
+.socials-grid > .field + .field {
+  margin-top: 0;
+}
+.at {
+  color: var(--muted);
+  font-weight: 600;
+}
+.form-alert {
   margin: 22px 0 0;
 }
 .actions {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 16px;
-  margin-top: 32px;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 28px;
 }
-.actions .btn {
-  font-size: 1.15rem;
-  padding: 14px 26px;
-}
-.saved {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--success);
+.unsaved {
+  color: var(--muted);
+  font-size: 0.92rem;
   font-weight: 600;
 }
-@media (max-width: 760px) {
-  .profile-head {
-    gap: 18px;
+
+@media (max-width: 640px) {
+  .panel {
+    padding: 24px 18px;
   }
-  .profile-head :deep(.avatar) {
-    width: 80px !important;
-    height: 80px !important;
-    font-size: 28px !important;
+  .avatar-block {
+    gap: 16px;
   }
-  .profile-card {
-    padding: 28px 20px;
-    margin-top: 28px;
+  .avatar-block :deep(.avatar) {
+    width: 64px !important;
+    height: 64px !important;
+    font-size: 23px !important;
   }
-  .socials {
-    grid-template-columns: 1fr;
-    gap: 0;
-  }
-  .socials .field {
-    margin-top: 22px;
+  .grid-2,
+  .socials-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
   .actions .btn {
     width: 100%;
+  }
+  .unsaved {
+    width: 100%;
+    text-align: center;
   }
 }
 </style>
