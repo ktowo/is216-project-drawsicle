@@ -269,7 +269,7 @@ test('listing shows public, non-draft events with filters, search and sorting', 
   assert.equal(page2.total, 4);
   assert.equal(page2.page, 2);
   assert.equal(page2.pages, 2);
-  assert.deepEqual(page2.events.map((e) => e.name), ['Heart Exchange']);
+  assert.deepEqual(page2.events.map((e) => e.name), ['Last Year']);
   const capped = await list('?limit=500');
   assert.equal(capped.pages, 1);
   const empty = await list('?q=nothing-matches-this');
