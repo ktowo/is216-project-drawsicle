@@ -214,6 +214,24 @@ wait_for() {
 
 mkdir -p "$RUN_DIR"
 
+# True when mongodb-memory-server already has a MongoDB binary, so starting the API won't download one.
+# It looks in MONGOMS_DOWNLOAD_DIR (also read from server/.env), then ~/.cache/mongodb-binaries, then
+# server/node_modules/.cache/mongodb-memory-server. MONGOMS_SYSTEM_BINARY means nothing is downloaded either.
+mongo_binary_cached() {
+  local pattern='mongod-*' version dir file
+  [[ -n ${MONGOMS_SYSTEM_BINARY:-$(env_value MONGOMS_SYSTEM_BINARY '')} ]] && return 0
+  version="${MONGOMS_VERSION:-$(env_value MONGOMS_VERSION '')}"
+  [[ -n $version ]] && pattern="mongod-*-$version*"
+  for dir in "${MONGOMS_DOWNLOAD_DIR:-$(env_value MONGOMS_DOWNLOAD_DIR '')}" \
+    "$HOME/.cache/mongodb-binaries" "$ROOT/server/node_modules/.cache/mongodb-memory-server"; do
+    [[ -n $dir ]] || continue
+    for file in "$dir"/$pattern; do
+      [[ -f $file && $file != *.md5 ]] && return 0
+    done
+  done
+  return 1
+}
+
 # ---------- API ----------
 
 if ((MOCK == 0)); then
@@ -223,7 +241,7 @@ if ((MOCK == 0)); then
     fail "Something else is using port $API_PORT. Stop it, or set PORT in server/.env (and VITE_PROXY_TARGET for the client)."
   else
     echo "Starting the API on $API_URL ..."
-    if ((EXTERNAL_DB == 0)) && [[ ! -d server/.data ]]; then
+    if ((EXTERNAL_DB == 0)) && ! mongo_binary_cached; then
       echo "  First run: the local MongoDB is downloaded once (about 800 MB on Windows, less elsewhere)."
       echo "  This can take several minutes. Later starts take a few seconds."
     fi

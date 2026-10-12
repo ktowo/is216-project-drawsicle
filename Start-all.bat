@@ -88,10 +88,16 @@ if "%MOCK%"=="0" if not exist "server\.env" (
 
 set "API_PORT=8000"
 set "DB_VALUE="
+set "ENVFILE_MONGO_DIR="
+set "ENVFILE_MONGO_BIN="
+set "ENVFILE_MONGO_VERSION="
 if exist "server\.env" (
   for /f "usebackq tokens=1,* delims==" %%a in ("server\.env") do (
     if /i "%%a"=="PORT" set "API_PORT=%%b"
     if /i "%%a"=="DB" set "DB_VALUE=%%b"
+    if /i "%%a"=="MONGOMS_DOWNLOAD_DIR" set "ENVFILE_MONGO_DIR=%%b"
+    if /i "%%a"=="MONGOMS_SYSTEM_BINARY" set "ENVFILE_MONGO_BIN=%%b"
+    if /i "%%a"=="MONGOMS_VERSION" set "ENVFILE_MONGO_VERSION=%%b"
   )
 )
 set "API_PORT=%API_PORT: =%"
@@ -117,8 +123,23 @@ if not errorlevel 1 (
   goto :fail
 )
 
+rem The download notice is only for a first run: skip it when mongodb-memory-server already has
+rem its MongoDB binary in MONGOMS_DOWNLOAD_DIR (also read from server\.env), %USERPROFILE%\.cache\mongodb-binaries
+rem or server\node_modules\.cache. MONGOMS_SYSTEM_BINARY means nothing is downloaded either.
+rem (A replace on an undefined variable expands to junk, so each line checks that it is defined first.)
+if not defined MONGOMS_DOWNLOAD_DIR if defined ENVFILE_MONGO_DIR set "MONGOMS_DOWNLOAD_DIR=%ENVFILE_MONGO_DIR:"=%"
+if not defined MONGOMS_SYSTEM_BINARY if defined ENVFILE_MONGO_BIN set "MONGOMS_SYSTEM_BINARY=%ENVFILE_MONGO_BIN:"=%"
+if not defined MONGOMS_VERSION if defined ENVFILE_MONGO_VERSION set "MONGOMS_VERSION=%ENVFILE_MONGO_VERSION:"=%"
+set "MONGO_PATTERN=mongod-*.exe"
+if defined MONGOMS_VERSION set "MONGO_PATTERN=mongod-*-%MONGOMS_VERSION%*.exe"
+set "MONGO_CACHED=0"
+if defined MONGOMS_SYSTEM_BINARY set "MONGO_CACHED=1"
+if defined MONGOMS_DOWNLOAD_DIR if exist "%MONGOMS_DOWNLOAD_DIR%\%MONGO_PATTERN%" set "MONGO_CACHED=1"
+if exist "%USERPROFILE%\.cache\mongodb-binaries\%MONGO_PATTERN%" set "MONGO_CACHED=1"
+if exist "%ROOT%server\node_modules\.cache\mongodb-memory-server\%MONGO_PATTERN%" set "MONGO_CACHED=1"
+
 echo Starting the API on %API_URL% ...
-if "%EXTERNAL_DB%"=="0" if not exist "server\.data" (
+if "%EXTERNAL_DB%"=="0" if "%MONGO_CACHED%"=="0" (
   echo   First run: the local MongoDB is downloaded once, about 800 MB on Windows.
   echo   This can take several minutes. Later starts take a few seconds.
 )
