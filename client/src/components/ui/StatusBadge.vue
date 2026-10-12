@@ -8,7 +8,7 @@ const props = defineProps({
   kind: {
     type: String,
     default: 'event',
-    validator: (v) => ['event', 'application', 'match', 'submission'].includes(v),
+    validator: (v) => ['event', 'application', 'match', 'submission', 'user'].includes(v),
   },
 });
 
@@ -17,13 +17,15 @@ const LABELS = {
   application: APPLICATION_STATUS_LABELS,
   match: { assigned: 'Not submitted', submitted: 'Submitted' },
   submission: { on_time: 'On time', late: 'Late', verified: 'Verified', missing: 'Missing', overdue: 'Overdue' },
+  user: { active: 'Active', deactivated: 'Deactivated', banned: 'Banned' },
 };
 
 const TONES = {
-  event: { draft: 'muted', open: 'success', matching: 'warning', active: 'brand', completed: 'info' },
+  event: { draft: 'muted', open: 'success', matching: 'warning', active: 'brand', completed: 'info', cancelled: 'danger' },
   application: { pending: 'warning', accepted: 'success', rejected: 'danger', withdrawn: 'muted' },
   match: { assigned: 'warning', submitted: 'success' },
   submission: { on_time: 'success', late: 'warning', verified: 'info', missing: 'muted', overdue: 'danger' },
+  user: { active: 'success', deactivated: 'muted', banned: 'danger' },
 };
 
 const label = computed(() => {
@@ -62,7 +64,7 @@ const tone = computed(() => TONES[props.kind]?.[props.status] || 'muted');
   flex-shrink: 0;
 }
 .tone-muted {
-  background: #f2eadb;
+  background: var(--chip);
   color: var(--muted);
 }
 .tone-success {
@@ -70,8 +72,8 @@ const tone = computed(() => TONES[props.kind]?.[props.status] || 'muted');
   color: var(--success);
 }
 .tone-warning {
-  background: var(--warning-soft, #fdf3e1);
-  color: var(--warning, #b7791f);
+  background: var(--warning-soft, var(--warning-soft));
+  color: var(--warning, var(--warning));
 }
 .tone-danger {
   background: var(--danger-soft);
@@ -82,7 +84,7 @@ const tone = computed(() => TONES[props.kind]?.[props.status] || 'muted');
   color: var(--pink-dark);
 }
 .tone-info {
-  background: var(--info-soft, #e6f2fc);
-  color: var(--info, #2f6f9f);
+  background: var(--info-soft, var(--blue-soft));
+  color: var(--info, var(--blue-ink));
 }
 </style>

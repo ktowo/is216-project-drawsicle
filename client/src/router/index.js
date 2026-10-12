@@ -55,6 +55,9 @@ const routes = [
   { path: '/privacy', name: 'privacy', component: () => import('../views/PrivacyView.vue'), meta: { title: 'Privacy' } },
   { path: '/terms', name: 'terms', component: () => import('../views/TermsView.vue'), meta: { title: 'Terms' } },
 
+  // Site admins only (User.role === 'admin')
+  { path: '/admin', name: 'admin', component: () => import('../views/AdminView.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: 'Site admin' } },
+
   { path: '/forbidden', name: 'forbidden', component: () => import('../views/ForbiddenView.vue'), meta: { title: 'No access' } },
   { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('../views/NotFoundView.vue'), meta: { title: 'Page not found' } },
 ];
@@ -81,6 +84,9 @@ router.beforeEach(async (to) => {
 
   if (to.meta.requiresAuth && !auth.user) {
     return { name: 'login', query: { redirect: to.fullPath } };
+  }
+  if (to.meta.requiresAdmin && auth.user?.role !== 'admin') {
+    return { name: 'forbidden' };
   }
   if (to.meta.guestOnly && auth.user) {
     return { name: 'dashboard' };
