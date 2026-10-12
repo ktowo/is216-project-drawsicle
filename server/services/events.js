@@ -80,6 +80,44 @@ async function serializeEvent(event, user, { ctx } = {}) {
   });
 }
 
+// Same output as serializeEvent(), but a fixed number of queries for a whole list.
+// counts: Map(eventId -> participantCount) when the caller already has them.
+async function serializeEvents(events, user, { counts } = {}) {
+  if (!events.length) return [];
+  const ids = events.map((e) => e._id);
+  const [countMap, organizerRows, memberships, applications] = await Promise.all([
+    counts || participantCounts(ids),
+    EventMember.find({ event: { $in: ids }, roles: 'organizer' })
+      .sort({ createdAt: 1 })
+      .populate('user', 'displayName username avatarUrl email'),
+    user ? EventMember.find({ user: user._id, event: { $in: ids } }) : [],
+    user ? Application.find({ user: user._id, event: { $in: ids } }).select('event status') : [],
+  ]);
+
+  const organizersByEvent = new Map();
+  for (const row of organizerRows) {
+    if (!row.user) continue;
+    const key = row.event.toString();
+    if (!organizersByEvent.has(key)) organizersByEvent.set(key, []);
+    organizersByEvent.get(key).push(userMini(row.user));
+  }
+  const rolesByEvent = new Map(memberships.map((m) => [m.event.toString(), [...m.roles]]));
+  const statusByEvent = new Map(applications.map((a) => [a.event.toString(), a.status]));
+  const isAdmin = user?.role === 'admin';
+
+  return events.map((event) => {
+    const key = event._id.toString();
+    const roles = rolesByEvent.get(key) || [];
+    const isOrganizer = isAdmin || roles.includes('organizer');
+    return event.toPublic({
+      participantCount: countMap.get(key) || 0,
+      organizers: organizersByEvent.get(key) || [],
+      viewer: user ? { roles, isOrganizer, applicationStatus: statusByEvent.get(key) || null } : null,
+      includeInvite: isOrganizer,
+    });
+  });
+}
+
 module.exports = {
   organizerIds,
   organizerMinis,
@@ -88,4 +126,5 @@ module.exports = {
   viewerContext,
   canViewEvent,
   serializeEvent,
+  serializeEvents,
 };
