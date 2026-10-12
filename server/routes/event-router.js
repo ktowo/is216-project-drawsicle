@@ -206,8 +206,26 @@ const LIST_STATUSES = {
   all: ['open', 'matching', 'active', 'completed'],
 };
 
+// "deadline" means each event's next relevant date: sign-ups closing for open events, gifts
+// being due for matching/active ones. Completed events go last, most recently finished first.
+const NEXT_DEADLINE_FIELDS = {
+  isCompleted: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] },
+  deadlineSortTime: {
+    $switch: {
+      branches: [
+        { case: { $eq: ['$status', 'open'] }, then: { $toLong: '$signupDeadline' } },
+        {
+          case: { $eq: ['$status', 'completed'] },
+          then: { $subtract: [0, { $toLong: { $ifNull: ['$completedAt', '$updatedAt'] } }] },
+        },
+      ],
+      default: { $toLong: '$submissionDeadline' },
+    },
+  },
+};
+
 const LIST_SORTS = {
-  deadline: { signupDeadline: 1, _id: 1 },
+  deadline: { isCompleted: 1, deadlineSortTime: 1, _id: 1 },
   newest: { createdAt: -1, _id: -1 },
   popular: { participantCount: -1, signupDeadline: 1, _id: 1 },
 };
@@ -262,7 +280,12 @@ router.get('/', optionalAuth, asyncHandler(async (req, res) => {
         as: 'accepted',
       },
     },
-    { $addFields: { participantCount: { $ifNull: [{ $arrayElemAt: ['$accepted.n', 0] }, 0] } } },
+    {
+      $addFields: {
+        participantCount: { $ifNull: [{ $arrayElemAt: ['$accepted.n', 0] }, 0] },
+        ...NEXT_DEADLINE_FIELDS,
+      },
+    },
     { $project: { accepted: 0 } },
   ];
   if (minCount !== null || maxCount !== null) {
@@ -281,7 +304,9 @@ router.get('/', optionalAuth, asyncHandler(async (req, res) => {
   const [{ rows, total: totalRows }] = await Event.aggregate(pipeline);
   const total = totalRows[0]?.n || 0;
   const counts = new Map(rows.map((r) => [r._id.toString(), r.participantCount]));
-  const events = rows.map(({ participantCount: _count, ...doc }) => Event.hydrate(doc));
+  const events = rows.map(({ participantCount: _count, isCompleted: _c, deadlineSortTime: _t, ...doc }) =>
+    Event.hydrate(doc)
+  );
 
   res.json({
     events: await serializeEvents(events, req.user, { counts }),

@@ -235,7 +235,8 @@ test('listing shows public, non-draft events with filters, search and sorting', 
 
   const all = await list('');
   assert.equal(all.total, 4);
-  assert.deepEqual(all.events.map((e) => e.name), ['Last Year', 'Spring Fling', 'Winter Swap', 'Heart Exchange']);
+  // Default sort: next deadline first, completed events last
+  assert.deepEqual(all.events.map((e) => e.name), ['Spring Fling', 'Winter Swap', 'Heart Exchange', 'Last Year']);
   const heart = all.events.find((e) => e.id === valentine.id);
   assert.equal(heart.participantCount, 3);
   assert.deepEqual(heart.organizers.map((o) => o.id), [juno.user.id]);
@@ -258,7 +259,7 @@ test('listing shows public, non-draft events with filters, search and sorting', 
   assert.deepEqual((await list('?q=juno_paints&status=upcoming')).events.map((e) => e.id), [valentine.id]);
 
   assert.deepEqual((await list('?minParticipants=2')).events.map((e) => e.id), [valentine.id]);
-  assert.deepEqual((await list('?maxParticipants=0')).events.map((e) => e.name), ['Last Year', 'Winter Swap']);
+  assert.deepEqual((await list('?maxParticipants=0')).events.map((e) => e.name), ['Winter Swap', 'Last Year']);
   assert.deepEqual((await list('?minParticipants=1&maxParticipants=1')).events.map((e) => e.id), [spring.id]);
 
   assert.deepEqual((await list('?sort=popular')).events.map((e) => e.name).slice(0, 2), ['Heart Exchange', 'Spring Fling']);
@@ -643,4 +644,32 @@ test('organisers can add co-organisers by email or username and remove them', as
   await org.agent.patch(`/api/events/${event.id}`).send({ theme: 'x' }).expect(403);
   const final = await h.request(app).get(`/api/events/${event.id}/organizers`).expect(200);
   assert.deepEqual(final.body.organizers.map((o) => o.id), [helper.user.id]);
+});
+
+test('deadline sort uses each event\'s next relevant date, with completed events last', async () => {
+  const app = h.makeApp();
+  const owner = await User.create({ email: 'sorter@test.local', displayName: 'Sorter' });
+  const make = (name, status, fields) =>
+    Event.create({ name, status, publicity: 'public', createdBy: owner._id, ...fields });
+
+  await make('Open later', 'open', { signupDeadline: h.daysFromNow(20), submissionDeadline: h.daysFromNow(50) });
+  await make('Done long ago', 'completed', {
+    signupDeadline: h.daysFromNow(-60), submissionDeadline: h.daysFromNow(-30), completedAt: h.daysFromNow(-5),
+  });
+  await make('Gifts due soon', 'active', { signupDeadline: h.daysFromNow(-10), submissionDeadline: h.daysFromNow(2) });
+  await make('Open soon', 'open', { signupDeadline: h.daysFromNow(5), submissionDeadline: h.daysFromNow(30) });
+  await make('Just finished', 'completed', {
+    signupDeadline: h.daysFromNow(-40), submissionDeadline: h.daysFromNow(-3), completedAt: h.daysFromNow(-1),
+  });
+  await make('Being matched', 'matching', { signupDeadline: h.daysFromNow(-1), submissionDeadline: h.daysFromNow(10) });
+
+  const res = await h.request(app).get('/api/events?sort=deadline').expect(200);
+  assert.deepEqual(res.body.events.map((e) => e.name), [
+    'Gifts due soon',
+    'Open soon',
+    'Being matched',
+    'Open later',
+    'Just finished',
+    'Done long ago',
+  ]);
 });
