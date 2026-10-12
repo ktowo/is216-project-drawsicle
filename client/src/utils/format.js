@@ -22,6 +22,27 @@ export function formatDate(value) {
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }
 
+// 'October 2026', e.g. for "Member since"
+const LONG_MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+export function formatMonthYear(value) {
+  const d = toDate(value);
+  if (!d) return '';
+  return `${LONG_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+
 // '6:00 pm'
 export function formatTime(value) {
   const d = toDate(value);
