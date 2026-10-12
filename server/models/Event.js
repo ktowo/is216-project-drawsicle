@@ -1,7 +1,7 @@
 const crypto = require('node:crypto');
 const mongoose = require('mongoose');
 const {
-  EVENT_STATUSES,
+  ALL_EVENT_STATUSES,
   PUBLICITY,
   PLATFORM_VALUES,
   SEASON_VALUES,
@@ -52,7 +52,7 @@ const eventSchema = new mongoose.Schema(
       validate: [(v) => v.length > 0, 'Allow at least one kind of creation.'],
     },
 
-    status: { type: String, enum: EVENT_STATUSES, default: 'draft', index: true },
+    status: { type: String, enum: ALL_EVENT_STATUSES, default: 'draft', index: true },
     publicity: { type: String, enum: PUBLICITY, default: 'public' },
     // Needed to view/apply to private events. Only organisers ever see it.
     inviteCode: { type: String, default: newInviteCode, index: true },
@@ -65,7 +65,7 @@ const eventSchema = new mongoose.Schema(
       type: [
         {
           _id: false,
-          status: { type: String, enum: EVENT_STATUSES },
+          status: { type: String, enum: ALL_EVENT_STATUSES },
           at: { type: Date, default: Date.now },
           by: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }, // null = automatic
         },
@@ -77,6 +77,16 @@ const eventSchema = new mongoose.Schema(
 
     // Keys of automatic reminders already sent, e.g. 'submission-72h'
     remindersSent: { type: [String], default: [] },
+
+    // Site admin moderation. Cancelled events stay visible with a notice; disabled ones are
+    // hidden from everyone except their organisers and admins. Both are read-only.
+    cancelledAt: { type: Date, default: null },
+    cancelReason: { type: String, trim: true, default: '', maxlength: 500 },
+    cancelledBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    statusBeforeCancel: { type: String, enum: [...ALL_EVENT_STATUSES, null], default: null },
+    disabledAt: { type: Date, default: null, index: true },
+    disabledReason: { type: String, trim: true, default: '', maxlength: 500 },
+    disabledBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true }
 );
@@ -149,12 +159,17 @@ eventSchema.methods.toPublic = function ({
     bannerUrl: this.bannerUrl || null,
     publishedAt: this.publishedAt,
     completedAt: this.completedAt,
+    cancelledAt: this.cancelledAt,
+    cancelReason: this.cancelReason || '',
+    disabled: Boolean(this.disabledAt),
     createdAt: this.createdAt,
     updatedAt: this.updatedAt,
     participantCount,
     organizers,
     viewer,
-    ...(includeInvite ? { inviteCode: this.inviteCode } : {}),
+    ...(includeInvite
+      ? { inviteCode: this.inviteCode, disabledAt: this.disabledAt, disabledReason: this.disabledReason || '' }
+      : {}),
   };
 };
 

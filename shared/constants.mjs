@@ -13,10 +13,16 @@ export const EVENT_STATUS_LABELS = {
   matching: 'Matching',
   active: 'Active',
   completed: 'Completed',
+  cancelled: 'Cancelled',
 };
 
 // Status changes an organiser can make with POST /api/events/:eventId/status.
 // matching -> active is not here: it happens by publishing matches.
+// Site admins can cancel an event at any stage. It keeps its page (with a notice) but
+// nothing else can happen in it. Not part of the normal lifecycle above.
+export const EVENT_CANCELLED = 'cancelled';
+export const ALL_EVENT_STATUSES = [...EVENT_STATUSES, EVENT_CANCELLED];
+
 export const EVENT_TRANSITIONS = {
   draft: ['open'],
   open: ['draft', 'matching'],
@@ -75,6 +81,10 @@ export const MATCH_STATUSES = ['assigned', 'submitted'];
 
 // Event roles live in EventMember (server/models/EventMember.js)
 export const EVENT_ROLES = ['organizer', 'participant', 'helper', 'approver'];
+
+// Site-wide account states. Banned accounts can't log in; deactivated ones can (which reactivates them).
+export const USER_STATUSES = ['active', 'deactivated', 'banned'];
+export const SITE_ROLES = ['user', 'admin'];
 
 export const NOTIFICATION_TYPES = [
   'application_received',

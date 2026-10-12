@@ -29,8 +29,12 @@ const userSchema = new mongoose.Schema(
 
     // Deactivated accounts are logged out and anonymised after a grace period
     // unless they log back in (which reactivates them).
-    status: { type: String, enum: ['active', 'deactivated'], default: 'active' },
+    status: { type: String, enum: ['active', 'deactivated', 'banned'], default: 'active' },
     deactivatedAt: { type: Date, default: null },
+    // Set by site admins. Banned accounts can't log in and their open sign-ups are withdrawn.
+    bannedAt: { type: Date, default: null },
+    banReason: { type: String, trim: true, default: '', maxlength: 500 },
+    bannedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
 
     // Profile
     displayName: { type: String, trim: true, maxlength: 60 },
