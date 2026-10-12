@@ -5,18 +5,22 @@ import {
   ArrowLeft,
   Lock,
   Globe,
-  Link2,
+  Share2,
   ExternalLink,
   CalendarSearch,
+  CalendarPlus,
   Users,
   LogOut,
+  LogIn,
   Info,
   CircleCheck,
   TriangleAlert,
   CircleAlert,
+  ScrollText,
 } from 'lucide-vue-next';
 import EventBanner from '@/components/events/EventBanner.vue';
 import LifecycleStepper from '@/components/events/LifecycleStepper.vue';
+import PersonLink from '@/components/events/PersonLink.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import DeadlineChip from '@/components/ui/DeadlineChip.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
@@ -25,6 +29,7 @@ import ErrorBlock from '@/components/ui/ErrorBlock.vue';
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue';
 import UserAvatar from '@/components/UserAvatar.vue';
 import { api, qs, assetUrl } from '@/api';
+import { auth } from '@/stores/auth';
 import { toast } from '@/stores/toast';
 import { signupsOpen } from '@shared/constants.mjs';
 import { formatDateTime, pluralize } from '@/utils/format';
@@ -37,9 +42,10 @@ import {
   safeUrl,
   inviteFrom,
   absoluteEventUrl,
-  copyText,
   hasActiveApplication,
+  shareOrCopy,
 } from '@/utils/events';
+import { eventCalendarEntries, downloadIcs } from '@/utils/calendar';
 
 const route = useRoute();
 const router = useRouter();
@@ -51,6 +57,7 @@ const notFound = ref(false);
 
 const confirmWithdraw = ref(false);
 const withdrawing = ref(false);
+const sharing = ref(false);
 
 const invite = computed(() => inviteFrom(route));
 
@@ -83,6 +90,8 @@ watch(
   { immediate: true }
 );
 
+const loginHere = computed(() => ({ name: 'login', query: { redirect: route.fullPath } }));
+
 const actions = computed(() => viewerActions(event.value, { invite: invite.value }));
 const note = computed(() => viewerNote(event.value));
 const noteIcon = computed(
@@ -91,14 +100,12 @@ const noteIcon = computed(
 
 const canWithdraw = computed(() => event.value && signupsOpen(event.value) && hasActiveApplication(event.value));
 const applicationStatus = computed(() => event.value?.viewer?.applicationStatus || null);
+const isPrivate = computed(() => event.value?.publicity === 'private');
+const organizers = computed(() => event.value?.organizers || []);
 
-const meta = computed(() => {
-  if (!event.value) return [];
-  const parts = [];
-  if (event.value.season && event.value.season !== 'other') parts.push(seasonLabel(event.value.season));
-  if (event.value.theme) parts.push(`Theme: ${event.value.theme}`);
-  return parts;
-});
+const seasonQuery = computed(() =>
+  event.value?.season && event.value.season !== 'other' ? { path: '/events', query: { season: event.value.season, status: 'all' } } : null
+);
 
 const capacity = computed(() => {
   const count = event.value?.participantCount || 0;
@@ -112,23 +119,67 @@ const capacity = computed(() => {
 });
 
 const platformHref = computed(() => safeUrl(event.value?.platformLink));
+const communityName = computed(() => {
+  if (!event.value) return '';
+  if (event.value.platform === 'other') return event.value.platformName || 'the community';
+  return event.value.platformName || platformLabel(event.value.platform);
+});
+
+// ---------- Sharing ----------
 
 // Public events: anyone can share the plain link. Private events: only organisers, with the invite code.
-const canCopyLink = computed(
-  () => event.value && (event.value.publicity === 'public' || (event.value.viewer?.isOrganizer && event.value.inviteCode))
+const canShare = computed(
+  () => event.value && (!isPrivate.value || (event.value.viewer?.isOrganizer && event.value.inviteCode))
+);
+const shareLabel = computed(() => (isPrivate.value ? 'Share invite link' : 'Share event'));
+
+async function share() {
+  if (sharing.value) return;
+  sharing.value = true;
+  try {
+    const url = absoluteEventUrl(router, event.value, { invite: isPrivate.value ? event.value.inviteCode : undefined });
+    const result = await shareOrCopy({
+      title: event.value.name,
+      text: `Join ${event.value.name}, an art exchange on Drawisicle.`,
+      url,
+    });
+    if (result === 'failed') {
+      toast.error("Couldn't copy the link. You can copy it from the address bar instead.");
+    } else if (result === 'copied') {
+      if (event.value.status === 'draft') toast.info('Link copied. It works for others once sign-ups open.');
+      else toast.success(isPrivate.value ? 'Invite link copied. Anyone with it can see this event.' : 'Link copied.');
+    }
+  } finally {
+    sharing.value = false;
+  }
+}
+
+// ---------- Calendar ----------
+
+const calendarEntries = computed(() =>
+  event.value
+    ? eventCalendarEntries(event.value, { url: absoluteEventUrl(router, event.value, { invite: invite.value }) })
+    : []
 );
 
-async function copyLink() {
-  const isPrivate = event.value.publicity === 'private';
-  const url = absoluteEventUrl(router, event.value, { invite: isPrivate ? event.value.inviteCode : undefined });
-  const ok = await copyText(url);
-  if (!ok) {
-    toast.error("Couldn't copy the link. You can copy it from the address bar instead.");
+function addToCalendar() {
+  const entries = calendarEntries.value;
+  if (!entries.length) {
+    toast.info('There are no upcoming deadlines to add.');
     return;
   }
-  if (event.value.status === 'draft') toast.info('Link copied. It works for others once sign-ups open.');
-  else toast.success(isPrivate ? 'Invite link copied. Anyone with it can see this event.' : 'Link copied.');
+  if (downloadIcs(`${event.value.name} deadlines`, entries, { name: event.value.name })) {
+    toast.success(
+      entries.length === 1
+        ? 'Calendar file saved. Open it to add the deadline to your calendar.'
+        : `Calendar file saved. Open it to add both deadlines to your calendar.`
+    );
+  } else {
+    toast.error("Your browser didn't let us save the calendar file.");
+  }
 }
+
+// ---------- Withdrawing ----------
 
 async function withdraw() {
   withdrawing.value = true;
@@ -138,7 +189,15 @@ async function withdraw() {
     confirmWithdraw.value = false;
     await load({ quiet: true });
   } catch (e) {
+    if (e.status === 401) {
+      router.push(loginHere.value);
+      return;
+    }
     toast.error(e.message);
+    if (e.code === 'SIGNUPS_CLOSED') {
+      confirmWithdraw.value = false;
+      load({ quiet: true });
+    }
   } finally {
     withdrawing.value = false;
   }
@@ -159,9 +218,16 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
       v-else-if="notFound"
       :icon="CalendarSearch"
       title="Event not found"
-      message="It may have been deleted, or it's a private event that needs an invite link."
+      :message="
+        auth.user
+          ? 'It may have been deleted, or it’s a private event that needs an invite link. Ask the organisers to send you the full link.'
+          : 'It may have been deleted, or it’s a private event. If you’re taking part, log in to see it, or ask the organisers for the invite link.'
+      "
     >
-      <RouterLink to="/events" class="btn btn-primary">Browse events</RouterLink>
+      <RouterLink v-if="!auth.user" :to="loginHere" class="btn btn-primary">
+        <LogIn :size="18" aria-hidden="true" /> Log in
+      </RouterLink>
+      <RouterLink to="/events" class="btn" :class="auth.user ? 'btn-primary' : 'btn-outline'">Browse events</RouterLink>
     </EmptyState>
 
     <ErrorBlock v-else-if="error" :message="error" @retry="load" />
@@ -172,21 +238,28 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
         <div class="hero-body">
           <div class="badges">
             <StatusBadge :status="event.status" />
-            <span class="pill" :title="event.publicity === 'private' ? 'Only people with the invite link can see it' : 'Listed publicly'">
-              <component :is="event.publicity === 'private' ? Lock : Globe" :size="14" aria-hidden="true" />
-              {{ event.publicity === 'private' ? 'Private, invite only' : 'Public' }}
+            <span class="pill" :title="isPrivate ? 'Only people with the invite link can see it' : 'Listed publicly'">
+              <component :is="isPrivate ? Lock : Globe" :size="14" aria-hidden="true" />
+              {{ isPrivate ? 'Private, invite only' : 'Public' }}
             </span>
           </div>
           <h1 class="title">{{ event.name }}</h1>
-          <p v-if="meta.length" class="meta">{{ meta.join(' · ') }}</p>
-          <div v-if="event.organizers?.length" class="organisers">
+          <p v-if="seasonQuery || event.theme" class="meta">
+            <RouterLink v-if="seasonQuery" :to="seasonQuery" class="meta-link" :title="`More ${seasonLabel(event.season)} events`">
+              {{ seasonLabel(event.season) }}
+            </RouterLink>
+            <template v-if="seasonQuery && event.theme"> · </template>
+            <template v-if="event.theme">Theme: {{ event.theme }}</template>
+          </p>
+          <div v-if="organizers.length" class="organisers">
             <span class="avatars" aria-hidden="true">
-              <UserAvatar v-for="o in event.organizers.slice(0, 4)" :key="o.id" :user="avatarUser(o)" :size="30" />
+              <UserAvatar v-for="o in organizers.slice(0, 4)" :key="o.id" :user="avatarUser(o)" :size="30" />
             </span>
             <span class="org-names">
               Organised by
-              <template v-for="(o, i) in event.organizers" :key="o.id">
-                <strong>{{ o.displayName }}</strong><template v-if="i < event.organizers.length - 2">, </template><template v-else-if="i === event.organizers.length - 2"> and </template>
+              <template v-for="(o, i) in organizers" :key="o.id">
+                <PersonLink :user="o" :size="0" class="org-name" /><template v-if="i < organizers.length - 2">, </template
+                ><template v-else-if="i === organizers.length - 2"> and </template>
               </template>
             </span>
           </div>
@@ -204,14 +277,32 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
             </ul>
           </section>
 
-          <section v-if="event.rules" class="card panel" aria-labelledby="rules-heading">
-            <h2 id="rules-heading" class="panel-title">Rules</h2>
-            <p class="prose">{{ event.rules }}</p>
+          <section class="card panel" aria-labelledby="rules-heading">
+            <h2 id="rules-heading" class="panel-title">
+              <ScrollText :size="22" class="title-icon" aria-hidden="true" /> Rules
+            </h2>
+            <p v-if="event.rules" class="prose">{{ event.rules }}</p>
+            <p v-else class="muted">
+              No extra rules for this one. Be kind, keep your gift a secret until the reveal, and follow our
+              <RouterLink to="/guidelines">community guidelines</RouterLink>.
+            </p>
           </section>
 
           <section class="card panel" aria-labelledby="progress-heading">
             <h2 id="progress-heading" class="panel-title">Progress</h2>
             <LifecycleStepper :status="event.status" />
+          </section>
+
+          <section v-if="organizers.length" class="card panel" aria-labelledby="org-heading">
+            <h2 id="org-heading" class="panel-title">{{ organizers.length === 1 ? 'Organiser' : 'Organisers' }}</h2>
+            <ul class="org-list">
+              <li v-for="o in organizers" :key="o.id">
+                <PersonLink :user="o" :size="44" show-handle />
+              </li>
+            </ul>
+            <p class="muted small org-hint">
+              Questions about this exchange? Ask the organisers in {{ communityName }}.
+            </p>
           </section>
         </div>
 
@@ -245,10 +336,14 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
               </button>
             </div>
 
-            <button v-if="canCopyLink" type="button" class="btn btn-ghost btn-block copy" @click="copyLink">
-              <Link2 :size="16" aria-hidden="true" />
-              {{ event.publicity === 'private' ? 'Copy invite link' : 'Copy link' }}
-            </button>
+            <div class="share-row">
+              <button v-if="canShare" type="button" class="btn btn-ghost btn-sm" :disabled="sharing" @click="share">
+                <Share2 :size="16" aria-hidden="true" /> {{ shareLabel }}
+              </button>
+              <p v-else-if="isPrivate" class="muted small share-note">
+                <Lock :size="14" aria-hidden="true" /> Private event: only organisers can share the invite link.
+              </p>
+            </div>
           </section>
 
           <section class="card panel dates-panel" aria-labelledby="dates-heading">
@@ -273,6 +368,17 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
                 <dd><span class="date">{{ formatDateTime(event.completedAt) }}</span></dd>
               </div>
             </dl>
+            <button
+              v-if="calendarEntries.length"
+              type="button"
+              class="btn btn-outline btn-sm btn-block calendar-btn"
+              @click="addToCalendar"
+            >
+              <CalendarPlus :size="16" aria-hidden="true" /> Add to calendar
+            </button>
+            <p v-else-if="event.status !== 'completed'" class="muted small calendar-note">
+              Both deadlines have passed, so there's nothing to add to your calendar.
+            </p>
           </section>
 
           <section class="card panel" aria-labelledby="people-heading">
@@ -282,11 +388,20 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
               <strong>{{ capacity.count }}</strong>
               <span class="muted">/ {{ capacity.max }} spots taken</span>
             </p>
-            <div class="bar" aria-hidden="true">
+            <div
+              class="bar"
+              role="progressbar"
+              :aria-valuenow="capacity.count"
+              aria-valuemin="0"
+              :aria-valuemax="capacity.max"
+              :aria-valuetext="`${capacity.count} of ${capacity.max} spots taken`"
+              aria-label="Spots taken"
+            >
               <span class="bar-fill" :style="{ width: `${capacity.percent}%` }" />
             </div>
             <p class="muted small">
               <template v-if="event.status === 'open' && capacity.left">{{ pluralize(capacity.left, 'spot') }} left. </template>
+              <template v-else-if="event.status === 'open'">Every spot is taken. </template>
               Needs at least {{ pluralize(event.minParticipants, 'participant') }} to run.
               <template v-if="event.requireApproval"> Organisers review each sign-up.</template>
             </p>
@@ -297,6 +412,13 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
             <ul class="type-list">
               <li v-for="t in event.allowedTypes" :key="t" class="type-chip">{{ typeLabel(t) }}</li>
             </ul>
+            <p class="muted small types-hint">
+              {{
+                event.allowedTypes?.length === 1
+                  ? `Everyone makes ${typeLabel(event.allowedTypes[0]).toLowerCase()} for their match.`
+                  : 'When you sign up, you pick which of these you can make and which you would like to receive.'
+              }}
+            </p>
           </section>
 
           <section class="card panel" aria-labelledby="community-heading">
@@ -312,6 +434,7 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
             </p>
             <a v-if="platformHref" :href="platformHref" target="_blank" rel="noopener noreferrer" class="external">
               Visit the community <ExternalLink :size="14" aria-hidden="true" />
+              <span class="sr-only">(opens in a new tab)</span>
             </a>
           </section>
         </aside>
@@ -385,6 +508,15 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
   font-size: 1.05rem;
   font-weight: 500;
 }
+.meta-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 4px;
+}
+.meta-link:hover {
+  color: var(--pink-dark);
+}
 .organisers {
   display: flex;
   align-items: center;
@@ -403,10 +535,10 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
 }
 .org-names {
   color: var(--muted);
+  min-width: 0;
 }
-.org-names strong {
+.org-name {
   color: var(--text);
-  font-weight: 600;
 }
 .layout {
   display: grid;
@@ -426,9 +558,15 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
   padding: 26px 28px;
 }
 .panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 1.35rem;
   font-weight: 700;
   margin-bottom: 14px;
+}
+.title-icon {
+  color: var(--pink-dark);
 }
 .small-title {
   font-size: 1.1rem;
@@ -462,6 +600,20 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
   color: var(--pink-dark);
   font-size: 0.85rem;
   font-weight: 600;
+}
+.org-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px 20px;
+}
+.org-list li {
+  min-width: 0;
+}
+.org-hint {
+  margin-top: 16px;
 }
 .action-panel {
   display: flex;
@@ -517,8 +669,23 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
 .withdraw {
   color: var(--danger);
 }
-.copy {
-  margin-top: -4px;
+.share-row {
+  display: flex;
+  justify-content: center;
+  margin-top: -6px;
+}
+.share-row:empty {
+  display: none;
+}
+.share-note {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+  text-align: center;
+}
+.share-note svg {
+  flex-shrink: 0;
+  margin-top: 3px;
 }
 .dates {
   margin: 0;
@@ -540,6 +707,10 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
 }
 .date {
   font-weight: 600;
+}
+.calendar-btn,
+.calendar-note {
+  margin-top: 18px;
 }
 .capacity-line {
   margin: 0 0 10px;
@@ -577,6 +748,9 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
   font-weight: 600;
   font-size: 0.9rem;
 }
+.types-hint {
+  margin-top: 12px;
+}
 .community {
   margin: 0;
   display: flex;
@@ -592,6 +766,15 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
   gap: 6px;
   margin-top: 10px;
   font-weight: 600;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }
 /* One column on small screens, with the actions and dates first so nobody scrolls past the description to sign up */
 @media (max-width: 960px) {
@@ -624,6 +807,11 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
   }
   .layout {
     margin-top: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bar-fill {
+    transition: none;
   }
 }
 </style>

@@ -18,6 +18,12 @@ export function eventLink(event, suffix = '') {
   return `/events/${id}${suffix}`;
 }
 
+// Public profile of a UserMini: '/users/mika', or null for deleted accounts without a username
+export function userProfileLink(user) {
+  const username = typeof user?.username === 'string' ? user.username.trim() : '';
+  return username ? `/users/${encodeURIComponent(username)}` : null;
+}
+
 export const seasonLabel = (value) => labelFor(SEASONS, value);
 export const platformLabel = (value) => labelFor(PLATFORMS, value);
 export const typeLabel = (value) => labelFor(CREATION_TYPES, value);
@@ -86,10 +92,18 @@ export function viewerActions(event, { invite } = {}) {
   const open = signupsOpen(event);
   const actions = [];
 
+  const browse = { key: 'browse', label: 'Find an open event', to: { path: '/events', query: { status: 'open' } }, primary: false };
+
   if (!viewer) {
+    const here = eventLink(event) + (invite ? `?invite=${encodeURIComponent(invite)}` : '');
     if (open && !isFull(event)) {
-      const here = eventLink(event) + (invite ? `?invite=${encodeURIComponent(invite)}` : '');
       actions.push({ key: 'login', label: 'Log in to sign up', to: { path: '/login', query: { redirect: here } }, primary: true });
+      actions.push({ key: 'register', label: 'Create a free account', to: { path: '/register', query: { redirect: here } }, primary: false });
+    } else {
+      // Members who aren't logged in still need a way back to their match or the reveal
+      const label = status === 'active' || status === 'completed' ? 'Taking part? Log in' : 'Log in';
+      actions.push({ key: 'login', label, to: { path: '/login', query: { redirect: here } }, primary: false });
+      actions.push({ ...browse, primary: true });
     }
     return actions;
   }
@@ -98,7 +112,8 @@ export function viewerActions(event, { invite } = {}) {
     if (appStatus === 'pending' || appStatus === 'accepted') {
       actions.push({ key: 'edit-application', label: 'Edit sign-up', to: withInvite('/apply'), primary: false });
     } else if ((!appStatus || appStatus === 'withdrawn') && !isFull(event)) {
-      actions.push({ key: 'apply', label: 'Sign up', to: withInvite('/apply'), primary: true });
+      const label = appStatus === 'withdrawn' ? 'Sign up again' : 'Sign up';
+      actions.push({ key: 'apply', label, to: withInvite('/apply'), primary: true });
     }
   }
 
@@ -117,6 +132,13 @@ export function viewerActions(event, { invite } = {}) {
       actions.push({ key: 'edit', label: 'Edit details', to: eventLink(event, '/edit'), primary: false });
     }
   }
+
+  // Signed up while matches are being made: nothing to do here yet, so point to their other events
+  if (!actions.length && status === 'matching' && isParticipant(event)) {
+    actions.push({ key: 'my-events', label: 'Go to my events', to: '/my-events', primary: false });
+  }
+  // Nothing this person can do in this event: help them find another one
+  if (!actions.length) actions.push(browse);
 
   // Exactly one primary button: the first one that asked for it, else the first action.
   let primaryTaken = false;
@@ -320,6 +342,24 @@ export async function copyText(text) {
   } catch {
     return false;
   }
+}
+
+// Opens the device's share sheet where there is one, otherwise copies the link.
+// -> 'shared' | 'copied' | 'cancelled' | 'failed'
+export async function shareOrCopy({ title, text, url }) {
+  if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+    const data = { title, text, url };
+    try {
+      if (!navigator.canShare || navigator.canShare(data)) {
+        await navigator.share(data);
+        return 'shared';
+      }
+    } catch (e) {
+      if (e?.name === 'AbortError') return 'cancelled';
+      // Anything else (no permission, nothing to share with): copy instead
+    }
+  }
+  return (await copyText(url)) ? 'copied' : 'failed';
 }
 
 // Characters typed into the sign-up form use the same rules and request body as the
