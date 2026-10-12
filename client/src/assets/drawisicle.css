@@ -394,3 +394,21 @@ main:focus {
     transition: none;
   }
 }
+
+/* ---------- Print: pages like Privacy and Terms print without the site chrome ---------- */
+@media print {
+  .topbar,
+  .site-footer,
+  .toast-host,
+  .demo-banner,
+  .skip-link {
+    display: none !important;
+  }
+  html,
+  body {
+    background: #fff;
+  }
+  .card {
+    box-shadow: none;
+  }
+}
