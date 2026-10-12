@@ -3,13 +3,39 @@ import { RouterLink } from 'vue-router';
 import { Palette } from 'lucide-vue-next';
 
 const year = new Date().getFullYear();
+
+const COLUMNS = [
+  {
+    title: 'Explore',
+    links: [
+      { to: '/events', label: 'Browse events' },
+      { to: '/events/new', label: 'Create an event' },
+    ],
+  },
+  {
+    title: 'You',
+    links: [
+      { to: '/dashboard', label: 'Dashboard' },
+      { to: '/characters', label: 'Character library' },
+      { to: '/notification', label: 'Notifications' },
+    ],
+  },
+  {
+    title: 'Help',
+    links: [
+      { to: '/help', label: 'Help & FAQ' },
+      { to: '/guidelines', label: 'Community guidelines' },
+      { to: '/about', label: 'About' },
+    ],
+  },
+];
 </script>
 
 <template>
   <footer class="site-footer">
     <div class="inner">
       <div class="brand-col">
-        <RouterLink to="/" class="brand">
+        <RouterLink to="/" class="brand" aria-label="Drawisicle home">
           <span class="brand-tile"><Palette :size="20" aria-hidden="true" /></span>
           <span class="brand-name">Drawisicle</span>
         </RouterLink>
@@ -17,26 +43,25 @@ const year = new Date().getFullYear();
       </div>
 
       <nav class="links" aria-label="Footer">
-        <div class="col">
-          <h2 class="col-title">Explore</h2>
+        <div v-for="col in COLUMNS" :key="col.title" class="col">
+          <h2 class="col-title">{{ col.title }}</h2>
           <ul>
-            <li><RouterLink to="/events">Browse events</RouterLink></li>
-            <li><RouterLink to="/events/new">Create an event</RouterLink></li>
-          </ul>
-        </div>
-        <div class="col">
-          <h2 class="col-title">You</h2>
-          <ul>
-            <li><RouterLink to="/dashboard">Dashboard</RouterLink></li>
-            <li><RouterLink to="/characters">Character library</RouterLink></li>
-            <li><RouterLink to="/notification">Notifications</RouterLink></li>
+            <li v-for="link in col.links" :key="link.to">
+              <RouterLink :to="link.to">{{ link.label }}</RouterLink>
+            </li>
           </ul>
         </div>
       </nav>
     </div>
 
     <div class="bottom">
-      <p>© {{ year }} Drawisicle · IS216 project</p>
+      <div class="bottom-inner">
+        <p>© {{ year }} Drawisicle · An IS216 project at SMU</p>
+        <ul class="legal" aria-label="Legal">
+          <li><RouterLink to="/privacy">Privacy</RouterLink></li>
+          <li><RouterLink to="/terms">Terms</RouterLink></li>
+        </ul>
+      </div>
     </div>
   </footer>
 </template>
@@ -51,9 +76,8 @@ const year = new Date().getFullYear();
   max-width: 1200px;
   margin: 0 auto;
   padding: 40px 24px 28px;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(220px, 1.2fr) minmax(0, 2.4fr);
   gap: 32px 48px;
 }
 .brand-col {
@@ -88,8 +112,9 @@ const year = new Date().getFullYear();
   line-height: 1.6;
 }
 .links {
-  display: flex;
-  gap: 56px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 28px 32px;
 }
 .col-title {
   font-family: var(--font-body);
@@ -117,21 +142,50 @@ const year = new Date().getFullYear();
 .bottom {
   border-top: 1px solid var(--border);
 }
-.bottom p {
+.bottom-inner {
   max-width: 1200px;
   margin: 0 auto;
   padding: 16px 24px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 24px;
+}
+.bottom p {
+  margin: 0;
   color: var(--muted);
   font-size: 0.88rem;
+}
+.legal {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 18px;
+  font-size: 0.88rem;
+}
+.legal a {
+  color: var(--muted);
+  font-weight: 600;
+}
+.legal a:hover {
+  color: var(--pink-dark);
+}
+
+@media (max-width: 860px) {
+  .inner {
+    grid-template-columns: 1fr;
+  }
 }
 @media (max-width: 640px) {
   .inner {
     padding: 32px 16px 24px;
   }
   .links {
-    gap: 40px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .bottom p {
+  .bottom-inner {
     padding: 14px 16px 18px;
   }
 }
