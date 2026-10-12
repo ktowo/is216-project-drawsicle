@@ -2,20 +2,26 @@
 import { ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { Mail, MailCheck, ArrowLeft, Loader2 } from 'lucide-vue-next';
-import AuthLayout from '../components/AuthLayout.vue';
-import TextField from '../components/TextField.vue';
-import { api } from '../api';
+import AuthLayout from '@/components/AuthLayout.vue';
+import TextField from '@/components/TextField.vue';
+import { api } from '@/api';
 
 const email = ref('');
 const loading = ref(false);
 const error = ref('');
 const sent = ref(false);
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 async function submit() {
   error.value = '';
+  if (!EMAIL_RE.test(email.value.trim())) {
+    error.value = 'Enter a valid email address.';
+    return;
+  }
   loading.value = true;
   try {
-    await api('/auth/forgot-password', { method: 'POST', body: { email: email.value } });
+    await api('/auth/forgot-password', { method: 'POST', body: { email: email.value.trim() } });
     sent.value = true;
   } catch (e) {
     error.value = e.message;
@@ -36,7 +42,7 @@ async function submit() {
         If an account exists for <strong>{{ email }}</strong>, a reset link is on its way.
         Check your spam folder if it doesn't show up in a minute.
       </p>
-      <button class="btn btn-outline btn-block" @click="sent = false">Use a different email</button>
+      <button type="button" class="btn btn-outline btn-block" @click="sent = false">Use a different email</button>
     </div>
 
     <form v-else novalidate @submit.prevent="submit">
@@ -52,14 +58,14 @@ async function submit() {
 
       <p v-if="error" class="alert alert-error" role="alert">{{ error }}</p>
 
-      <button class="btn btn-primary btn-block submit" :disabled="loading">
-        <Loader2 v-if="loading" :size="18" class="spin" />
+      <button type="submit" class="btn btn-primary btn-block submit" :disabled="loading">
+        <Loader2 v-if="loading" :size="18" class="spin" aria-hidden="true" />
         Send reset link
       </button>
     </form>
 
     <template #footer>
-      <RouterLink to="/login" class="back"><ArrowLeft :size="16" /> Back to log in</RouterLink>
+      <RouterLink to="/login" class="back"><ArrowLeft :size="16" aria-hidden="true" /> Back to log in</RouterLink>
     </template>
   </AuthLayout>
 </template>

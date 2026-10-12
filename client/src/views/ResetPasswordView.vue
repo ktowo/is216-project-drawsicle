@@ -2,10 +2,11 @@
 import { ref } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
 import { KeyRound, Lock, AlertTriangle, Loader2 } from 'lucide-vue-next';
-import AuthLayout from '../components/AuthLayout.vue';
-import TextField from '../components/TextField.vue';
-import { api } from '../api';
-import { setUser } from '../stores/auth';
+import AuthLayout from '@/components/AuthLayout.vue';
+import TextField from '@/components/TextField.vue';
+import { api } from '@/api';
+import { setUser } from '@/stores/auth';
+import { toast } from '@/stores/toast';
 
 const route = useRoute();
 const router = useRouter();
@@ -28,6 +29,10 @@ async function submit() {
     error.value = 'Password must be at least 8 characters.';
     return;
   }
+  if (password.value.length > 128) {
+    error.value = 'Password is too long (max 128 characters).';
+    return;
+  }
   if (password.value !== confirm.value) {
     error.value = "Passwords don't match.";
     return;
@@ -40,6 +45,7 @@ async function submit() {
       body: { token, password: password.value },
     });
     setUser(user);
+    toast.success('Password updated. You are logged in.');
     router.replace('/dashboard');
   } catch (e) {
     if (e.code === 'INVALID_TOKEN') {
@@ -75,6 +81,7 @@ async function submit() {
         :icon="Lock"
         placeholder="At least 8 characters"
         autocomplete="new-password"
+        :maxlength="128"
         required
       />
       <TextField
@@ -84,13 +91,14 @@ async function submit() {
         :icon="Lock"
         placeholder="Type it again"
         autocomplete="new-password"
+        :maxlength="128"
         required
       />
 
       <p v-if="error" class="alert alert-error" role="alert">{{ error }}</p>
 
-      <button class="btn btn-primary btn-block submit" :disabled="loading">
-        <Loader2 v-if="loading" :size="18" class="spin" />
+      <button type="submit" class="btn btn-primary btn-block submit" :disabled="loading">
+        <Loader2 v-if="loading" :size="18" class="spin" aria-hidden="true" />
         Save new password
       </button>
     </form>

@@ -1,17 +1,25 @@
 <script setup>
+import { RouterLink } from 'vue-router';
+import { Palette } from 'lucide-vue-next';
+
 // Shared shell for login / register / reset screens: pink icon tile, title, card, footer link.
 defineProps({
-  icon: { required: true },
+  icon: { type: [Object, Function], required: true },
   title: { type: String, required: true },
   subtitle: { type: String, default: '' },
 });
 </script>
 
 <template>
-  <main class="auth-page">
+  <main id="main" class="auth-page">
+    <RouterLink to="/" class="home-link">
+      <span class="home-tile"><Palette :size="18" aria-hidden="true" /></span>
+      <span>Drawisicle</span>
+    </RouterLink>
+
     <div class="auth-inner">
       <div class="icon-tile">
-        <component :is="icon" :size="32" :stroke-width="2.2" />
+        <component :is="icon" :size="32" :stroke-width="2.2" aria-hidden="true" />
       </div>
       <h1 class="auth-title">{{ title }}</h1>
       <p v-if="subtitle" class="auth-subtitle">{{ subtitle }}</p>
@@ -29,10 +37,35 @@ defineProps({
 
 <style scoped>
 .auth-page {
+  position: relative;
   min-height: 100vh;
   display: flex;
   justify-content: center;
-  padding: 64px 16px;
+  padding: 80px 16px 64px;
+}
+.home-link {
+  position: absolute;
+  top: 20px;
+  left: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.15rem;
+}
+.home-link:hover {
+  color: var(--pink-dark);
+}
+.home-tile {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--pink);
+  color: #fff;
+  display: grid;
+  place-items: center;
 }
 .auth-inner {
   width: 100%;
@@ -74,9 +107,14 @@ defineProps({
 }
 @media (max-width: 480px) {
   .auth-page {
-    padding-top: 40px;
+    padding-top: 72px;
+  }
+  .home-link {
+    top: 16px;
+    left: 16px;
   }
   .auth-card {
+    margin-top: 28px;
     padding: 28px 20px;
   }
   .auth-title {

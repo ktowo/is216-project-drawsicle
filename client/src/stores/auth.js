@@ -1,5 +1,6 @@
 import { reactive } from 'vue';
 import { api } from '../api';
+import { resetNotifications } from './notifications';
 
 // Shared logged-in user. Import `auth` anywhere and read auth.user.
 export const auth = reactive({
@@ -19,31 +20,57 @@ export async function loadUser() {
   return auth.user;
 }
 
-export async function login(email, password) {
-  const { user } = await api('/auth/login', { method: 'POST', body: { email, password } });
-  auth.user = user;
-  return user;
+// Fetch the user again (e.g. after something on the server changed it).
+// Only a 401 logs the person out here; a network blip keeps the user we have.
+export async function refreshUser() {
+  try {
+    const { user } = await api('/auth/me');
+    setUser(user);
+  } catch (e) {
+    if (e.status === 401) setUser(null);
+  } finally {
+    auth.checked = true;
+  }
+  return auth.user;
 }
 
-export async function register(email, password) {
-  const { user } = await api('/auth/register', { method: 'POST', body: { email, password } });
+// -> { user, reactivated } (reactivated is true when this login woke up a deactivated account)
+export async function login(email, password) {
+  const { user, reactivated } = await api('/auth/login', { method: 'POST', body: { email, password } });
+  resetNotifications();
   auth.user = user;
+  auth.checked = true;
+  return { user, reactivated: Boolean(reactivated) };
+}
+
+export async function register(email, password, displayName) {
+  const body = { email, password };
+  const name = typeof displayName === 'string' ? displayName.trim() : '';
+  if (name) body.displayName = name;
+  const { user } = await api('/auth/register', { method: 'POST', body });
+  resetNotifications();
+  auth.user = user;
+  auth.checked = true;
   return user;
 }
 
 export async function logout() {
   await api('/auth/logout', { method: 'POST' }).catch(() => {});
-  auth.user = null;
+  setUser(null);
 }
 
+// Pass null to clear the user (logout, deactivation). A different account than before
+// (e.g. a password reset while someone else was logged in) also starts with a clean bell.
 export function setUser(user) {
+  if (!user || user.id !== auth.user?.id) resetNotifications();
   auth.user = user;
+  auth.checked = true;
 }
 
 // Event roles helper for teammates' pages:
 //   hasEventRole(memberships, eventId, 'organizer')
 export function hasEventRole(memberships, eventId, ...roles) {
   if (auth.user?.role === 'admin') return true;
-  const m = memberships.find((x) => x.eventId === eventId);
+  const m = (memberships || []).find((x) => x.eventId === eventId);
   return Boolean(m && m.roles.some((r) => roles.includes(r)));
 }
