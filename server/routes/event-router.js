@@ -12,10 +12,10 @@ const { requireAuth, optionalAuth, loadEvent, requireEventRole } = require('../m
 const {
   organizerMinis,
   participantCount,
-  participantCounts,
   viewerContext,
   canViewEvent,
   serializeEvent,
+  serializeEvents,
 } = require('../services/events.js');
 const { notify, notifyMany } = require('../services/notify.js');
 const { uploadImage, looksLikeImage, IMAGE_TYPES } = require('../services/storage.js');
@@ -193,46 +193,6 @@ function rejectIfCompleted(req, res, next) {
     return next(httpError(409, 'This event is completed, so it can no longer be edited.', 'EVENT_LOCKED'));
   }
   next();
-}
-
-// ---------- Serialising many events at once ----------
-
-// Same output as serializeEvent(), but a fixed number of queries for the whole list.
-// counts: Map(eventId -> participantCount) when the caller already has them.
-async function serializeEvents(events, user, { counts } = {}) {
-  if (!events.length) return [];
-  const ids = events.map((e) => e._id);
-  const [countMap, organizerRows, memberships, applications] = await Promise.all([
-    counts || participantCounts(ids),
-    EventMember.find({ event: { $in: ids }, roles: 'organizer' })
-      .sort({ createdAt: 1 })
-      .populate('user', 'displayName username avatarUrl email'),
-    user ? EventMember.find({ user: user._id, event: { $in: ids } }) : [],
-    user ? Application.find({ user: user._id, event: { $in: ids } }).select('event status') : [],
-  ]);
-
-  const organizersByEvent = new Map();
-  for (const row of organizerRows) {
-    if (!row.user) continue;
-    const key = row.event.toString();
-    if (!organizersByEvent.has(key)) organizersByEvent.set(key, []);
-    organizersByEvent.get(key).push(userMini(row.user));
-  }
-  const rolesByEvent = new Map(memberships.map((m) => [m.event.toString(), [...m.roles]]));
-  const statusByEvent = new Map(applications.map((a) => [a.event.toString(), a.status]));
-  const isAdmin = user?.role === 'admin';
-
-  return events.map((event) => {
-    const key = event._id.toString();
-    const roles = rolesByEvent.get(key) || [];
-    const isOrganizer = isAdmin || roles.includes('organizer');
-    return event.toPublic({
-      participantCount: countMap.get(key) || 0,
-      organizers: organizersByEvent.get(key) || [],
-      viewer: user ? { roles, isOrganizer, applicationStatus: statusByEvent.get(key) || null } : null,
-      includeInvite: isOrganizer,
-    });
-  });
 }
 
 // ---------- Public listing ----------
@@ -609,6 +569,52 @@ router.post('/:eventId/invite/regenerate', ...organizerOnly, asyncHandler(async 
   const inviteCode = req.event.regenerateInviteCode();
   await req.event.save();
   res.json({ inviteCode });
+}));
+
+// ---------- Duplicate ----------
+
+// Settings copied into a new draft. People, matches, gifts and the invite code are not.
+const COPIED_FIELDS = [
+  'description', 'theme', 'season', 'rules', 'tags', 'platform', 'platformName', 'platformLink',
+  'minParticipants', 'maxParticipants', 'allowedTypes', 'publicity', 'requireApproval', 'bannerUrl',
+];
+const DUPLICATE_SIGNUP_DAYS = 14;
+
+function copyName(name) {
+  return `Copy of ${name}`.slice(0, LIMITS.eventName).trim();
+}
+
+router.post('/:eventId/duplicate', ...organizerOnly, asyncHandler(async (req, res) => {
+  const source = req.event;
+  const src = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+
+  let name = src.name === undefined ? '' : readText(src.name, 'Name', LIMITS.eventName);
+  if (!name) name = copyName(source.name);
+  const now = new Date();
+  const signupDeadline = readDate(src.signupDeadline, 'Sign-up deadline') ||
+    new Date(now.getTime() + DUPLICATE_SIGNUP_DAYS * 24 * 60 * 60 * 1000);
+  if (signupDeadline <= now) throw invalid('The sign-up deadline must be in the future.');
+  // Same time for making gifts as the original had
+  const gap = source.submissionDeadline.getTime() - source.signupDeadline.getTime();
+  const submissionDeadline = readDate(src.submissionDeadline, 'Submission deadline') ||
+    new Date(signupDeadline.getTime() + gap);
+
+  const fields = {};
+  for (const key of COPIED_FIELDS) {
+    const value = source[key];
+    fields[key] = Array.isArray(value) ? [...value] : value;
+  }
+  const event = new Event({ ...fields, name, signupDeadline, submissionDeadline, createdBy: req.user._id, status: 'draft' });
+  event.setStatus('draft', req.user._id);
+  await event.save();
+  try {
+    await EventMember.grant(req.user._id, event._id, 'organizer');
+  } catch (err) {
+    await event.deleteOne();
+    throw err;
+  }
+
+  res.status(201).json({ event: await serializeEvent(event, req.user) });
 }));
 
 // ---------- Banner ----------
