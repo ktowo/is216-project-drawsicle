@@ -4,6 +4,7 @@ const path = require("path");
 const mongoose = require("mongoose");
 const dotenv = require('dotenv');
 const session = require('express-session');
+const cors = require('cors');
 
 // Initialize Server
 const server = express();
@@ -15,6 +16,7 @@ dotenv.config({ path: './.env' });
 // Middleware
 server.use(express.static(path.join(__dirname, "public")));
 server.use(express.urlencoded({ extended: true }));
+server.use(cors()); // Adds headers: Access-Control-Allow-Origin: *
 
 // Session
 const secret = process.env.SECRET;
@@ -29,7 +31,7 @@ server.use(session({
 
 // Routes
 const baseRouter = require("./routes/base-router.js")
-server.use("/", baseRouter);
+server.use("/api/", baseRouter);
 
 // Database connection
 async function connectDB() {
