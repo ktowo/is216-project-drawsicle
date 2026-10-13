@@ -2,16 +2,16 @@
 const express = require("express");
 const path = require("path");
 const mongoose = require("mongoose");
-const dotenv = require('dotenv');
-const session = require('express-session');
-const cors = require('cors');
+const dotenv = require("dotenv");
+const session = require("express-session");
+const cors = require("cors");
 
 // Initialize Server
 const server = express();
 require("node:dns/promises").setServers(["1.1.1.1", "8.8.8.8"]);
 
 // Load Env variable
-dotenv.config({ path: './.env' });
+dotenv.config({ path: "./.env" });
 
 // Middleware
 server.use(express.static(path.join(__dirname, "public")));
@@ -20,29 +20,36 @@ server.use(cors()); // Adds headers: Access-Control-Allow-Origin: *
 
 // Session
 const secret = process.env.SECRET;
-server.use(session({
-  secret: secret, // sign the session ID cookie. should be a long, random, and secure string, preferably stored in an environment variable
-  resave: false, // Prevents the session from being saved back to the session store if nothing has changed.
-  saveUninitialized: false, // Prevents a new, empty session from being saved to the store.
-  cookie: {
-    secure: false // even if I reload, session will stay
-  }
-}));
+server.use(
+  session({
+    secret: secret, // sign the session ID cookie. should be a long, random, and secure string, preferably stored in an environment variable
+    resave: false, // Prevents the session from being saved back to the session store if nothing has changed.
+    saveUninitialized: false, // Prevents a new, empty session from being saved to the store.
+    cookie: {
+      secure: false, // even if I reload, session will stay
+    },
+  }),
+);
 
 // Routes
-const baseRouter = require("./routes/base-router.js")
+const baseRouter = require("./routes/base-router.js");
 server.use("/api/", baseRouter);
 
 // Database connection
+let isConnected = false;
+
 async function connectDB() {
+  if (isConnected) return;
+
   try {
     await mongoose.connect(process.env.DB);
+    isConnected = db.connections[0].readyState;
     console.log("MongoDB connected successfully");
   } catch (error) {
-    console.error("MongoDB connection failed:", error.message);
+    console.error("MongoDB connection failed:", error);
     process.exit(1);
   }
-};
+}
 
 // Initialize Server
 function startServer() {
@@ -54,6 +61,16 @@ function startServer() {
   });
 }
 
+// Middleware to ensure DB connection on every request
+server.use(async (req, res, next) => {
+  await connectDB();
+  next();
+});
 
-// call connectDB first and when connection is ready we start the web server
-connectDB().then(startServer);
+// run server if node environment is not production
+if (process.env.NODE_ENV !== 'production') {
+  startServer();
+}
+
+// Export the app for Vercel's serverless environment
+module.exports = server; 
