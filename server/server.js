@@ -42,7 +42,7 @@ async function connectDB() {
   if (isConnected) return;
 
   try {
-    await mongoose.connect(process.env.DB);
+    await mongoose.connect(process.env.DB_MONGODB_URI);
     isConnected = db.connections[0].readyState;
     console.log("MongoDB connected successfully");
   } catch (error) {

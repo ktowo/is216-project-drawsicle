@@ -2,7 +2,7 @@
 import axios from 'axios';
 import { onMounted, ref } from 'vue';
 
-const API_URL = "http://localhost:8000/api/";
+const API_URL = `${window.location.origin}/api/`;
 const response = ref("-- No Connection --");
 
 onMounted(async () => {
