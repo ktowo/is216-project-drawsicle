@@ -4,6 +4,8 @@ import { RouterLink } from 'vue-router';
 import { Users, Ban, ShieldCheck, CalendarHeart, EyeOff, ClipboardList, Shuffle, Gift } from 'lucide-vue-next';
 import { api } from '@/api';
 import UserAvatar from '@/components/UserAvatar.vue';
+import PersonLink from '@/components/events/PersonLink.vue';
+import { linkableUser } from './helpers.js';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import LoadingBlock from '@/components/ui/LoadingBlock.vue';
 import ErrorBlock from '@/components/ui/ErrorBlock.vue';
@@ -68,7 +70,7 @@ const tiles = computed(() => {
           <li v-for="u in stats.recent.users" :key="u.id">
             <UserAvatar :user="u" :size="32" />
             <span class="min-w-0">
-              <span class="block font-semibold truncate">{{ u.displayName }}</span>
+              <PersonLink :user="linkableUser(u)" :size="0" class="block" />
               <span class="hint">{{ u.email }} · joined {{ timeAgo(u.createdAt) }}</span>
             </span>
             <StatusBadge kind="user" :status="u.status" class="ml-auto" />
