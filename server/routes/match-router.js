@@ -2,14 +2,18 @@ const crypto = require('node:crypto');
 const { Router } = require('express');
 const mongoose = require('mongoose');
 const Application = require('../models/Application.js');
+const EventMember = require('../models/EventMember.js');
 const Match = require('../models/Match.js');
+const User = require('../models/User.js');
 const Submission = require('../models/Submission.js');
 const { userMini } = require('../models/User.js');
 const { requireAuth, loadEvent, requireEventRole } = require('../middleware/auth.js');
 const { serializeEvent, viewerContext } = require('../services/events.js');
 const { notify } = require('../services/notify.js');
+const { announceMilestone } = require('../services/discord.js');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
 const { generateMatches, scorePair, skippedAccountsWarning } = require('../../shared/matching.mjs');
+const { LIMITS } = require('../../shared/constants.mjs');
 
 // Mounted at /api/events/:eventId. Every route names its own middleware, because the
 // application and submission routers share this mount point.
@@ -69,12 +73,56 @@ async function adminMatchList(eventId) {
   return rows.map((r) => r.admin);
 }
 
+// Who each person mustn't be matched with, and who they already made gifts for:
+//   personal  their own block lists, applied both ways (private; organisers can't override them)
+//   blocked   personal plus the organisers' "never pair these two" rules
+//   previous  recipients from the same organisers' earlier exchanges (avoided when possible)
+async function pairRules(event, userIds) {
+  const ids = userIds.map(String);
+  const inEvent = new Set(ids);
+  const personal = new Map(ids.map((id) => [id, new Set()]));
+  const users = await User.find({ _id: { $in: ids } }).select('blockedUsers');
+  for (const user of users) {
+    for (const other of user.blockedUsers || []) {
+      const otherId = other.toString();
+      if (!inEvent.has(otherId)) continue;
+      personal.get(user._id.toString()).add(otherId);
+      personal.get(otherId).add(user._id.toString());
+    }
+  }
+
+  const blocked = new Map([...personal].map(([id, set]) => [id, new Set(set)]));
+  for (const { a, b } of event.matchingRules?.avoidPairs || []) {
+    const [x, y] = [String(a), String(b)];
+    if (inEvent.has(x) && inEvent.has(y)) {
+      blocked.get(x).add(y);
+      blocked.get(y).add(x);
+    }
+  }
+
+  const previous = new Map(ids.map((id) => [id, new Set()]));
+  if (event.matchingRules?.avoidRepeats !== false) {
+    const organisers = await EventMember.find({ event: event._id, roles: 'organizer' }).distinct('user');
+    const earlier = (await EventMember.find({ user: { $in: organisers }, roles: 'organizer' }).distinct('event')).filter(
+      (id) => !id.equals(event._id)
+    );
+    if (earlier.length) {
+      const rows = await Match.find({ event: { $in: earlier }, published: true, giver: { $in: ids } }).select('giver recipient');
+      for (const row of rows) previous.get(row.giver.toString())?.add(row.recipient.toString());
+    }
+  }
+  return { personal, blocked, previous };
+}
+
 // The matching algorithm only sees types the event allows, so nobody is matched on
-// something they couldn't submit.
-function toParticipant(application, allowedTypes) {
+// something they couldn't submit. rules: from pairRules(), or leave out.
+function toParticipant(application, allowedTypes, rules = null) {
   const allowed = new Set(allowedTypes);
+  const id = (application.user?._id || application.user).toString();
   return {
-    id: (application.user?._id || application.user).toString(),
+    id,
+    blockedIds: [...(rules?.blocked.get(id) || [])],
+    previousRecipients: [...(rules?.previous.get(id) || [])],
     name: application.user ? userMini(application.user).displayName : '',
     canCreate: (application.canCreate || []).filter((t) => allowed.has(t)),
     wantsTypes: (application.wantsTypes || []).filter((t) => allowed.has(t)),
@@ -140,8 +188,9 @@ router.post('/matches/generate', ...organizerOnly, asyncHandler(async (req, res)
   const given = rawSeed === undefined || rawSeed === null || rawSeed === '' ? NaN : Number(rawSeed);
   const seed = Number.isFinite(given) ? Math.floor(given) : crypto.randomInt(1, 2 ** 31 - 1);
 
+  const rules = await pairRules(event, applications.map((a) => a.user._id));
   const result = generateMatches(
-    applications.map((a) => toParticipant(a, event.allowedTypes)),
+    applications.map((a) => toParticipant(a, event.allowedTypes, rules)),
     { seed }
   );
 
@@ -183,6 +232,45 @@ router.post('/matches/generate', ...organizerOnly, asyncHandler(async (req, res)
   });
 }));
 
+// The organisers' matching rules: people to keep apart, and whether to avoid repeat pairs
+router.put('/matching-rules', ...organizerOnly, asyncHandler(async (req, res) => {
+  const event = req.event;
+  if (!['draft', 'open', 'matching'].includes(event.status)) {
+    throw httpError(409, 'Matches are already published, so the rules no longer apply.', 'WRONG_STATUS');
+  }
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const update = {};
+  if (body.avoidRepeats !== undefined) {
+    if (typeof body.avoidRepeats !== 'boolean') throw httpError(400, 'avoidRepeats must be true or false.', 'VALIDATION');
+    update['matchingRules.avoidRepeats'] = body.avoidRepeats;
+  }
+  if (body.avoidPairs !== undefined) {
+    if (!Array.isArray(body.avoidPairs)) throw httpError(400, 'avoidPairs must be a list.', 'VALIDATION');
+    if (body.avoidPairs.length > LIMITS.avoidPairs) {
+      throw httpError(400, `Keep it to ${LIMITS.avoidPairs} pairs.`, 'VALIDATION');
+    }
+    const signedUp = new Set((await Application.find({ event: event._id }).distinct('user')).map(String));
+    const seen = new Set();
+    const pairs = [];
+    for (const pair of body.avoidPairs) {
+      const a = String(pair?.a ?? '');
+      const b = String(pair?.b ?? '');
+      if (!signedUp.has(a) || !signedUp.has(b)) {
+        throw httpError(400, 'Pick two people who signed up for this event.', 'VALIDATION');
+      }
+      if (a === b) throw httpError(400, 'Pick two different people.', 'VALIDATION');
+      const key = [a, b].sort().join('|');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      pairs.push({ a, b });
+    }
+    update['matchingRules.avoidPairs'] = pairs;
+  }
+  await event.constructor.updateOne({ _id: event._id }, { $set: update });
+  const fresh = await event.constructor.findById(event._id);
+  res.json({ event: await serializeEvent(fresh, req.user) });
+}));
+
 router.get('/matches', ...organizerOnly, asyncHandler(async (req, res) => {
   const matches = await adminMatchList(req.event._id);
   res.json({ matches, published: matches.length > 0 && matches.every((m) => m.published) });
@@ -214,6 +302,11 @@ router.post('/matches/swap', ...organizerOnly, asyncHandler(async (req, res) => 
 
   if (a.giver.equals(b.recipient) || b.giver.equals(a.recipient)) {
     throw httpError(400, 'That swap would have someone making a gift for themselves.', 'SELF_MATCH');
+  }
+  // Someone's own block list always wins, without saying whose list it is
+  const { personal } = await pairRules(event, [a.giver, a.recipient, b.giver, b.recipient]);
+  if (personal.get(a.giver.toString()).has(b.recipient.toString()) || personal.get(b.giver.toString()).has(a.recipient.toString())) {
+    throw httpError(409, "One of these people asked not to be matched with the other, so this swap isn't possible.", 'BLOCKED_PAIR');
   }
 
   const ids = [a.giverApplication, a.recipientApplication, b.giverApplication, b.recipientApplication].filter(Boolean);
@@ -310,6 +403,7 @@ router.post('/matches/publish', ...organizerOnly, asyncHandler(async (req, res) 
     throw err;
   }
 
+  announceMilestone(event, 'matches_out');
   const due = event.submissionDeadline.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   const results = await Promise.allSettled(
     matches.map((m) =>

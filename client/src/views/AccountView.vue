@@ -6,6 +6,7 @@ import PageHeader from '@/components/ui/PageHeader.vue';
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue';
 import TextField from '@/components/TextField.vue';
 import PasswordStrength from '@/components/PasswordStrength.vue';
+import BlockList from '@/components/profile/BlockList.vue';
 import { auth, setUser } from '@/stores/auth';
 import { toast } from '@/stores/toast';
 import { api } from '@/api';
@@ -324,6 +325,8 @@ async function deactivate() {
         </button>
       </div>
     </form>
+
+    <BlockList />
 
     <section class="card panel" aria-labelledby="data-heading">
       <h2 id="data-heading" class="section-title">Your data</h2>
