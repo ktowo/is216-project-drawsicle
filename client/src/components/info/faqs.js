@@ -287,6 +287,7 @@ export const FAQ_GROUPS = [
         q: 'What is on my public profile?',
         a: [
           'Your display name, username, picture, bio, social handles, the month you joined and the public events you organised. Your email address is never shown. You decide what to fill in.',
+          'Finished public exchanges you took part in are listed too, unless you hide them. Gifts you made only appear if both you and the person you made it for allow public display of gifts, which is off unless you turn it on.',
           { links: [{ to: '/privacy', label: 'Read the privacy page' }, { to: '/profile', label: 'Edit your profile' }] },
         ],
       },
