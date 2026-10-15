@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, useId } from 'vue';
-import { ArrowRight, Eye, Send, Gift, Inbox } from 'lucide-vue-next';
+import { ArrowRight, Eye, Send, Gift, Inbox, Download, LayoutGrid, List, CheckCheck, Loader2, Images } from 'lucide-vue-next';
 import TabNav from '@/components/ui/TabNav.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
@@ -11,10 +11,10 @@ import UserAvatar from '@/components/UserAvatar.vue';
 import StatTile from './StatTile.vue';
 import ReminderModal from './ReminderModal.vue';
 import SubmissionViewModal from './SubmissionViewModal.vue';
-import { api } from '@/api';
+import { api, assetUrl } from '@/api';
 import { toast } from '@/stores/toast';
-import { formatDate, formatDateTime } from '@/utils/format';
-import { personName, submissionState } from './helpers';
+import { formatDate, formatDateTime, pluralize } from '@/utils/format';
+import { personName, submissionState, downloadCsv, fileSlug } from './helpers';
 
 const props = defineProps({
   event: { type: Object, required: true },
@@ -95,7 +95,8 @@ const visible = computed(() =>
   })
 );
 
-async function setVerified(row, verified) {
+// quiet: leave errors to the caller (bulk verify sums them up)
+async function setVerified(row, verified, { quiet = false } = {}) {
   const sub = row.submission;
   if (!sub) return;
   savingId.value = sub.id;
@@ -110,11 +111,58 @@ async function setVerified(row, verified) {
     if (viewing.value?.submission?.id === sub.id) {
       viewing.value = rows.value.find((r) => r.submission?.id === sub.id) || null;
     }
+    return true;
   } catch (e) {
-    toast.error(e.message);
+    if (!quiet) toast.error(e.message);
+    return false;
   } finally {
     savingId.value = null;
   }
+}
+
+// ---- Verify every gift shown at once ----
+const verifying = ref(false);
+const toVerify = computed(() => visible.value.filter((r) => r.submission && !r.submission.verified));
+
+async function verifyShown() {
+  const list = [...toVerify.value];
+  if (!list.length || verifying.value) return;
+  verifying.value = true;
+  let ok = 0;
+  for (const row of list) {
+    if (await setVerified(row, true, { quiet: true })) ok++;
+  }
+  verifying.value = false;
+  if (ok) toast.success(`Verified ${pluralize(ok, 'gift')}.`);
+  if (ok < list.length) toast.error(`${pluralize(list.length - ok, 'gift')} couldn't be verified. Try again.`);
+}
+
+// ---- List or gallery ----
+const view = ref('list');
+
+// ---- Export ----
+const CSV_HEADER = ['Artist', 'Recipient', 'Status', 'Submitted', 'Late', 'Verified', 'Title', 'Type', 'Images', 'Links'];
+const STATUS_TEXT = { on_time: 'Submitted', late: 'Submitted late', overdue: 'Overdue', missing: 'Not submitted' };
+
+function exportCsv() {
+  const rowsOut = visible.value.map((r) => {
+    const sub = r.submission;
+    return [
+      personName(r.match.giver),
+      personName(r.match.recipient),
+      STATUS_TEXT[submissionState(sub, r.overdue)],
+      sub ? formatDateTime(sub.submittedAt) : '',
+      sub ? (sub.late ? 'Yes' : 'No') : '',
+      sub ? (sub.verified ? 'Yes' : 'No') : '',
+      sub?.title || '',
+      sub?.type || '',
+      (sub?.images || []).length,
+      (sub?.links || []).map((l) => l.url).join(' '),
+    ];
+  });
+  const suffix = filter.value === 'all' ? 'gifts' : `${filter.value}-gifts`;
+  downloadCsv(`${fileSlug(props.event.name)}-${suffix}.csv`, [CSV_HEADER, ...rowsOut]);
+  toast.success(`Exported ${pluralize(rowsOut.length, 'row')}.`);
 }
 </script>
 
@@ -170,7 +218,77 @@ async function setVerified(row, verified) {
       <template v-else>
         <TabNav v-model="filter" :tabs="tabs" />
 
+        <div v-if="visible.length" class="toolbar">
+          <div class="view-toggle" role="group" aria-label="Show gifts as">
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs"
+              :class="{ on: view === 'list' }"
+              :aria-pressed="view === 'list' ? 'true' : 'false'"
+              @click="view = 'list'"
+            >
+              <List :size="15" aria-hidden="true" /> List
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs"
+              :class="{ on: view === 'gallery' }"
+              :aria-pressed="view === 'gallery' ? 'true' : 'false'"
+              @click="view = 'gallery'"
+            >
+              <LayoutGrid :size="15" aria-hidden="true" /> Gallery
+            </button>
+          </div>
+          <div class="toolbar-actions">
+            <button
+              v-if="toVerify.length"
+              type="button"
+              class="btn btn-outline btn-xs"
+              :disabled="verifying"
+              @click="verifyShown"
+            >
+              <Loader2 v-if="verifying" :size="15" class="spin" aria-hidden="true" />
+              <CheckCheck v-else :size="15" aria-hidden="true" />
+              Verify {{ toVerify.length === 1 ? 'this gift' : `all ${toVerify.length} shown` }}
+            </button>
+            <button type="button" class="btn btn-outline btn-xs" @click="exportCsv">
+              <Download :size="15" aria-hidden="true" /> Export CSV
+            </button>
+          </div>
+        </div>
+
         <p v-if="!visible.length" class="card p-6 text-center text-cocoa m-0">Nothing here.</p>
+
+        <ul v-else-if="view === 'gallery'" class="gift-grid" aria-label="Gifts">
+          <li v-for="r in visible" :key="r.match.id" class="gift card" :class="{ missing: !r.submission }">
+            <button
+              v-if="r.submission"
+              type="button"
+              class="gift-cover"
+              :aria-label="`View the gift from ${personName(r.match.giver)}`"
+              @click="viewing = r"
+            >
+              <img v-if="r.submission.images?.length" :src="assetUrl(r.submission.images[0])" alt="" loading="lazy" />
+              <Gift v-else :size="30" aria-hidden="true" />
+              <span v-if="(r.submission.images?.length || 0) > 1" class="gift-count">
+                <Images :size="13" aria-hidden="true" /> {{ r.submission.images.length }}
+              </span>
+            </button>
+            <div v-else class="gift-cover empty" aria-hidden="true"><Inbox :size="30" /></div>
+            <div class="gift-body">
+              <p class="gift-pair">
+                <span class="truncate font-semibold">{{ personName(r.match.giver) }}</span>
+                <ArrowRight :size="14" class="text-brand shrink-0" aria-hidden="true" />
+                <span class="sr-only">for</span>
+                <span class="truncate">{{ personName(r.match.recipient) }}</span>
+              </p>
+              <div class="gift-meta">
+                <StatusBadge :status="submissionState(r.submission, r.overdue)" kind="submission" />
+                <span v-if="r.submission?.verified" class="badge badge-success">Verified</span>
+              </div>
+            </div>
+          </li>
+        </ul>
 
         <div v-else class="card overflow-hidden">
           <div class="row head" aria-hidden="true">
@@ -251,6 +369,104 @@ async function setVerified(row, verified) {
 </template>
 
 <style scoped>
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.view-toggle {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.view-toggle .on {
+  background: var(--pink-soft);
+  color: var(--pink-dark);
+}
+.toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.gift-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr));
+}
+.gift {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+.gift.missing {
+  border-style: dashed;
+}
+.gift-cover {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 4 / 3;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: var(--chip);
+  color: var(--muted);
+  cursor: pointer;
+  overflow: hidden;
+}
+.gift-cover.empty {
+  cursor: default;
+}
+.gift-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.gift-cover:focus-visible {
+  outline: 3px solid var(--pink);
+  outline-offset: -3px;
+}
+.gift-count {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.gift-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+}
+.gift-pair {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  min-width: 0;
+  font-size: 0.92rem;
+}
+.gift-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
 .row {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
