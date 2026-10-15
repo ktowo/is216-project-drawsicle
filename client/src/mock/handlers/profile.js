@@ -44,7 +44,7 @@ function typeList(value, label) {
 export function register(router) {
   router.patch('/profile', (ctx) => {
     const user = ctx.requireAuth();
-    const { displayName, bio, username, socials, defaultForm, notificationPrefs } = ctx.body;
+    const { displayName, bio, username, socials, defaultForm, notificationPrefs, profilePrivacy } = ctx.body;
     // Work on a copy so a bad field halfway through leaves the account as it was
     const next = {
       displayName: user.displayName,
@@ -53,6 +53,7 @@ export function register(router) {
       socials: { ...user.socials },
       defaultForm: { ...user.defaultForm },
       notificationPrefs: { ...user.notificationPrefs },
+      profilePrivacy: { ...user.profilePrivacy },
     };
 
     if (displayName !== undefined) {
@@ -106,6 +107,15 @@ export function register(router) {
         if (notificationPrefs[key] === undefined) continue;
         if (typeof notificationPrefs[key] !== 'boolean') throw invalid(`${key} must be true or false.`);
         next.notificationPrefs[key] = notificationPrefs[key];
+      }
+    }
+
+    if (profilePrivacy !== undefined) {
+      if (!isPlainObject(profilePrivacy)) throw invalid('profilePrivacy must be an object.');
+      for (const key of ['showExchanges', 'showGifts']) {
+        if (profilePrivacy[key] === undefined) continue;
+        if (typeof profilePrivacy[key] !== 'boolean') throw invalid(`${key} must be true or false.`);
+        next.profilePrivacy[key] = profilePrivacy[key];
       }
     }
 
@@ -179,14 +189,14 @@ export function register(router) {
     };
   });
 
-  // Someone's public profile (no email), by id or username. Deactivated accounts are hidden.
+  // Someone's public profile (no email), by id or username. Deactivated and banned accounts are hidden.
   router.get('/profile/:id', (ctx) => {
     const { id } = ctx.params;
     let user = isId(id) ? findUser(ctx.state, id) : null;
     if (!user && USERNAME_RE.test(id.toLowerCase())) {
       user = ctx.state.users.find((u) => u.username === id.toLowerCase()) || null;
     }
-    if (!user || user.status === 'deactivated') throw httpError(404, 'User not found.', 'NOT_FOUND');
+    if (!user || (user.status || 'active') !== 'active') throw httpError(404, 'User not found.', 'NOT_FOUND');
     return { profile: userProfile(user) };
   });
 

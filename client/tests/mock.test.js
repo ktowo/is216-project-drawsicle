@@ -2,7 +2,7 @@
 // Run: cd client && pnpm exec vitest run tests/mock.test.js
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN_EMAIL, DEMO_PASSWORD } from '@shared/demo-data.mjs';
-import { getState } from '../src/mock/db.js';
+import { getState, saveState } from '../src/mock/db.js';
 import { mockRequest, resetMockData, setMockLatency } from '../src/mock/index.js';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -496,6 +496,76 @@ describe('build-out additions', () => {
     await loginAs('mika');
     await ok('/profile/deactivate', { method: 'POST', body: { password: DEMO_PASSWORD } });
     expect((await fails('/users/mika')).code).toBe('USER_NOT_FOUND');
+  });
+
+  it('saves profile privacy settings and keeps them off the public profile', async () => {
+    await loginAs('pip');
+    expect((await ok('/auth/me')).user.profilePrivacy).toEqual({ showExchanges: true, showGifts: false });
+
+    const { user } = await ok('/profile', { method: 'PATCH', body: { profilePrivacy: { showGifts: true } } });
+    expect(user.profilePrivacy).toEqual({ showExchanges: true, showGifts: true });
+    expect((await fails('/profile', { method: 'PATCH', body: { profilePrivacy: { showExchanges: 'no' } } })).code).toBe(
+      'VALIDATION'
+    );
+    expect((await ok('/profile/export')).user.profilePrivacy).toEqual({ showExchanges: true, showGifts: true });
+    expect((await ok('/users/pip')).profile).not.toHaveProperty('profilePrivacy');
+  });
+
+  it('lists exchanges joined unless the artist hides them', async () => {
+    const kit = await ok('/users/kit');
+    expect(kit.exchanges.length).toBe(kit.stats.exchangesCompleted);
+    expect(kit.exchanges.length).toBeGreaterThan(0);
+    for (const event of kit.exchanges) {
+      expect(event).toMatchObject({ status: 'completed', publicity: 'public' });
+    }
+
+    await loginAs('kit');
+    await ok('/profile', { method: 'PATCH', body: { profilePrivacy: { showExchanges: false } } });
+    await logout();
+    const hidden = await ok('/users/kit');
+    expect(hidden).not.toHaveProperty('exchanges');
+    expect(hidden.stats).toEqual({ eventsOrganized: 1 });
+  });
+
+  it('shows only gifts both people agreed to, newest first, in pages', async () => {
+    // Demo: Mika, Sol and Kit allow it; Remy and Noor don't
+    const mika = await ok('/users/mika/gifts');
+    expect(mika.items.map((i) => [i.giver.username, i.recipient.username])).toEqual([['mika', 'sol']]);
+    expect(Object.keys(mika.items[0].submission).sort()).toEqual(['id', 'images', 'links', 'submittedAt', 'title', 'type']);
+    expect(mika.items[0].event.name).toBe('Spring Bloom Exchange');
+    expect(JSON.stringify(mika)).not.toMatch(/Happy spring, Sol/);
+    expect((await ok('/users/mika')).hasGifts).toBe(true);
+
+    expect((await ok('/users/sol/gifts')).items).toEqual([]); // made for Remy, who didn't agree
+    expect((await ok('/users/noor/gifts')).items).toEqual([]); // Noor didn't agree
+    expect((await ok('/users/noor')).hasGifts).toBe(false);
+
+    const page = await ok('/users/kit/gifts?limit=1');
+    expect(page).toMatchObject({ hasMore: false });
+    expect(page.items).toHaveLength(1);
+    expect((await fails('/users/kit/gifts?before=nope')).code).toBe('VALIDATION');
+    expect((await fails('/users/nobody_here/gifts')).code).toBe('USER_NOT_FOUND');
+
+    // Sol changing their mind hides Mika's gift to them straight away
+    await loginAs('sol');
+    await ok('/profile', { method: 'PATCH', body: { profilePrivacy: { showGifts: false } } });
+    expect((await ok('/users/mika/gifts')).items).toEqual([]);
+  });
+
+  it('hides banned artists until they are unbanned', async () => {
+    // Saved, because a failed request throws away unsaved changes
+    const setStatus = (status) => {
+      getState().users.find((u) => u.username === 'kit').status = status;
+      saveState();
+    };
+    const kitId = (await ok('/users/kit')).profile.id;
+    setStatus('banned');
+    expect((await fails('/users/kit')).code).toBe('USER_NOT_FOUND');
+    expect((await fails(`/profile/${kitId}`)).code).toBe('NOT_FOUND');
+    expect((await fails(`/users/${kitId}`)).code).toBe('USER_NOT_FOUND');
+
+    setStatus('active');
+    expect((await ok('/users/kit')).profile.username).toBe('kit');
   });
 
   it('lists where a character was offered, on the single-character route only', async () => {

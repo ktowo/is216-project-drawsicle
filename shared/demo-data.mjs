@@ -25,6 +25,8 @@ export function buildDemoData(now = new Date()) {
   const users = [
     {
       key: 'mika',
+      // Happy for gifts they made or received to show on public profiles
+      profilePrivacy: { showExchanges: true, showGifts: true },
       displayName: 'Mika',
       bio: 'Pastel painter and the person behind most of our seasonal exchanges. Dragons, cats and soft lighting. Open for gift art year-round, and always happy to be a backup gifter.',
       socials: { instagram: 'mika.draws', bluesky: 'mika', discord: 'mika.draws' },
@@ -39,6 +41,8 @@ export function buildDemoData(now = new Date()) {
     },
     {
       key: 'sol',
+      // Happy for gifts they made or received to show on public profiles
+      profilePrivacy: { showExchanges: true, showGifts: true },
       displayName: 'Sol',
       bio: 'Mostly digital, mostly foxes. I also make the odd adoptable batch when I have time. Commissions closed, exchanges always open.',
       socials: { twitter: 'solstice_fox', deviantart: 'solstice-fox', discord: 'solstice_fox' },
@@ -109,6 +113,8 @@ export function buildDemoData(now = new Date()) {
     },
     {
       key: 'kit',
+      // Happy for gifts they made or received to show on public profiles
+      profilePrivacy: { showExchanges: true, showGifts: true },
       displayName: 'Kit',
       bio: 'Moth enthusiast and organiser of the Moth & Lantern Exchange. I collect lantern designs and cosy autumn evenings.',
       socials: { instagram: 'kit.lantern', tumblr: 'kit-lantern', discord: 'kit.lantern' },

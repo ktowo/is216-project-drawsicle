@@ -1,6 +1,7 @@
 <script setup>
 import { ref, reactive, watch, onMounted } from 'vue';
 import { RouterLink } from 'vue-router';
+import PersonLink from '@/components/events/PersonLink.vue';
 import { Search, EyeOff, Eye, CircleSlash, Undo2, Trash2, CalendarHeart, Lock } from 'lucide-vue-next';
 import { api, qs } from '@/api';
 import { toast } from '@/stores/toast';
@@ -113,7 +114,7 @@ async function run(reason) {
               <span v-if="e.publicity === 'private'" class="chip"><Lock :size="13" aria-hidden="true" /> Private</span>
             </div>
             <div class="hint">
-              by {{ e.createdBy?.displayName || 'Unknown' }} · created {{ formatDate(e.createdAt) }}
+              by <PersonLink :user="e.createdBy" :size="0" fallback="Unknown" class="creator" /> · created {{ formatDate(e.createdAt) }}
               · {{ e.participantCount }} / {{ e.maxParticipants }} artists
             </div>
             <div v-if="e.disabled && e.disabledReason" class="note">Disabled: {{ e.disabledReason }}</div>

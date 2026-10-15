@@ -24,6 +24,7 @@ import LoadingBlock from '@/components/ui/LoadingBlock.vue';
 import ErrorBlock from '@/components/ui/ErrorBlock.vue';
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue';
 import UserAvatar from '@/components/UserAvatar.vue';
+import PersonLink from '@/components/events/PersonLink.vue';
 import ImageUploader from '@/components/events/ImageUploader.vue';
 import SubmissionDetails from '@/components/events/SubmissionDetails.vue';
 import { api, qs } from '@/api';
@@ -410,7 +411,7 @@ const counter = (value, max) => `${value.trim().length} / ${max}`;
           <UserAvatar :user="recipient" :size="48" />
           <div class="recipient-text">
             <p class="muted small">You're making a gift for</p>
-            <p class="recipient-name">{{ recipient.displayName }}</p>
+            <p class="recipient-name"><PersonLink :user="recipient" :size="0" fallback="your recipient" /></p>
           </div>
           <RouterLink :to="eventLink(event, '/matches')" class="btn btn-ghost btn-sm">
             <Gift :size="16" aria-hidden="true" /> Their wishes

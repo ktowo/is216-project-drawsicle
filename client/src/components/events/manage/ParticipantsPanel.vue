@@ -7,7 +7,9 @@ import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingBlock from '@/components/ui/LoadingBlock.vue';
 import ErrorBlock from '@/components/ui/ErrorBlock.vue';
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue';
+import { RouterLink } from 'vue-router';
 import UserAvatar from '@/components/UserAvatar.vue';
+import { userProfileLink } from '@/utils/events';
 import ApplicationDetailsModal from './ApplicationDetailsModal.vue';
 import { APPLICATION_STATUSES, APPLICATION_STATUS_LABELS } from '@shared/constants.mjs';
 import { api } from '@/api';
@@ -368,7 +370,9 @@ function exportCsv() {
                 <button type="button" class="name-btn" @click="selectedId = app.id">
                   {{ personName(app.user) }}
                 </button>
-                <p v-if="app.user?.username" class="m-0 text-sm text-cocoa truncate">@{{ app.user.username }}</p>
+                <p v-if="app.user?.username" class="m-0 text-sm text-cocoa truncate">
+                  <RouterLink :to="userProfileLink(app.user)" class="handle-link" :aria-label="`${personName(app.user)}'s profile`">@{{ app.user.username }}</RouterLink>
+                </p>
               </div>
             </div>
             <div class="cell">
@@ -612,5 +616,13 @@ li.row:first-child {
     justify-content: flex-end;
     padding-top: 0;
   }
+}
+.handle-link {
+  color: inherit;
+}
+.handle-link:hover {
+  color: var(--pink-dark);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 </style>

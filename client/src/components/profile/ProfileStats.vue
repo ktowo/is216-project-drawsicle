@@ -1,7 +1,8 @@
 <script setup>
 import { CalendarHeart, Gift } from 'lucide-vue-next';
 
-// Two number tiles on a public profile: events organised and exchanges completed.
+// Number tiles on a public profile: events organised, and exchanges completed unless the
+// artist hides their exchanges (the stat is missing then).
 defineProps({
   stats: { type: Object, default: () => ({}) },
 });
@@ -16,7 +17,7 @@ defineProps({
         <p class="tile-label">{{ stats.eventsOrganized === 1 ? 'Event organised' : 'Events organised' }}</p>
       </div>
     </li>
-    <li class="card tile">
+    <li v-if="stats.exchangesCompleted !== undefined" class="card tile">
       <span class="tile-icon artist" aria-hidden="true"><Gift :size="22" /></span>
       <div>
         <p class="tile-num">{{ (stats.exchangesCompleted || 0).toLocaleString('en-GB') }}</p>
