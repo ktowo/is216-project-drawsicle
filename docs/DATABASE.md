@@ -161,6 +161,9 @@ erDiagram
 | `applications` | `Application` | Sign-up forms, one per person per event | `(event, user)` unique, `(event, status)`, `offeredCharacters` |
 | `matches` | `Match` | Who makes a gift for whom; drafts until published | `(event, giver)` unique, `(event, recipient)` |
 | `submissions` | `Submission` | The finished gift for one match | `match` unique, `event` |
+| `auditlogs` | `AuditLog` | Every site admin action (bans, role changes, deleting or moderating events) with the reason | `createdAt desc`, `(targetType, targetId, createdAt desc)` |
+| `jobruns` | `JobRun` | When each background job last ran (`_id: 'reminders'`), so serverless instances share one schedule | `_id` |
+| `uploads.files`, `uploads.chunks` | GridFS | Uploaded images and demo artwork when the database is a shared one (Atlas); served at `/api/files/<id>.<ext>` | GridFS defaults |
 
 ## How the pieces fit
 
@@ -173,7 +176,8 @@ erDiagram
   published matches of an event. `giverApplication` / `recipientApplication` keep the forms the match was made from.
 - **Secrecy is enforced in the API, not the schema.** A recipient's match row names their giver, so routes never return
   it to them before the event is `completed`; applications are only returned to their owner and the organisers.
-- **Uploads live outside MongoDB.** `bannerUrl`, `avatarUrl` and `Submission.images` hold URLs from
-  `services/storage.js` (Azure Blob Storage, or `server/uploads/` locally).
+- **Uploads are stored as URLs.** `bannerUrl`, `avatarUrl` and `Submission.images` hold URLs from
+  `services/storage.js`: `/api/files/<id>.<ext>` for GridFS (the default with a connection string, so Vercel can
+  serve them), an Azure Blob Storage URL, or `/uploads/...` for files in `server/uploads/` with the local database.
 - **Deactivation** sets `User.status`; after 30 days the reminder job anonymises the account in place so references from
   events, matches and submissions stay valid.

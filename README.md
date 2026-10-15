@@ -92,7 +92,7 @@ What the first run does:
 1. Installs the server and client dependencies (`pnpm install` in `server/` and `client/`).
 2. Creates `server/.env` from `server/.env.example` with fresh random secrets. An existing `.env` is never
    overwritten.
-3. Starts the API on port 8000. With no `DB` set, the server starts its own MongoDB (port 27018, data in
+3. Starts the API on port 8000. With no connection string set, the server starts its own MongoDB (port 27018, data in
    `server/.data`). **The very first time, the MongoDB download is about 800 MB on Windows**, so allow a few
    minutes. It is cached afterwards (in `~/.cache/mongodb-binaries`, or the folder in `MONGOMS_DOWNLOAD_DIR`)
    and later starts take seconds. The script only warns about the download when nothing is cached yet.
@@ -166,24 +166,27 @@ The server reads `server/.env` (see `server/.env.example`):
 
 | Variable | Default | What it's for |
 | --- | --- | --- |
-| `DB` | *(placeholder)* | MongoDB connection string, e.g. from MongoDB Atlas. Leave the placeholder or empty to use the built-in local database |
-| `SECRET`, `JWT_SECRET` | | Long random strings. `JWT_SECRET` signs the login cookie; changing it logs everyone out |
+| `DB_MONGODB_URI` | *(placeholder)* | MongoDB connection string, e.g. from MongoDB Atlas (the name Vercel's MongoDB integration uses; `MONGODB_URI` and `DB` work too). Leave the placeholder or empty to use the built-in local database |
+| `SECRET`, `JWT_SECRET` | | Long random strings. `JWT_SECRET` signs the login cookie (`SECRET` is used when it's missing); changing it logs everyone out |
 | `HOST`, `PORT` | `localhost`, `8000` | Where the API listens |
-| `CLIENT_URL` | `http://localhost:5173` | Used in email links and sign-in redirects |
+| `CLIENT_URL` | `http://localhost:5173` | Used in email links and sign-in redirects, and allowed to call the API from another origin. On Vercel it defaults to the production domain |
 | `ADMIN_EMAILS` | | Comma-separated emails that become site admins |
-| `LOCAL_DB_PORT` | `27018` | Port of the built-in MongoDB (only when `DB` isn't set) |
+| `LOCAL_DB_PORT` | `27018` | Port of the built-in MongoDB (only when no connection string is set) |
 | `SEED_DEMO` | `true` | Add the demo data when the built-in database is empty |
 | `REMINDER_INTERVAL_MINUTES` | `60` | How often the deadline reminder job runs (`0` turns it off) |
+| `CRON_SECRET` | | Lets Vercel Cron call `/api/cron/reminders` (Vercel sends it automatically once it's set) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | | Optional "Continue with Google" |
 | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | | Optional "Continue with Discord" |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | | Real emails. Without them, emails are printed in the server log |
-| `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGE_CONTAINER` | | Store uploads in Azure Blob Storage instead of `server/uploads` |
+| `UPLOAD_STORAGE` | *(automatic)* | Where uploaded images go: `azure` when it's configured, `mongodb` (GridFS, served from `/api/files`) when a connection string is set, otherwise `local` (`server/uploads`) |
+| `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGE_CONTAINER` | | Store uploads in Azure Blob Storage |
 
-**MongoDB Atlas or the local database?** For development you don't need anything: with `DB` unset, the
+**MongoDB Atlas or the local database?** For development you don't need anything: with no connection string, the
 server downloads and runs its own MongoDB, keeps the data in `server/.data` between restarts, and seeds the
 demo accounts. To share one database with your team or deploy, create a free cluster on
-[MongoDB Atlas](https://www.mongodb.com/atlas), put its connection string in `DB`, and run `pnpm seed` once if
-you want the demo data there.
+[MongoDB Atlas](https://www.mongodb.com/atlas), put its connection string in `DB_MONGODB_URI`, and run `pnpm seed`
+once if you want the demo data there. Uploads then go into the same database, so everyone sharing it sees the
+same images.
 
 The client reads `client/.env*` files (Vite):
 
@@ -194,6 +197,43 @@ The client reads `client/.env*` files (Vite):
 | `VITE_API_URL` | API on another origin, e.g. `https://api.example.com/api` (default `/api`) |
 | `VITE_PROXY_TARGET` | Where the dev server forwards `/api` (default `http://localhost:8000`) |
 | `VITE_BASE` | Base path when hosting under a sub-folder, e.g. `/is216-project/` |
+
+## Deploying to Vercel
+
+`vercel.json` deploys the client and the API as one Vercel project on one domain, using
+[Vercel Services](https://vercel.com/docs/services):
+
+- **frontend** (`client/`): the Vite build. Any path that isn't a file gets `index.html`, so links like
+  `/events/123` work when opened directly.
+- **backend** (`server/`): `server.js` as one Vercel Function. Every `/api/...` request goes here.
+
+Set these in the Vercel project's *Settings → Environment Variables*:
+
+| Variable | |
+| --- | --- |
+| `DB_MONGODB_URI` | Set for you by the MongoDB Atlas integration (*Storage → MongoDB Atlas*). Any Atlas connection string works; Atlas must allow connections from anywhere (`0.0.0.0/0`), because Vercel has no fixed IP address |
+| `JWT_SECRET` | A long random string (`SECRET` is used if this one is missing) |
+| `CRON_SECRET` | A long random string, so the daily reminder cron can run |
+| `ADMIN_EMAILS` | Optional: accounts that become site admins |
+| Google, Discord, SMTP | Optional, as above. Sign-in callbacks are `https://<your-domain>/api/auth/google/callback` and `.../discord/callback` |
+
+How the server adapts when it runs on Vercel:
+
+- **No start-up step.** The first request connects to the database and runs the start-up data fixes;
+  later requests reuse the connection. If the database can't be reached, the API answers 503 with
+  `DB_UNAVAILABLE` and tries again on the next request.
+- **Uploads go into MongoDB** (GridFS), because a Vercel Function can't keep files on disk. They are
+  served from `/api/files/<id>.<ext>` and cached by Vercel's CDN. Requests are capped at 4.5 MB, so the
+  client shrinks large images before uploading.
+- **Deadline reminders** have no timer to run on. Incoming requests start a pass at most every
+  `REMINDER_INTERVAL_MINUTES` (the `JobRun` collection keeps every instance to one schedule), and Vercel
+  Cron calls `/api/cron/reminders` once a day as a backstop. The free plan allows daily cron jobs only.
+- **Demo data is never loaded automatically.** The demo accounts share a public password and include an
+  admin, so they don't belong on a public site. To add them anyway, run
+  `DB_MONGODB_URI="<connection string>" pnpm seed` from `server/`.
+
+To check a build on your own machine: `npx vercel build` (after `npx vercel link`), or `npx vercel dev`
+to run both services locally.
 
 ## Mock mode
 
@@ -234,7 +274,7 @@ is216-project/
 │   │   └── mock/           the in-browser API used in mock mode
 │   └── tests/              Vitest tests
 ├── server/                 Express API
-│   ├── server.js           loads .env, connects the database, seeds, starts reminders
+│   ├── server.js           loads .env, connects the database, seeds, starts reminders (exports the app for Vercel)
 │   ├── create-app.js       builds the Express app (used by server.js and the tests)
 │   ├── routes/             one router per feature
 │   ├── models/             Mongoose models
@@ -245,7 +285,8 @@ is216-project/
 ├── shared/                 constants, matching algorithm and demo data used by both sides
 ├── docs/ARCHITECTURE.md    conventions, response shapes and every API route
 ├── Start-all.sh / .bat     install, configure and start everything
-└── Stop-all.sh / .bat      stop everything
+├── Stop-all.sh / .bat      stop everything
+└── vercel.json             deploys client/ and server/ together on Vercel
 ```
 
 ## API

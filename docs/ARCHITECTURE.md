@@ -15,14 +15,15 @@ is216-project/
 │       ├── utils/               format.js (dates, numbers), calendar.js (.ics files), eventTemplates.js (event presets), social.js (profile links)
 │       └── mock/                in-browser copy of the API (VITE_API_MODE=mock, for static hosting)
 ├── server/          Express 5 + Mongoose 9 (CommonJS)
-│   ├── server.js                loads .env, connects DB, seeds demo data, starts reminders, listens on :8000
+│   ├── server.js                loads .env, connects DB, seeds demo data, starts reminders, listens on :8000;
+│   │                            on Vercel it's imported instead and the first request connects (module.exports = app)
 │   ├── create-app.js            builds the Express app (used by server.js and the tests)
-│   ├── db.js                    DB connection string, or a local MongoDB in server/.data when DB is unset
+│   ├── db.js                    connection string (DB_MONGODB_URI, MONGODB_URI or DB), or a local MongoDB in server/.data
 │   ├── setup-auth.js            accounts, profile, notifications, event roles
 │   ├── middleware/auth.js       requireAuth, optionalAuth, requireAdmin, loadEvent, requireEventRole, getEventRoles
-│   ├── models/                  User, EventMember, Notification, Character, Event, Application, Match, Submission
+│   ├── models/                  User, EventMember, Notification, Character, Event, Application, Match, Submission, AuditLog, JobRun
 │   ├── routes/*-router.js       one router per feature
-│   ├── services/                notify, mailer, storage (uploads), reminders (deadline job), events (serialising), accounts (deactivation)
+│   ├── services/                notify, mailer, storage (uploads: disk, GridFS or Azure), reminders (deadline job), events (serialising), accounts (deactivation)
 │   ├── scripts/seed.js          demo data (shared/demo-data.mjs)
 │   ├── scripts/stop-local-db.js asks the local MongoDB to shut down cleanly (used by Stop-all)
 │   └── tests/*.test.js          node:test + supertest against a throwaway MongoDB
@@ -32,7 +33,8 @@ is216-project/
 │   ├── demo-data.mjs            demo accounts/events used by the seed script and mock mode
 │   └── demo-art.mjs             generated SVG artwork for demo data
 ├── Start-all.sh / .bat          install, configure, start API + client
-└── Stop-all.sh / .bat
+├── Stop-all.sh / .bat
+└── vercel.json                  Vercel Services: client/ (static, index.html fallback) + server/ (/api/*), daily cron
 ```
 
 ## Conventions
@@ -44,7 +46,9 @@ is216-project/
   (attach `.code` when useful). Mongoose `ValidationError`s become 400s automatically.
 - **IDs**: JSON uses `id` strings, never `_id`. Dates are ISO strings.
 - **Auth**: an httpOnly JWT cookie (`drawisicle_token`, 7 days). The client sends `credentials: 'include'`;
-  in dev Vite proxies `/api` and `/uploads` to `http://localhost:8000`.
+  in dev Vite proxies `/api` and `/uploads` to `http://localhost:8000`; on Vercel both sides share one domain.
+- **Uploaded files** come back as URLs: `/uploads/...` (local disk), `/api/files/<id>.<ext>` (GridFS, used whenever
+  the database is a shared one such as Atlas) or an Azure blob URL. The client passes them through `assetUrl()`.
 - **Event roles** live in `EventMember` (`organizer`, `participant`, `helper`, `approver`). A user can hold several
   per event. Creating an event grants `organizer`. An *accepted* application grants `participant`; withdrawal,
   rejection or removal revokes it. Site admins (`User.role === 'admin'`) pass every event-role check.
@@ -230,9 +234,13 @@ with 409 `EVENT_DISABLED` / `EVENT_CANCELLED`. Cancelled events stay listed (`st
 ones never are. Event JSON carries `cancelledAt`, `cancelReason` and `disabled` (plus `disabledAt` and
 `disabledReason` for organisers).
 
-### Health
+### Health, files, cron
 
-`GET /health` → `{ ok, db, time }`
+| Method | Path | |
+| --- | --- | --- |
+| GET | /api/health | `{ ok, db, time }` |
+| GET | /api/files/:id.:ext | (public) an image kept in GridFS; 404 `FILE_NOT_FOUND`. Cached as immutable |
+| GET | /api/cron/reminders | (`Authorization: Bearer $CRON_SECRET`) one reminder pass → `{ ok, ran, summary }`; 401 otherwise |
 
 ## Matching (`shared/matching.mjs`)
 
@@ -250,7 +258,10 @@ The same seed always gives the same result.
 
 ## Reminders (`services/reminders.js`)
 
-Runs every `REMINDER_INTERVAL_MINUTES` (60; 0 disables):
+Runs every `REMINDER_INTERVAL_MINUTES` (60; 0 disables). With `node server.js` that's a timer; on Vercel, where
+nothing keeps running between requests, incoming requests start a pass when one is due (`runRemindersIfDue`, with
+the `JobRun` record making it one pass per interval across all instances) and Vercel Cron calls
+`/api/cron/reminders` daily. Each pass:
 - open events past their sign-up deadline move to `matching` and organisers are told to generate matches;
 - organisers get a heads-up 48 h before sign-ups close;
 - givers without a submission get reminders 72 h and 24 h before the submission deadline;
