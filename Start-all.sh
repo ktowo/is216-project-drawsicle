@@ -133,15 +133,19 @@ text = text
   .replace(/^ADMIN_EMAILS=.*$/m, 'ADMIN_EMAILS=');
 fs.writeFileSync('server/.env', text, { flag: 'wx' });
 EOF
-  echo "Created server/.env with new secrets. It uses the built-in local database; set DB there to use MongoDB Atlas."
+  echo "Created server/.env with new secrets. It uses the built-in local database; set DB_MONGODB_URI there to use MongoDB Atlas."
 fi
 
 API_PORT="$(env_value PORT 8000)"
-DB_VALUE="$(env_value DB '')"
+# A real connection string in any of these means a shared database (same names as server/db.js)
 EXTERNAL_DB=0
-if [[ -n $DB_VALUE && $DB_VALUE != \[* ]]; then
-  EXTERNAL_DB=1
-fi
+for name in DB_MONGODB_URI MONGODB_URI DB; do
+  DB_VALUE="$(env_value "$name" '')"
+  if [[ -n $DB_VALUE && $DB_VALUE != \[* ]]; then
+    EXTERNAL_DB=1
+    break
+  fi
+done
 
 API_URL="http://localhost:$API_PORT"
 CLIENT_URL="http://localhost:$CLIENT_PORT"

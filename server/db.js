@@ -4,22 +4,43 @@ const mongoose = require('mongoose');
 
 let memoryServer = null;
 
-// A real connection string in DB wins (e.g. MongoDB Atlas).
-// With no DB set, local development starts its own MongoDB that keeps its data
+// Where the connection string can come from, first match wins:
+//   DB_MONGODB_URI  what Vercel's MongoDB Atlas integration sets (with the "DB" prefix)
+//   MONGODB_URI     the integration's default name
+//   DB              the original name in server/.env
+const CONNECTION_VARS = ['DB_MONGODB_URI', 'MONGODB_URI', 'DB'];
+
+// "[MongoDB Connection String]" is the .env.example placeholder
+function connectionString() {
+  for (const name of CONNECTION_VARS) {
+    const uri = (process.env[name] || '').trim();
+    if (uri && !uri.startsWith('[')) return uri;
+  }
+  return '';
+}
+
+// A real connection string wins (e.g. MongoDB Atlas).
+// With none set, local development starts its own MongoDB that keeps its data
 // in server/.data/db, so nobody has to install MongoDB to work on the project.
 function hasConnectionString() {
-  const uri = (process.env.DB || '').trim();
-  return Boolean(uri) && !uri.startsWith('['); // "[MongoDB Connection String]" is the .env.example placeholder
+  return Boolean(connectionString());
 }
 
 async function connectDB() {
   if (hasConnectionString()) {
-    await mongoose.connect(process.env.DB.trim());
+    await mongoose.connect(connectionString(), {
+      // On Vercel every warm function instance keeps its own pool; keep them small
+      // so a free Atlas cluster's connection limit isn't used up.
+      maxPoolSize: process.env.VERCEL ? 5 : 20,
+      // Fail a request quickly instead of hanging when the database can't be reached
+      serverSelectionTimeoutMS: 10 * 1000,
+    });
     return { mode: 'external' };
   }
 
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('DB is not set. Add a MongoDB connection string to the environment.');
+  // A deployed site never falls back to a throwaway database
+  if (process.env.NODE_ENV === 'production' || ['production', 'preview'].includes(process.env.VERCEL_ENV)) {
+    throw new Error('No database is set. Add DB_MONGODB_URI (a MongoDB connection string) to the environment.');
   }
 
   const { MongoMemoryServer } = require('mongodb-memory-server');
@@ -50,4 +71,4 @@ async function disconnectDB() {
   }
 }
 
-module.exports = { connectDB, disconnectDB, hasConnectionString };
+module.exports = { connectDB, disconnectDB, hasConnectionString, connectionString, CONNECTION_VARS };

@@ -30,13 +30,16 @@ async function stopTestDb() {
   mongod = null;
 }
 
+// The test database address, for code that makes its own connection (server.js)
+const testDbUri = () => mongod.getUri('drawisicle-test');
+
 async function clearDb() {
   const collections = await mongoose.connection.db.collections();
   await Promise.all(collections.map((c) => c.deleteMany({})));
 }
 
 function makeApp() {
-  return require('../app.js').createApp();
+  return require('../create-app.js').createApp();
 }
 
 // Registers a new account and returns a supertest agent that keeps its login cookie.
@@ -55,4 +58,4 @@ function daysFromNow(days) {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 }
 
-module.exports = { startTestDb, stopTestDb, clearDb, makeApp, signUp, daysFromNow, request };
+module.exports = { startTestDb, stopTestDb, clearDb, testDbUri, makeApp, signUp, daysFromNow, request };

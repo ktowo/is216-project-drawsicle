@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions
 rem Starts Drawisicle from cmd.exe or a double-click: installs anything missing, creates
-rem server\.env, then runs the API (with its own local MongoDB unless server\.env has DB set)
+rem server\.env, then runs the API (with its own local MongoDB unless server\.env sets DB_MONGODB_URI)
 rem and the Vue client in two minimised windows. Git Bash, macOS and Linux: Start-all.sh
 rem
 rem   Start-all.bat               API + client
@@ -88,6 +88,8 @@ if "%MOCK%"=="0" if not exist "server\.env" (
 
 set "API_PORT=8000"
 set "DB_VALUE="
+set "MONGODB_URI_VALUE="
+set "DB_MONGODB_URI_VALUE="
 set "ENVFILE_MONGO_DIR="
 set "ENVFILE_MONGO_BIN="
 set "ENVFILE_MONGO_VERSION="
@@ -95,14 +97,19 @@ if exist "server\.env" (
   for /f "usebackq tokens=1,* delims==" %%a in ("server\.env") do (
     if /i "%%a"=="PORT" set "API_PORT=%%b"
     if /i "%%a"=="DB" set "DB_VALUE=%%b"
+    if /i "%%a"=="MONGODB_URI" set "MONGODB_URI_VALUE=%%b"
+    if /i "%%a"=="DB_MONGODB_URI" set "DB_MONGODB_URI_VALUE=%%b"
     if /i "%%a"=="MONGOMS_DOWNLOAD_DIR" set "ENVFILE_MONGO_DIR=%%b"
     if /i "%%a"=="MONGOMS_SYSTEM_BINARY" set "ENVFILE_MONGO_BIN=%%b"
     if /i "%%a"=="MONGOMS_VERSION" set "ENVFILE_MONGO_VERSION=%%b"
   )
 )
 set "API_PORT=%API_PORT: =%"
+rem A real connection string in DB_MONGODB_URI, MONGODB_URI or DB means a shared database (same as server\db.js)
 set "EXTERNAL_DB=0"
 if defined DB_VALUE if not "%DB_VALUE:~0,1%"=="[" set "EXTERNAL_DB=1"
+if defined MONGODB_URI_VALUE if not "%MONGODB_URI_VALUE:~0,1%"=="[" set "EXTERNAL_DB=1"
+if defined DB_MONGODB_URI_VALUE if not "%DB_MONGODB_URI_VALUE:~0,1%"=="[" set "EXTERNAL_DB=1"
 
 set "API_URL=http://localhost:%API_PORT%"
 set "CLIENT_URL=http://localhost:%CLIENT_PORT%"
@@ -267,7 +274,7 @@ if errorlevel 1 (
   echo Error: couldn't create server\.env.
   exit /b 1
 )
-echo Created server\.env with new secrets. It uses the built-in local database; set DB there to use MongoDB Atlas.
+echo Created server\.env with new secrets. It uses the built-in local database; set DB_MONGODB_URI there to use MongoDB Atlas.
 exit /b 0
 
 rem http_ok <url>: errorlevel 0 when the URL answers with a 2xx status

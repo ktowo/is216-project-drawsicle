@@ -235,7 +235,7 @@ is216-project/
 │   └── tests/              Vitest tests
 ├── server/                 Express API
 │   ├── server.js           loads .env, connects the database, seeds, starts reminders
-│   ├── app.js              builds the Express app (used by the tests)
+│   ├── create-app.js       builds the Express app (used by server.js and the tests)
 │   ├── routes/             one router per feature
 │   ├── models/             Mongoose models
 │   ├── middleware/auth.js  login and event-role checks

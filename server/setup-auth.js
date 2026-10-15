@@ -9,7 +9,7 @@ const notificationRouter = require('./routes/notification-router.js');
 const membershipRouter = require('./routes/membership-router.js');
 
 // Plugs accounts, roles, profiles and notifications into the Express app.
-// In app.js, right after `const server = express();`:
+// In create-app.js, right after `const server = express();`:
 //
 //   const { setupAuth } = require('./setup-auth.js');
 //   setupAuth(server);

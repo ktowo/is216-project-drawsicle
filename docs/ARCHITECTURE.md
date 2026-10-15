@@ -16,7 +16,7 @@ is216-project/
 │       └── mock/                in-browser copy of the API (VITE_API_MODE=mock, for static hosting)
 ├── server/          Express 5 + Mongoose 9 (CommonJS)
 │   ├── server.js                loads .env, connects DB, seeds demo data, starts reminders, listens on :8000
-│   ├── app.js                   builds the Express app (used by tests)
+│   ├── create-app.js            builds the Express app (used by server.js and the tests)
 │   ├── db.js                    DB connection string, or a local MongoDB in server/.data when DB is unset
 │   ├── setup-auth.js            accounts, profile, notifications, event roles
 │   ├── middleware/auth.js       requireAuth, optionalAuth, requireAdmin, loadEvent, requireEventRole, getEventRoles

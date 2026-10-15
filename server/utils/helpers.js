@@ -2,7 +2,14 @@
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
 
-const clientUrl = () => (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
+// The site's address for links in emails and sign-in redirects: the first CLIENT_URL, else the
+// production domain Vercel provides, else the local Vite server.
+function clientUrl() {
+  const configured = (process.env.CLIENT_URL || '').split(',')[0].trim();
+  if (configured) return configured.replace(/\/$/, '');
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  return 'http://localhost:5173';
+}
 
 // ADMIN_EMAILS=a@x.com,b@y.com in .env makes those accounts site admins.
 function applyAdminList(user) {
@@ -47,6 +54,11 @@ function apiErrorHandler(err, req, res, _next) {
   }
   if (err?.type === 'entity.too.large') {
     return sendError(res, 413, 'That request is too large.', 'TOO_LARGE');
+  }
+  // The server is up but can't serve yet (no database, missing settings): say so plainly
+  if (err?.status === 503) {
+    console.error(err.cause || err.message);
+    return sendError(res, 503, err.message, typeof err.code === 'string' ? err.code : 'UNAVAILABLE');
   }
   if (err?.status && err.status < 500) {
     const code = typeof err.code === 'string' ? err.code : DEFAULT_CODES[err.status];
