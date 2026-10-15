@@ -499,7 +499,7 @@ describe('build-out additions', () => {
   });
 
   it('saves profile privacy settings and keeps them off the public profile', async () => {
-    await loginAs('kit');
+    await loginAs('pip');
     expect((await ok('/auth/me')).user.profilePrivacy).toEqual({ showExchanges: true, showGifts: false });
 
     const { user } = await ok('/profile', { method: 'PATCH', body: { profilePrivacy: { showGifts: true } } });
@@ -508,7 +508,7 @@ describe('build-out additions', () => {
       'VALIDATION'
     );
     expect((await ok('/profile/export')).user.profilePrivacy).toEqual({ showExchanges: true, showGifts: true });
-    expect((await ok('/users/kit')).profile).not.toHaveProperty('profilePrivacy');
+    expect((await ok('/users/pip')).profile).not.toHaveProperty('profilePrivacy');
   });
 
   it('lists exchanges joined unless the artist hides them', async () => {
@@ -525,6 +525,31 @@ describe('build-out additions', () => {
     const hidden = await ok('/users/kit');
     expect(hidden).not.toHaveProperty('exchanges');
     expect(hidden.stats).toEqual({ eventsOrganized: 1 });
+  });
+
+  it('shows only gifts both people agreed to, newest first, in pages', async () => {
+    // Demo: Mika, Sol and Kit allow it; Remy and Noor don't
+    const mika = await ok('/users/mika/gifts');
+    expect(mika.items.map((i) => [i.giver.username, i.recipient.username])).toEqual([['mika', 'sol']]);
+    expect(Object.keys(mika.items[0].submission).sort()).toEqual(['id', 'images', 'links', 'submittedAt', 'title', 'type']);
+    expect(mika.items[0].event.name).toBe('Spring Bloom Exchange');
+    expect(JSON.stringify(mika)).not.toMatch(/Happy spring, Sol/);
+    expect((await ok('/users/mika')).hasGifts).toBe(true);
+
+    expect((await ok('/users/sol/gifts')).items).toEqual([]); // made for Remy, who didn't agree
+    expect((await ok('/users/noor/gifts')).items).toEqual([]); // Noor didn't agree
+    expect((await ok('/users/noor')).hasGifts).toBe(false);
+
+    const page = await ok('/users/kit/gifts?limit=1');
+    expect(page).toMatchObject({ hasMore: false });
+    expect(page.items).toHaveLength(1);
+    expect((await fails('/users/kit/gifts?before=nope')).code).toBe('VALIDATION');
+    expect((await fails('/users/nobody_here/gifts')).code).toBe('USER_NOT_FOUND');
+
+    // Sol changing their mind hides Mika's gift to them straight away
+    await loginAs('sol');
+    await ok('/profile', { method: 'PATCH', body: { profilePrivacy: { showGifts: false } } });
+    expect((await ok('/users/mika/gifts')).items).toEqual([]);
   });
 
   it('hides banned artists until they are unbanned', async () => {

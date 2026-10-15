@@ -161,6 +161,7 @@ async function seed({ reset = false, now = new Date(), artDir = DEMO_UPLOAD_DIR 
       socials: u.socials || {},
       defaultForm: u.defaultForm || {},
       ...(u.notificationPrefs ? { notificationPrefs: u.notificationPrefs } : {}),
+      ...(u.profilePrivacy ? { profilePrivacy: u.profilePrivacy } : {}),
     });
   }
 

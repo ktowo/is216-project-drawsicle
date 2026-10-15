@@ -106,6 +106,7 @@ export function buildState(now = new Date()) {
       ...(u.defaultForm || {}),
     },
     notificationPrefs: { emailReminders: true, emailMatches: true, emailEventUpdates: false },
+    profilePrivacy: { showExchanges: true, showGifts: false, ...(u.profilePrivacy || {}) },
     createdAt: iso(nowMs - (200 - i * 7) * DAY),
     updatedAt: iso(nowMs - (30 - i) * DAY),
   }));
