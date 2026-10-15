@@ -93,6 +93,11 @@ router.get('/:username', optionalAuth, asyncHandler(async (req, res) => {
   const gifts = await publicGiftsFilter(user);
   body.hasGifts = Boolean(gifts && (await Submission.exists(gifts)));
 
+  // Only the viewer learns whether they keep this person off their matches
+  if (req.user && !req.user._id.equals(user._id)) {
+    body.viewer = { blocked: (req.user.blockedUsers || []).some((id) => id.equals(user._id)) };
+  }
+
   res.json(body);
 }));
 

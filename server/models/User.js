@@ -67,6 +67,9 @@ const userSchema = new mongoose.Schema(
       showGifts: { type: Boolean, default: false },
     },
 
+    // People this person never wants to be matched with, in either direction. Private.
+    blockedUsers: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], default: [] },
+
     // In-app notifications are always on; these control the email copies.
     notificationPrefs: {
       emailReminders: { type: Boolean, default: true },

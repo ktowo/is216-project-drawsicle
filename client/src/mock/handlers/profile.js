@@ -189,6 +189,39 @@ export function register(router) {
     };
   });
 
+  // ---------- People I won't be matched with (private) ----------
+
+  const blockList = (state, user) => (user.blockedUsers || []).map((id) => findUser(state, id)).filter(Boolean).map(userMini);
+
+  router.get('/profile/blocks', (ctx) => {
+    const user = ctx.requireAuth();
+    return { blocks: blockList(ctx.state, user) };
+  });
+
+  router.post('/profile/blocks', (ctx) => {
+    const user = ctx.requireAuth();
+    const { state } = ctx;
+    const raw = String(ctx.body.username ?? ctx.body.userId ?? '').trim().replace(/^@/, '');
+    let other = USERNAME_RE.test(raw.toLowerCase()) ? state.users.find((u) => u.username === raw.toLowerCase()) : null;
+    if (!other && isId(raw)) other = findUser(state, raw);
+    if (!other) throw httpError(404, "We couldn't find anyone with that username.", 'USER_NOT_FOUND');
+    if (other.id === user.id) throw invalid("You can't add yourself.");
+    user.blockedUsers ||= [];
+    if (!user.blockedUsers.includes(other.id)) {
+      if (user.blockedUsers.length >= LIMITS.blockedUsers) {
+        throw invalid(`You can keep up to ${LIMITS.blockedUsers} people on this list.`);
+      }
+      user.blockedUsers.push(other.id);
+    }
+    return { blocks: blockList(state, user) };
+  });
+
+  router.delete('/profile/blocks/:userId', (ctx) => {
+    const user = ctx.requireAuth();
+    user.blockedUsers = (user.blockedUsers || []).filter((id) => id !== ctx.params.userId);
+    return { blocks: blockList(ctx.state, user) };
+  });
+
   // Someone's public profile (no email), by id or username. Deactivated and banned accounts are hidden.
   router.get('/profile/:id', (ctx) => {
     const { id } = ctx.params;

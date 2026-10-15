@@ -105,6 +105,7 @@ export function register(router) {
     }
 
     body.hasGifts = publicGifts(state, user).length > 0;
+    if (viewer && viewer.id !== user.id) body.viewer = { blocked: (viewer.blockedUsers || []).includes(user.id) };
     return body;
   });
 }
