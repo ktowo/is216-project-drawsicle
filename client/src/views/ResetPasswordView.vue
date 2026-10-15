@@ -4,6 +4,7 @@ import { useRoute, useRouter, RouterLink } from 'vue-router';
 import { KeyRound, Lock, AlertTriangle, Loader2 } from 'lucide-vue-next';
 import AuthLayout from '@/components/AuthLayout.vue';
 import TextField from '@/components/TextField.vue';
+import PasswordStrength from '@/components/PasswordStrength.vue';
 import { api } from '@/api';
 import { setUser } from '@/stores/auth';
 import { toast } from '@/stores/toast';
@@ -84,6 +85,7 @@ async function submit() {
         :maxlength="128"
         required
       />
+      <PasswordStrength :password="password" />
       <TextField
         v-model="confirm"
         label="Confirm new password"

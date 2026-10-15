@@ -5,6 +5,7 @@ import { Mail, Lock, KeyRound, Loader2, TriangleAlert, CircleCheck, Circle, Down
 import PageHeader from '@/components/ui/PageHeader.vue';
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue';
 import TextField from '@/components/TextField.vue';
+import PasswordStrength from '@/components/PasswordStrength.vue';
 import { auth, setUser } from '@/stores/auth';
 import { toast } from '@/stores/toast';
 import { api } from '@/api';
@@ -300,6 +301,7 @@ async function deactivate() {
           :hint="`At least ${PASSWORD_MIN} characters.`"
           required
         />
+        <PasswordStrength :password="newPassword" />
         <TextField
           id="account-confirm-password"
           v-model="confirmPassword"

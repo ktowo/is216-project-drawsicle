@@ -196,7 +196,8 @@ button {
   flex-direction: column;
   gap: 10px;
 }
-.field + .field {
+.field + .field,
+.password-strength + .field {
   margin-top: 22px;
 }
 .field-head {

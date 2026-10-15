@@ -7,6 +7,7 @@ import TextField from '@/components/TextField.vue';
 import GoogleButton from '@/components/GoogleButton.vue';
 import DiscordButton from '@/components/DiscordButton.vue';
 import OrDivider from '@/components/ui/OrDivider.vue';
+import PasswordStrength from '@/components/PasswordStrength.vue';
 import { register } from '@/stores/auth';
 import { toast } from '@/stores/toast';
 import { api } from '@/api';
@@ -28,6 +29,10 @@ const providers = ref({ google: false, discord: false });
 
 const redirectTo = computed(() => safeRedirect(route.query.redirect));
 const showProviders = computed(() => providers.value.google || providers.value.discord);
+
+// Opened in a new tab so the half-filled form isn't lost (resolve() keeps mock mode's # URLs working)
+const termsHref = router.resolve('/terms').href;
+const guidelinesHref = router.resolve('/guidelines').href;
 
 onMounted(async () => {
   try {
@@ -113,6 +118,7 @@ async function submit() {
         :maxlength="128"
         required
       />
+      <PasswordStrength :password="password" />
       <TextField
         v-model="confirm"
         label="Confirm password"
@@ -125,6 +131,14 @@ async function submit() {
       />
 
       <p v-if="error" class="alert alert-error" role="alert">{{ error }}</p>
+
+      <p class="terms">
+        By creating an account you agree to the
+        <a :href="termsHref" target="_blank" rel="noopener">Terms<span class="sr-only"> (opens in a new tab)</span></a>
+        and the
+        <a :href="guidelinesHref" target="_blank" rel="noopener">
+          Community guidelines<span class="sr-only"> (opens in a new tab)</span></a>.
+      </p>
 
       <button type="submit" class="btn btn-primary btn-block submit" :disabled="loading">
         <Loader2 v-if="loading" :size="18" class="spin" aria-hidden="true" />
@@ -150,8 +164,17 @@ async function submit() {
 .alert {
   margin: 20px 0 0;
 }
+.terms {
+  margin: 24px 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.terms a {
+  font-weight: 600;
+}
 .submit {
-  margin-top: 32px;
+  margin-top: 16px;
   font-size: 1.1rem;
   padding: 16px;
 }
