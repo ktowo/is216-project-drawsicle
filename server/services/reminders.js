@@ -14,6 +14,7 @@ const Submission = require('../models/Submission.js');
 const JobRun = require('../models/JobRun.js');
 const { organizerIds } = require('./events.js');
 const { notifyMany } = require('./notify.js');
+const { announceMilestone } = require('./discord.js');
 const { LIMITS } = require('../../shared/constants.mjs');
 
 const HOUR = 60 * 60 * 1000;
@@ -85,6 +86,7 @@ async function autoCloseSignups(now, summary) {
     if (!event.remindersSent.includes(KEYS.signupClosed)) event.remindersSent.push(KEYS.signupClosed);
     await event.save();
     summary.autoClosed += 1;
+    announceMilestone(event, 'signups_closed');
 
     const [acceptedIds, pending, organizers] = await Promise.all([
       Application.find({ event: event._id, status: 'accepted' }).distinct('user'),
@@ -137,6 +139,7 @@ async function warnSignupsClosing(now, summary) {
   await eachEvent(events, 'sign-up warning', async (event) => {
     if (!(await claim(event._id, KEYS.signupWarning))) return;
     summary.signupWarnings += 1;
+    announceMilestone(event, 'signups_closing');
 
     const [accepted, pending, organizers] = await Promise.all([
       Application.countDocuments({ event: event._id, status: 'accepted' }),

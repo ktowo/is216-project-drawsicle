@@ -110,3 +110,23 @@ export function pluralize(n, word, plural) {
   const label = count === 1 ? word : plural || `${word}s`;
   return `${count.toLocaleString('en-GB')} ${label}`;
 }
+
+// "Singapore" from "Asia/Singapore", "New York" from "America/New_York"
+export function zoneCity(timeZone) {
+  return String(timeZone || '').split('/').pop().replace(/_/g, ' ');
+}
+
+// The same moment on the organiser's clock, e.g. "Sat 6:00 pm in Singapore", or '' when it reads
+// the same as the viewer's (or the zone is unknown)
+export function timeInZone(value, timeZone) {
+  const d = toDate(value);
+  if (!d || !timeZone) return '';
+  try {
+    const options = { weekday: 'short', hour: 'numeric', minute: '2-digit', hour12: true };
+    const theirs = new Intl.DateTimeFormat('en-GB', { ...options, timeZone }).format(d);
+    const mine = new Intl.DateTimeFormat('en-GB', options).format(d);
+    return theirs === mine ? '' : `${theirs} in ${zoneCity(timeZone)}`;
+  } catch {
+    return '';
+  }
+}

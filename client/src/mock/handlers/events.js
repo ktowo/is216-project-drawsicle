@@ -9,6 +9,8 @@ import {
   PUBLICITY,
   SEASON_VALUES,
   normalizeTags,
+  DISCORD_WEBHOOK_RE,
+  isTimeZone,
 } from '@shared/constants.mjs';
 import { newId, randomCode } from '../db.js';
 import { checkImage, filesFrom, imageToDataUrl, looksLikeImage } from '../files.js';
@@ -129,6 +131,17 @@ function readEventInput(body) {
   }
   if (src.allowedTypes !== undefined) input.allowedTypes = readTypes(src.allowedTypes);
   if (src.requireApproval !== undefined) input.requireApproval = readBoolean(src.requireApproval, 'Require approval');
+  if (src.timeZone !== undefined && src.timeZone !== null && src.timeZone !== '') {
+    if (!isTimeZone(src.timeZone)) throw invalid("That time zone isn't one we recognise.");
+    input.timeZone = src.timeZone;
+  }
+  if (src.discordWebhookUrl !== undefined) {
+    const url = readText(src.discordWebhookUrl, 'Discord webhook', 300);
+    if (url && !DISCORD_WEBHOOK_RE.test(url)) {
+      throw invalid('Paste a Discord webhook link (it starts with https://discord.com/api/webhooks/).');
+    }
+    input.discordWebhookUrl = url;
+  }
   return input;
 }
 
@@ -170,7 +183,7 @@ function rejectIfCompleted(event) {
 // ---------- Duplicate ----------
 
 const COPIED_FIELDS = [
-  'description', 'theme', 'season', 'rules', 'tags', 'platform', 'platformName', 'platformLink',
+  'description', 'theme', 'season', 'rules', 'tags', 'platform', 'platformName', 'platformLink', 'timeZone', 'discordWebhookUrl',
   'minParticipants', 'maxParticipants', 'allowedTypes', 'publicity', 'requireApproval', 'bannerUrl',
 ];
 const DUPLICATE_SIGNUP_DAYS = 14;

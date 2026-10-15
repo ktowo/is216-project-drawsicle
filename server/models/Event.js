@@ -59,6 +59,28 @@ const eventSchema = new mongoose.Schema(
     // false: applications are accepted straight away
     requireApproval: { type: Boolean, default: false },
     bannerUrl: { type: String, default: '' },
+    // The organiser's time zone (IANA name, e.g. "Europe/London"), so deadlines can be shown in theirs too
+    timeZone: { type: String, trim: true, default: '', maxlength: 64 },
+    // Posts milestones (sign-ups open, matches out, the reveal) to the community's Discord channel
+    discordWebhookUrl: { type: String, trim: true, default: '', maxlength: 300 },
+    // Organiser's rules for generating matches
+    matchingRules: {
+      // People who should never be matched with each other (either direction)
+      avoidPairs: {
+        type: [
+          {
+            _id: false,
+            a: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+            b: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+          },
+        ],
+        default: [],
+      },
+      // Steer away from giver -> recipient pairs from the same organisers' earlier exchanges
+      avoidRepeats: { type: Boolean, default: true },
+    },
+    // Past events whose participants were invited to this one (each only once)
+    invitedFrom: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Event' }], default: [] },
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     statusHistory: {
@@ -157,6 +179,7 @@ eventSchema.methods.toPublic = function ({
     publicity: this.publicity,
     requireApproval: Boolean(this.requireApproval),
     bannerUrl: this.bannerUrl || null,
+    timeZone: this.timeZone || '',
     publishedAt: this.publishedAt,
     completedAt: this.completedAt,
     cancelledAt: this.cancelledAt,
@@ -168,7 +191,17 @@ eventSchema.methods.toPublic = function ({
     organizers,
     viewer,
     ...(includeInvite
-      ? { inviteCode: this.inviteCode, disabledAt: this.disabledAt, disabledReason: this.disabledReason || '' }
+      ? {
+          inviteCode: this.inviteCode,
+          disabledAt: this.disabledAt,
+          disabledReason: this.disabledReason || '',
+          discordWebhookUrl: this.discordWebhookUrl || '',
+          matchingRules: {
+            avoidPairs: (this.matchingRules?.avoidPairs || []).map((p) => ({ a: String(p.a), b: String(p.b) })),
+            avoidRepeats: this.matchingRules?.avoidRepeats !== false,
+          },
+          invitedFrom: (this.invitedFrom || []).map(String),
+        }
       : {}),
   };
 };

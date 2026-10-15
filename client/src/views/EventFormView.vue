@@ -31,7 +31,7 @@ import ErrorBlock from '@/components/ui/ErrorBlock.vue';
 import BannerUploader from '@/components/events/manage/BannerUploader.vue';
 import EventCard from '@/components/events/EventCard.vue';
 import { typeList } from '@/components/events/manage/helpers';
-import { PLATFORMS, SEASONS, CREATION_TYPES, LIMITS } from '@shared/constants.mjs';
+import { PLATFORMS, SEASONS, CREATION_TYPES, LIMITS, DISCORD_WEBHOOK_RE } from '@shared/constants.mjs';
 import { api } from '@/api';
 import { toast } from '@/stores/toast';
 import { auth } from '@/stores/auth';
@@ -74,6 +74,7 @@ function blankForm() {
     platform: 'discord',
     platformName: '',
     platformLink: '',
+    discordWebhookUrl: '',
     signupDeadline: toLocalInput(signup),
     submissionDeadline: toLocalInput(submission),
     minParticipants: 3,
@@ -95,6 +96,7 @@ function formFromEvent(ev) {
     platform: ev.platform || 'discord',
     platformName: ev.platformName || '',
     platformLink: ev.platformLink || '',
+    discordWebhookUrl: ev.discordWebhookUrl || '',
     signupDeadline: toLocalInput(ev.signupDeadline),
     submissionDeadline: toLocalInput(ev.submissionDeadline),
     minParticipants: ev.minParticipants,
@@ -119,6 +121,7 @@ function bodyFrom(f) {
     platform: f.platform,
     platformName: f.platformName.trim(),
     platformLink: f.platformLink.trim(),
+    discordWebhookUrl: f.discordWebhookUrl.trim(),
     signupDeadline: f.signupDeadline,
     submissionDeadline: f.submissionDeadline,
     minParticipants: toCount(f.minParticipants),
@@ -127,6 +130,23 @@ function bodyFrom(f) {
     requireApproval: Boolean(f.requireApproval),
     publicity: f.publicity,
   };
+}
+
+// ---- Discord ----
+const testingDiscord = ref(false);
+const canTestDiscord = computed(
+  () => isEdit.value && Boolean(event.value?.discordWebhookUrl) && form.discordWebhookUrl.trim() === event.value.discordWebhookUrl
+);
+async function testDiscord() {
+  testingDiscord.value = true;
+  try {
+    await api(`/events/${event.value.id}/discord/test`, { method: 'POST' });
+    toast.success('Test post sent. Check your Discord channel.');
+  } catch (e) {
+    toast.error(e.message);
+  } finally {
+    testingDiscord.value = false;
+  }
 }
 
 function toCount(value) {
@@ -375,6 +395,9 @@ function validate() {
   } else if (body.platformLink && !isHttpUrl(body.platformLink)) {
     e.platformLink = 'Community link must start with http:// or https://';
   }
+  if (body.discordWebhookUrl && !DISCORD_WEBHOOK_RE.test(body.discordWebhookUrl)) {
+    e.discordWebhookUrl = 'Paste a Discord webhook link (it starts with https://discord.com/api/webhooks/).';
+  }
   if (form.tags.length > LIMITS.tags) e.tags = `Up to ${LIMITS.tags} tags.`;
 
   const signup = signupDate.value ? new Date(signupDate.value).getTime() : null;
@@ -433,6 +456,7 @@ const FIELD_PATTERNS = [
   [/^Rules/i, 'rules'],
   [/^Community name/i, 'platformName'],
   [/^Community link/i, 'platformLink'],
+  [/Discord webhook/i, 'discordWebhookUrl'],
   [/community platform/i, 'platform'],
   [/season/i, 'season'],
   [/sign-up deadline/i, 'signupDeadline'],
@@ -458,6 +482,7 @@ const FIELD_IDS = {
   platform: 'ev-platform',
   platformName: 'ev-platform-name',
   platformLink: 'ev-platform-link',
+  discordWebhookUrl: 'ev-discord-webhook',
   signupDeadline: 'ev-signup',
   submissionDeadline: 'ev-submission',
   minParticipants: 'ev-min',
@@ -477,6 +502,7 @@ const FIELD_NAMES = {
   platform: 'Platform',
   platformName: 'Community name',
   platformLink: 'Community link',
+  discordWebhookUrl: 'Discord webhook',
   signupDeadline: 'Sign-ups close',
   submissionDeadline: 'Gifts due',
   minParticipants: 'Minimum participants',
@@ -535,6 +561,9 @@ function buildPayload() {
   }
   if ('signupDeadline' in payload) payload.signupDeadline = fromLocalInput(payload.signupDeadline);
   if ('submissionDeadline' in payload) payload.submissionDeadline = fromLocalInput(payload.submissionDeadline);
+  // The organiser's time zone, so deadlines can also be shown in it (older events get it with their next edit)
+  const changed = Object.keys(payload).length > 0;
+  if (timeZone && (!isEdit.value || (changed && !event.value?.timeZone))) payload.timeZone = timeZone;
   return payload;
 }
 
@@ -1088,6 +1117,39 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
                   </div>
                 </template>
               </FormField>
+
+              <FormField
+                label="Discord announcements"
+                for-id="ev-discord-webhook"
+                hint="Optional. Paste a channel webhook (Server settings, Integrations, Webhooks) and we'll post when sign-ups open and close, when matches are out and at the reveal. Only organisers see it."
+                :error="errors.discordWebhookUrl"
+              >
+                <template #default="{ describedby, invalid }">
+                  <div class="input-wrap" :class="{ 'is-invalid': invalid }">
+                    <input
+                      id="ev-discord-webhook"
+                      v-model="form.discordWebhookUrl"
+                      class="input"
+                      type="url"
+                      inputmode="url"
+                      autocomplete="off"
+                      placeholder="https://discord.com/api/webhooks/..."
+                      maxlength="300"
+                      :aria-invalid="invalid"
+                      :aria-describedby="describedby"
+                    />
+                  </div>
+                  <button
+                    v-if="canTestDiscord"
+                    type="button"
+                    class="btn btn-outline btn-xs discord-test"
+                    :disabled="testingDiscord"
+                    @click="testDiscord"
+                  >
+                    Send a test post
+                  </button>
+                </template>
+              </FormField>
             </section>
 
             <!-- Dates -->
@@ -1338,6 +1400,10 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
 </template>
 
 <style scoped>
+.discord-test {
+  align-self: flex-start;
+  margin-top: 8px;
+}
 .narrow {
   max-width: 860px;
 }

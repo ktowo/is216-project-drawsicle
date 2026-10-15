@@ -21,6 +21,7 @@ const {
 const { notify, notifyMany } = require('../services/notify.js');
 const { uploadImage, looksLikeImage, IMAGE_TYPES } = require('../services/storage.js');
 const { REMINDER_KEYS } = require('../services/reminders.js');
+const { announceMilestone } = require('../services/discord.js');
 const {
   EVENT_STATUSES,
   EVENT_TRANSITIONS,
@@ -30,6 +31,8 @@ const {
   CREATION_TYPE_VALUES,
   LIMITS,
   normalizeTags,
+  DISCORD_WEBHOOK_RE,
+  isTimeZone,
 } = require('../../shared/constants.mjs');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
 
@@ -174,6 +177,17 @@ function readEventInput(body) {
   }
   if (src.allowedTypes !== undefined) input.allowedTypes = readTypes(src.allowedTypes);
   if (src.requireApproval !== undefined) input.requireApproval = readBoolean(src.requireApproval, 'Require approval');
+  if (src.timeZone !== undefined && src.timeZone !== null && src.timeZone !== '') {
+    if (!isTimeZone(src.timeZone)) throw invalid("That time zone isn't one we recognise.");
+    input.timeZone = src.timeZone;
+  }
+  if (src.discordWebhookUrl !== undefined) {
+    const url = readText(src.discordWebhookUrl, 'Discord webhook', 300);
+    if (url && !DISCORD_WEBHOOK_RE.test(url)) {
+      throw invalid('Paste a Discord webhook link (it starts with https://discord.com/api/webhooks/).');
+    }
+    input.discordWebhookUrl = url;
+  }
   return input;
 }
 
@@ -560,6 +574,9 @@ router.post('/:eventId/status', ...organizerOnly, asyncHandler(async (req, res) 
   if (from === 'matching' && to === 'open') {
     await Match.deleteMany({ event: event._id, published: false });
   }
+  if (to === 'open') announceMilestone(event, 'signups_open');
+  if (from === 'open' && to === 'matching') announceMilestone(event, 'signups_closed');
+  if (from === 'active' && to === 'completed') announceMilestone(event, 'revealed');
 
   if (from === 'open' && to === 'matching') {
     await quietly(
@@ -597,7 +614,7 @@ router.post('/:eventId/invite/regenerate', ...organizerOnly, asyncHandler(async 
 
 // Settings copied into a new draft. People, matches, gifts and the invite code are not.
 const COPIED_FIELDS = [
-  'description', 'theme', 'season', 'rules', 'tags', 'platform', 'platformName', 'platformLink',
+  'description', 'theme', 'season', 'rules', 'tags', 'platform', 'platformName', 'platformLink', 'timeZone', 'discordWebhookUrl',
   'minParticipants', 'maxParticipants', 'allowedTypes', 'publicity', 'requireApproval', 'bannerUrl',
 ];
 const DUPLICATE_SIGNUP_DAYS = 14;

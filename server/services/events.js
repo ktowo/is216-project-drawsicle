@@ -2,6 +2,7 @@
 // who organises an event, how many people are in it, what the viewer can see,
 // and the JSON shape of an event.
 const mongoose = require('mongoose');
+const Announcement = require('../models/Announcement.js');
 const Application = require('../models/Application.js');
 const EventMember = require('../models/EventMember.js');
 const Match = require('../models/Match.js');
@@ -127,6 +128,7 @@ async function deleteEventCascade(event) {
     Application.deleteMany({ event: event._id }),
     Match.deleteMany({ event: event._id }),
     Submission.deleteMany({ event: event._id }),
+    Announcement.deleteMany({ event: event._id }),
   ]);
   await EventMember.deleteMany({ event: event._id });
   await event.deleteOne();

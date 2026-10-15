@@ -196,6 +196,7 @@ export function serializeEvent(state, event, user, ctx = viewerContext(state, ev
     publicity: event.publicity,
     requireApproval: Boolean(event.requireApproval),
     bannerUrl: event.bannerUrl || null,
+    timeZone: event.timeZone || '',
     publishedAt: event.publishedAt || null,
     completedAt: event.completedAt || null,
     createdAt: event.createdAt,
@@ -203,7 +204,17 @@ export function serializeEvent(state, event, user, ctx = viewerContext(state, ev
     participantCount: participantCount(state, event.id),
     organizers: organizerMinis(state, event.id),
     viewer: user ? { roles: ctx.roles, isOrganizer: ctx.isOrganizer, applicationStatus: ctx.applicationStatus } : null,
-    ...(ctx.isOrganizer ? { inviteCode: event.inviteCode } : {}),
+    ...(ctx.isOrganizer
+      ? {
+          inviteCode: event.inviteCode,
+          discordWebhookUrl: event.discordWebhookUrl || '',
+          matchingRules: {
+            avoidPairs: (event.matchingRules?.avoidPairs || []).map((p) => ({ a: p.a, b: p.b })),
+            avoidRepeats: event.matchingRules?.avoidRepeats !== false,
+          },
+          invitedFrom: [...(event.invitedFrom || [])],
+        }
+      : {}),
   };
 }
 
