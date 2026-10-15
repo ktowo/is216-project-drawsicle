@@ -32,6 +32,10 @@ export function userPublic(user) {
       emailMatches: user.notificationPrefs?.emailMatches !== false,
       emailEventUpdates: Boolean(user.notificationPrefs?.emailEventUpdates),
     },
+    profilePrivacy: {
+      showExchanges: user.profilePrivacy?.showExchanges !== false,
+      showGifts: Boolean(user.profilePrivacy?.showGifts),
+    },
     providers: { google: false, discord: false },
     profileComplete: Boolean(user.displayName && user.bio),
     createdAt: user.createdAt,
