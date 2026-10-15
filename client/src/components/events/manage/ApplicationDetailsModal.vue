@@ -4,7 +4,9 @@ import { Check, X, UserMinus, Loader2 } from 'lucide-vue-next';
 import BaseModal from '@/components/ui/BaseModal.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import CharacterCard from '@/components/characters/CharacterCard.vue';
+import { RouterLink } from 'vue-router';
 import UserAvatar from '@/components/UserAvatar.vue';
+import { userProfileLink } from '@/utils/events';
 import { formatDateTime } from '@/utils/format';
 import { typeList, personName } from './helpers';
 
@@ -28,7 +30,9 @@ const title = computed(() => (app.value ? personName(app.value.user) : 'Sign-up'
       <div class="flex flex-wrap items-center gap-3.5">
         <UserAvatar :user="app.user" :size="52" />
         <div class="min-w-0 flex-1">
-          <p v-if="app.user?.username" class="m-0 text-cocoa">@{{ app.user.username }}</p>
+          <p v-if="app.user?.username" class="m-0 text-cocoa">
+            <RouterLink :to="userProfileLink(app.user)" class="handle-link">@{{ app.user.username }}</RouterLink>
+          </p>
           <p class="m-0 text-sm text-cocoa">Signed up {{ formatDateTime(app.createdAt) }}</p>
         </div>
         <StatusBadge :status="app.status" kind="application" />
@@ -131,5 +135,13 @@ const title = computed(() => (app.value ? personName(app.value.user) : 'Sign-up'
   .details {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+.handle-link {
+  color: inherit;
+}
+.handle-link:hover {
+  color: var(--pink-dark);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 </style>
