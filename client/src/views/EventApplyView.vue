@@ -1,7 +1,19 @@
 <script setup>
 import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter, RouterLink, onBeforeRouteLeave } from 'vue-router';
-import { CalendarSearch, CalendarX, LoaderCircle, Send, LogOut, TriangleAlert } from 'lucide-vue-next';
+import {
+  CalendarSearch,
+  CalendarX,
+  LoaderCircle,
+  Send,
+  LogOut,
+  TriangleAlert,
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  Pencil,
+  History,
+} from 'lucide-vue-next';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import FormField from '@/components/ui/FormField.vue';
 import ChoiceChips from '@/components/ui/ChoiceChips.vue';
@@ -21,6 +33,7 @@ import {
   eventLink,
   platformLabel,
   typeOptions,
+  typeLabel,
   inviteFrom,
   isFull,
   validateCharacterDraft,
@@ -61,6 +74,20 @@ const snapshot = ref('');
 
 const confirmWithdraw = ref(false);
 const withdrawing = ref(false);
+
+// ---------- Steps ----------
+const STEPS = [
+  { key: 'you', title: 'About you' },
+  { key: 'characters', title: 'Characters' },
+  { key: 'prefs', title: 'Preferences' },
+  { key: 'review', title: 'Review and send' },
+];
+const REVIEW = STEPS.length - 1;
+// Which step each answer is on, for sending people back to fix it
+const STEP_OF = { communityUsername: 0, canCreate: 0, wantsTypes: 0, characters: 1, likes: 2, avoid: 2, cannotDraw: 2, notes: 2 };
+
+const step = ref(0);
+const reached = ref(0); // furthest step opened so far; the indicator lets you jump back to any of them
 
 const invite = computed(() => inviteFrom(route));
 const backTo = computed(() =>
@@ -124,7 +151,60 @@ function prefill() {
   errors.value = {};
   newErrors.value = [];
   snapshot.value = currentState();
+  // Changing a sign-up starts on the summary, with every step a click away
+  step.value = existing.value ? REVIEW : 0;
+  reached.value = existing.value ? REVIEW : 0;
 }
+
+// ---------- Draft kept in this browser ----------
+// Answers are saved as you type, so closing the tab by mistake loses nothing.
+const draftKey = computed(() => `drawsicle:signup-draft:${route.params.id}`);
+const draftFound = ref(null); // { savedAt } when there's a draft that differs from the form
+
+function readDraft() {
+  try {
+    const draft = JSON.parse(localStorage.getItem(draftKey.value) || 'null');
+    return draft && draft.state ? draft : null;
+  } catch {
+    return null;
+  }
+}
+function clearDraft() {
+  try {
+    localStorage.removeItem(draftKey.value);
+  } catch {
+    // Nothing to clear
+  }
+  draftFound.value = null;
+}
+function restoreDraft() {
+  const draft = readDraft();
+  if (!draft) return;
+  const { form: saved, ids, drafts } = JSON.parse(draft.state);
+  Object.assign(form, saved, { saveAsDefault: Boolean(saved.saveAsDefault) });
+  // Characters deleted since the draft was saved are left out
+  selectedIds.value = (ids || []).filter((id) => library.value.some((c) => c.id === id) || application.value?.offeredCharacterIds?.includes(id));
+  newCharacters.value = drafts || [];
+  draftFound.value = null;
+  toast.info('Your draft is back. Check it over before sending.');
+}
+let draftTimer = null;
+watch(
+  () => currentState(),
+  (state) => {
+    if (!snapshot.value || savedOnce.value || draftFound.value) return;
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(() => {
+      try {
+        if (state === snapshot.value) localStorage.removeItem(draftKey.value);
+        else localStorage.setItem(draftKey.value, JSON.stringify({ state, savedAt: new Date().toISOString() }));
+      } catch {
+        // Private browsing or full storage: the draft just isn't kept
+      }
+    }, 400);
+  }
+);
+onBeforeUnmount(() => clearTimeout(draftTimer));
 
 function loginRedirect() {
   router.replace({ name: 'login', query: { redirect: route.fullPath } });
@@ -154,6 +234,8 @@ async function load() {
     library.value = charRes.value.characters || [];
     document.title = `Sign up: ${event.value.name} · Drawsicle`;
     prefill();
+    const draft = readDraft();
+    if (draft && draft.state !== snapshot.value && !closedReason.value) draftFound.value = { savedAt: draft.savedAt };
   }
   loading.value = false;
 }
@@ -195,6 +277,58 @@ function validate() {
   return Object.keys(e).length === 0;
 }
 
+const stepErrors = (index) => Object.keys(errors.value).filter((key) => STEP_OF[key] === index);
+
+const STEP_FIELD_IDS = {
+  communityUsername: 'apply-community',
+  likes: 'apply-likes',
+  avoid: 'apply-avoid',
+  notes: 'apply-notes',
+};
+
+async function showStep(index, { focusField } = {}) {
+  step.value = index;
+  reached.value = Math.max(reached.value, index);
+  await nextTick();
+  const target = (focusField && document.getElementById(STEP_FIELD_IDS[focusField])) || document.getElementById(`step-heading-${index}`);
+  target?.focus();
+  document.querySelector('.stepper')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Moving on checks this step's answers only; the others are checked when you get to them
+function next() {
+  validate();
+  const problems = stepErrors(step.value);
+  // Keep showing only this step's problems, so later steps don't open with red errors
+  errors.value = Object.fromEntries(problems.map((key) => [key, errors.value[key]]));
+  if (step.value !== 1) newErrors.value = newCharacters.value.map(() => ({}));
+  if (problems.length) {
+    submitError.value = null;
+    nextTick(() => document.getElementById(STEP_FIELD_IDS[problems[0]] || `step-heading-${step.value}`)?.focus());
+    return;
+  }
+  submitError.value = null;
+  showStep(Math.min(step.value + 1, REVIEW));
+}
+
+function back() {
+  if (step.value > 0) showStep(step.value - 1);
+}
+
+// The indicator only jumps to steps you've already opened
+function goTo(index) {
+  if (index <= reached.value && index !== step.value) showStep(index);
+}
+
+// ---------- Review ----------
+const characterNames = computed(() => {
+  const known = [...library.value, ...(application.value?.offeredCharacters || [])];
+  const picked = selectedIds.value.map((id) => known.find((c) => c.id === id)?.name).filter(Boolean);
+  const added = newCharacters.value.map((c) => (c.name || '').trim()).filter(Boolean).map((name) => `${name} (new)`);
+  return [...picked, ...added];
+});
+const typesText = (list) => list.map(typeLabel).join(', ') || 'None picked';
+
 const SUBMIT_ERRORS = {
   SIGNUPS_CLOSED: {
     title: 'Sign-ups have closed',
@@ -217,9 +351,16 @@ async function focusSummary() {
 }
 
 async function submit() {
+  // Enter in a text box on an earlier step means "next", not "send"
+  if (step.value < REVIEW) return next();
   submitError.value = null;
   if (!validate()) {
     submitError.value = { title: 'Check your answers', message: 'Some answers need fixing before you can send this.' };
+    const first = Math.min(...Object.keys(errors.value).map((key) => STEP_OF[key] ?? REVIEW));
+    if (first < REVIEW) {
+      const key = Object.keys(errors.value).find((k) => STEP_OF[k] === first);
+      return showStep(first, { focusField: key });
+    }
     return focusSummary();
   }
 
@@ -244,6 +385,7 @@ async function submit() {
       body,
     });
     savedOnce.value = true;
+    clearDraft();
     if (form.saveAsDefault && auth.user) {
       const { communityUsername, canCreate, wantsTypes, likes, avoid, cannotDraw } = body;
       setUser({ ...auth.user, defaultForm: { communityUsername, canCreate, wantsTypes, likes, avoid, cannotDraw } });
@@ -270,6 +412,7 @@ async function withdraw() {
   try {
     await api(`/events/${route.params.id}/application${qs({ invite: invite.value })}`, { method: 'DELETE' });
     savedOnce.value = true;
+    clearDraft();
     confirmWithdraw.value = false;
     toast.success("You've withdrawn from this event.");
     router.push(backTo.value);
@@ -351,6 +494,41 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
           The organisers review each sign-up for this event. You'll get a notification once they've decided.
         </p>
 
+        <div v-if="draftFound" class="alert alert-info draft" role="status">
+          <History :size="18" aria-hidden="true" />
+          <span class="draft-text">You started filling this in earlier. Pick up where you left off?</span>
+          <span class="draft-actions">
+            <button type="button" class="btn btn-primary btn-xs" @click="restoreDraft">Restore my draft</button>
+            <button type="button" class="btn btn-ghost btn-xs" @click="clearDraft">Start fresh</button>
+          </span>
+        </div>
+
+        <nav class="stepper" aria-label="Sign-up steps">
+          <ol>
+            <li
+              v-for="(s, i) in STEPS"
+              :key="s.key"
+              class="stepper-item"
+              :class="{ current: i === step, done: i < step || (i <= reached && i !== step) }"
+            >
+              <button
+                type="button"
+                class="stepper-btn"
+                :disabled="i > reached"
+                :aria-current="i === step ? 'step' : undefined"
+                @click="goTo(i)"
+              >
+                <span class="stepper-num" aria-hidden="true">
+                  <Check v-if="i < step" :size="14" :stroke-width="3" />
+                  <template v-else>{{ i + 1 }}</template>
+                </span>
+                <span class="stepper-label">{{ s.title }}</span>
+                <span class="sr-only">{{ i === step ? '(current step)' : i < step ? '(done)' : '' }}</span>
+              </button>
+            </li>
+          </ol>
+        </nav>
+
         <div
           v-if="submitError"
           ref="errorSummary"
@@ -362,52 +540,54 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
           <p class="summary-text">{{ submitError.message }}</p>
         </div>
 
-        <section class="card section" aria-labelledby="sec-you">
-          <h2 id="sec-you" class="section-title">About you</h2>
-          <FormField
-            :label="`Your username on ${communityName}`"
-            :hint="
-              event.platformName
-                ? `So the organisers can find you in ${event.platformName}.`
-                : 'So the organisers can find you in the community.'
-            "
-            :error="errors.communityUsername"
-            for-id="apply-community"
-            required
-          >
-            <div class="input-wrap">
-              <input
-                id="apply-community"
-                v-model="form.communityUsername"
-                class="input"
-                type="text"
-                autocomplete="off"
-                :maxlength="LIMITS.communityUsername"
-                :aria-invalid="Boolean(errors.communityUsername)"
-                required
-              />
-            </div>
-          </FormField>
-        </section>
+        <div v-show="step === 0" class="step-panel">
+          <section class="card section" aria-labelledby="step-heading-0">
+            <h2 id="step-heading-0" class="section-title" tabindex="-1">About you</h2>
+            <FormField
+              :label="`Your username on ${communityName}`"
+              :hint="
+                event.platformName
+                  ? `So the organisers can find you in ${event.platformName}.`
+                  : 'So the organisers can find you in the community.'
+              "
+              :error="errors.communityUsername"
+              for-id="apply-community"
+              required
+            >
+              <div class="input-wrap">
+                <input
+                  id="apply-community"
+                  v-model="form.communityUsername"
+                  class="input"
+                  type="text"
+                  autocomplete="off"
+                  :maxlength="LIMITS.communityUsername"
+                  :aria-invalid="Boolean(errors.communityUsername)"
+                  required
+                />
+              </div>
+            </FormField>
+          </section>
 
-        <section class="card section" aria-labelledby="sec-types">
-          <h2 id="sec-types" class="section-title">Making and receiving</h2>
-          <fieldset class="group">
-            <legend id="legend-can" class="label">What can you make? <span class="req" aria-hidden="true">*</span></legend>
-            <p class="hint">Pick everything you're happy to make for someone.</p>
-            <ChoiceChips v-model="form.canCreate" :options="typeChoices" aria-labelledby="legend-can" />
-            <p v-if="errors.canCreate" class="field-error">{{ errors.canCreate }}</p>
-          </fieldset>
-          <fieldset class="group">
-            <legend id="legend-wants" class="label">What would you like to receive? <span class="req" aria-hidden="true">*</span></legend>
-            <p class="hint">You'll only be matched with someone who can make at least one of these.</p>
-            <ChoiceChips v-model="form.wantsTypes" :options="typeChoices" aria-labelledby="legend-wants" />
-            <p v-if="errors.wantsTypes" class="field-error">{{ errors.wantsTypes }}</p>
-          </fieldset>
-        </section>
+          <section class="card section" aria-labelledby="sec-types">
+            <h2 id="sec-types" class="section-title">Making and receiving</h2>
+            <fieldset class="group">
+              <legend id="legend-can" class="label">What can you make? <span class="req" aria-hidden="true">*</span></legend>
+              <p class="hint">Pick everything you're happy to make for someone.</p>
+              <ChoiceChips v-model="form.canCreate" :options="typeChoices" aria-labelledby="legend-can" />
+              <p v-if="errors.canCreate" class="field-error">{{ errors.canCreate }}</p>
+            </fieldset>
+            <fieldset class="group">
+              <legend id="legend-wants" class="label">What would you like to receive? <span class="req" aria-hidden="true">*</span></legend>
+              <p class="hint">You'll only be matched with someone who can make at least one of these.</p>
+              <ChoiceChips v-model="form.wantsTypes" :options="typeChoices" aria-labelledby="legend-wants" />
+              <p v-if="errors.wantsTypes" class="field-error">{{ errors.wantsTypes }}</p>
+            </fieldset>
+          </section>
+        </div>
 
-        <section class="card section" aria-labelledby="sec-chars">
-          <h2 id="sec-chars" class="section-title">Characters to offer</h2>
+        <section v-show="step === 1" class="card section" aria-labelledby="step-heading-1">
+          <h2 id="step-heading-1" class="section-title" tabindex="-1">Characters to offer</h2>
           <p class="hint section-hint">
             Your Secret Santa will make something featuring one or more of these. Offer
             {{ LIMITS.offeredCharactersMin }} to {{ LIMITS.offeredCharactersMax }} characters.
@@ -423,67 +603,110 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
           />
         </section>
 
-        <section class="card section" aria-labelledby="sec-prefs">
-          <h2 id="sec-prefs" class="section-title">Your preferences</h2>
-          <FormField
-            label="What would you love to get?"
-            :hint="`Themes, moods, styles or ideas. ${counter(form.likes)}`"
-            :error="errors.likes"
-            for-id="apply-likes"
-          >
-            <div class="input-wrap">
-              <textarea
-                id="apply-likes"
-                v-model="form.likes"
-                class="textarea short"
-                :maxlength="LIMITS.formText"
-                placeholder="Cosy scenes, soft colours, my character with their cat…"
+        <div v-show="step === 2" class="step-panel">
+          <section class="card section" aria-labelledby="step-heading-2">
+            <h2 id="step-heading-2" class="section-title" tabindex="-1">Your preferences</h2>
+            <FormField
+              label="What would you love to get?"
+              :hint="`Themes, moods, styles or ideas. ${counter(form.likes)}`"
+              :error="errors.likes"
+              for-id="apply-likes"
+            >
+              <div class="input-wrap">
+                <textarea
+                  id="apply-likes"
+                  v-model="form.likes"
+                  class="textarea short"
+                  :maxlength="LIMITS.formText"
+                  placeholder="Cosy scenes, soft colours, my character with their cat…"
+                />
+              </div>
+            </FormField>
+            <FormField
+              label="Anything to avoid?"
+              :hint="`Things you'd rather not see in your gift. ${counter(form.avoid)}`"
+              :error="errors.avoid"
+              for-id="apply-avoid"
+            >
+              <div class="input-wrap">
+                <textarea
+                  id="apply-avoid"
+                  v-model="form.avoid"
+                  class="textarea short"
+                  :maxlength="LIMITS.formText"
+                  placeholder="Horror, gore, heavy shading…"
+                />
+              </div>
+            </FormField>
+            <FormField
+              label="What can't you draw?"
+              hint="Species or tags you can't draw, like “mecha” or “feral”. We use these so you're never matched with characters you can't draw. Press Enter or comma after each one."
+              :error="errors.cannotDraw"
+              for-id="apply-cannot-draw"
+            >
+              <TagInput
+                id="apply-cannot-draw"
+                v-model="form.cannotDraw"
+                :max="LIMITS.tags"
+                placeholder="Add a species or tag"
               />
-            </div>
-          </FormField>
-          <FormField
-            label="Anything to avoid?"
-            :hint="`Things you'd rather not see in your gift. ${counter(form.avoid)}`"
-            :error="errors.avoid"
-            for-id="apply-avoid"
-          >
-            <div class="input-wrap">
-              <textarea
-                id="apply-avoid"
-                v-model="form.avoid"
-                class="textarea short"
-                :maxlength="LIMITS.formText"
-                placeholder="Horror, gore, heavy shading…"
-              />
-            </div>
-          </FormField>
-          <FormField
-            label="What can't you draw?"
-            hint="Species or tags you can't draw, like “mecha” or “feral”. We use these so you're never matched with characters you can't draw. Press Enter or comma after each one."
-            :error="errors.cannotDraw"
-            for-id="apply-cannot-draw"
-          >
-            <TagInput
-              id="apply-cannot-draw"
-              v-model="form.cannotDraw"
-              :max="LIMITS.tags"
-              placeholder="Add a species or tag"
-            />
-          </FormField>
-        </section>
+            </FormField>
 
-        <section class="card section" aria-labelledby="sec-notes">
-          <h2 id="sec-notes" class="section-title">Anything else</h2>
-          <FormField
-            label="Notes for the organisers"
-            :hint="`Only the organisers see this. ${counter(form.notes)}`"
-            :error="errors.notes"
-            for-id="apply-notes"
-          >
-            <div class="input-wrap">
-              <textarea id="apply-notes" v-model="form.notes" class="textarea short" :maxlength="LIMITS.formText" />
+            <FormField
+              label="Notes for the organisers"
+              :hint="`Only the organisers see this. ${counter(form.notes)}`"
+              :error="errors.notes"
+              for-id="apply-notes"
+            >
+              <div class="input-wrap">
+                <textarea id="apply-notes" v-model="form.notes" class="textarea short" :maxlength="LIMITS.formText" />
+              </div>
+            </FormField>
+          </section>
+        </div>
+
+        <section v-show="step === REVIEW" class="card section" aria-labelledby="step-heading-3">
+          <h2 id="step-heading-3" class="section-title" tabindex="-1">Review and send</h2>
+          <p class="hint section-hint">Check everything looks right. Organisers see all of this; your Secret Santa sees everything but the notes.</p>
+          <div class="review">
+            <div class="review-block">
+              <div class="review-head">
+                <h3 class="review-title">About you</h3>
+                <button type="button" class="btn btn-ghost btn-xs" @click="showStep(0)">
+                  <Pencil :size="14" aria-hidden="true" /> Edit<span class="sr-only"> about you</span>
+                </button>
+              </div>
+              <dl class="review-list">
+                <div><dt>Username on {{ communityName }}</dt><dd>{{ form.communityUsername.trim() || 'Not given' }}</dd></div>
+                <div><dt>You can make</dt><dd>{{ typesText(form.canCreate) }}</dd></div>
+                <div><dt>You'd like</dt><dd>{{ typesText(form.wantsTypes) }}</dd></div>
+              </dl>
             </div>
-          </FormField>
+            <div class="review-block">
+              <div class="review-head">
+                <h3 class="review-title">Characters</h3>
+                <button type="button" class="btn btn-ghost btn-xs" @click="showStep(1)">
+                  <Pencil :size="14" aria-hidden="true" /> Edit<span class="sr-only"> characters</span>
+                </button>
+              </div>
+              <p v-if="characterNames.length" class="review-text">{{ characterNames.join(', ') }}</p>
+              <p v-else class="review-text muted">No characters picked yet.</p>
+            </div>
+            <div class="review-block">
+              <div class="review-head">
+                <h3 class="review-title">Preferences</h3>
+                <button type="button" class="btn btn-ghost btn-xs" @click="showStep(2)">
+                  <Pencil :size="14" aria-hidden="true" /> Edit<span class="sr-only"> preferences</span>
+                </button>
+              </div>
+              <dl class="review-list">
+                <div><dt>You'd love</dt><dd class="pre">{{ form.likes.trim() || 'Nothing in particular' }}</dd></div>
+                <div><dt>Please avoid</dt><dd class="pre">{{ form.avoid.trim() || 'Nothing in particular' }}</dd></div>
+                <div><dt>Can't draw</dt><dd>{{ form.cannotDraw.join(', ') || 'Nothing listed' }}</dd></div>
+                <div v-if="form.notes.trim()"><dt>Notes for organisers</dt><dd class="pre">{{ form.notes.trim() }}</dd></div>
+              </dl>
+            </div>
+          </div>
 
           <label class="check">
             <input v-model="form.saveAsDefault" type="checkbox" />
@@ -495,12 +718,18 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
         </section>
 
         <div class="form-actions">
-          <button type="submit" class="btn btn-primary submit" :disabled="saving">
+          <button v-if="step > 0" type="button" class="btn btn-outline" :disabled="saving" @click="back">
+            <ArrowLeft :size="18" aria-hidden="true" /> Back
+          </button>
+          <button v-if="step < REVIEW" type="button" class="btn btn-primary submit" @click="next">
+            Next: {{ STEPS[step + 1].title }} <ArrowRight :size="18" aria-hidden="true" />
+          </button>
+          <button v-else type="submit" class="btn btn-primary submit" :disabled="saving">
             <LoaderCircle v-if="saving" :size="18" class="spin" aria-hidden="true" />
             <Send v-else :size="18" aria-hidden="true" />
             {{ existing ? 'Save changes' : 'Send sign-up' }}
           </button>
-          <RouterLink :to="backTo" class="btn btn-outline">Cancel</RouterLink>
+          <RouterLink :to="backTo" class="btn btn-ghost">Cancel</RouterLink>
           <button
             v-if="existing"
             type="button"
@@ -557,6 +786,134 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
   gap: 10px;
   background: var(--warning-soft);
   color: var(--warning);
+}
+.draft {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0;
+}
+.draft-text {
+  flex: 1 1 240px;
+}
+.draft-actions {
+  display: flex;
+  gap: 6px;
+}
+.stepper ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.stepper-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.stepper-btn:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.stepper-btn:not(:disabled):hover {
+  border-color: var(--pink-line);
+}
+.stepper-num {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--chip);
+  font-size: 0.85rem;
+}
+.done .stepper-num {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.current .stepper-btn {
+  border-color: var(--pink);
+  color: var(--text);
+}
+.current .stepper-num {
+  background: var(--pink);
+  color: #fff;
+}
+.stepper-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+.step-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.section-title:focus {
+  outline: none;
+}
+.review {
+  display: flex;
+  flex-direction: column;
+}
+.review-block {
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+}
+.review-block:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.review-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.review-title {
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 700;
+}
+.review-list {
+  margin: 8px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.review-list div {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 12px;
+}
+.review-list dt {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.review-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.review-text {
+  margin: 8px 0 0;
+}
+.pre {
+  white-space: pre-line;
 }
 .summary {
   outline: none;
@@ -651,6 +1008,21 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
 @media (max-width: 640px) {
   .section {
     padding: 20px 16px 22px;
+  }
+  .stepper ol {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+  }
+  .stepper-btn {
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 4px;
+    text-align: center;
+    font-size: 0.78rem;
+  }
+  .review-list div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
   }
   .form-actions {
     flex-direction: column;
