@@ -89,7 +89,8 @@ test('public profiles show public events, stats and socials, never private detai
   assert.deepEqual(organizing.map((e) => e.name), [newer.name, older.name]);
   assert.equal(organizing[0].viewer, null);
   assert.equal(organizing[0].inviteCode, undefined);
-  assert.deepEqual(stats, { eventsOrganized: 2, exchangesCompleted: 2 });
+  // Only public exchanges count, matching the list on the page (Done B is private)
+  assert.deepEqual(stats, { eventsOrganized: 2, exchangesCompleted: 1 });
 
   // Logged in: events carry the viewer, and the id works as well as the username
   const asViewer = await viewer.agent.get(`/api/users/${mika.id}`).expect(200);
@@ -158,6 +159,52 @@ test('the short public profile hides banned accounts too', async () => {
   for (const handle of ['mika_draws', mika.id]) {
     assert.equal((await h.request(app).get(`/api/profile/${handle}`).expect(404)).body.code, 'NOT_FOUND');
   }
+});
+
+test('exchanges joined: finished public exchanges they were accepted into, newest first', async () => {
+  const mika = await signUpAs('Mika', { username: 'mika_draws' });
+  const other = await signUpAs('Other');
+  const done = (name, completedDaysAgo, extra = {}) =>
+    makeEvent(other.id, { name, status: 'completed', completedAt: h.daysFromNow(-completedDaysAgo), ...extra });
+
+  await signUpFor(await done('Older Swap', 30), mika.id);
+  await signUpFor(await done('Newer Swap', 2), mika.id);
+  await signUpFor(await done('Private Swap', 5, { publicity: 'private' }), mika.id);
+  await signUpFor(await done('Pulled Swap', 6, { disabledAt: new Date() }), mika.id);
+  await signUpFor(await done('Rejected Swap', 7), mika.id, 'rejected');
+  await signUpFor(await done('Withdrawn Swap', 8), mika.id, 'withdrawn');
+  await signUpFor(await makeEvent(other.id, { name: 'Running Swap', status: 'active' }), mika.id);
+  await signUpFor(await makeEvent(other.id, { name: 'Called Off', status: 'cancelled' }), mika.id);
+  await done('Not Joined', 1);
+
+  const { body } = await h.request(app).get('/api/users/mika_draws').expect(200);
+  assert.deepEqual(body.exchanges.map((e) => e.name), ['Newer Swap', 'Older Swap']);
+  assert.equal(body.exchanges[0].viewer, null);
+  assert.equal(body.exchanges[0].inviteCode, undefined);
+  assert.equal(body.stats.exchangesCompleted, 2);
+});
+
+test('exchanges joined: at most 12, with the full count in the stats', async () => {
+  const mika = await signUpAs('Mika', { username: 'mika_draws' });
+  const other = await signUpAs('Other');
+  for (let i = 0; i < 14; i++) {
+    await signUpFor(await makeEvent(other.id, { name: `Swap ${i}`, status: 'completed', completedAt: h.daysFromNow(-i) }), mika.id);
+  }
+  const { body } = await h.request(app).get('/api/users/mika_draws').expect(200);
+  assert.equal(body.exchanges.length, 12);
+  assert.equal(body.exchanges[0].name, 'Swap 0');
+  assert.equal(body.stats.exchangesCompleted, 14);
+});
+
+test('exchanges joined: hiding them leaves out the list and the count', async () => {
+  const mika = await signUpAs('Mika', { username: 'mika_draws' });
+  const other = await signUpAs('Other');
+  await signUpFor(await makeEvent(other.id, { name: 'Done', status: 'completed' }), mika.id);
+  await mika.agent.patch('/api/profile').send({ profilePrivacy: { showExchanges: false } }).expect(200);
+
+  const { body } = await h.request(app).get('/api/users/mika_draws').expect(200);
+  assert.equal(body.exchanges, undefined);
+  assert.deepEqual(body.stats, { eventsOrganized: 0 });
 });
 
 test('profiles list at most 12 events', async () => {
