@@ -16,6 +16,9 @@ import {
   TriangleAlert,
   CircleCheck,
   Hourglass,
+  Printer,
+  Link as LinkIcon,
+  CalendarPlus,
 } from 'lucide-vue-next';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
@@ -28,6 +31,7 @@ import CharacterCard from '@/components/characters/CharacterCard.vue';
 import { api, qs } from '@/api';
 import { toast } from '@/stores/toast';
 import { formatDateTime } from '@/utils/format';
+import { eventCalendarEntries, downloadIcs } from '@/utils/calendar';
 import {
   eventLink,
   inviteFrom,
@@ -117,6 +121,35 @@ const community = computed(() => {
 // Characters were offered for this event, so an "archived" flag from the owner's library means nothing here
 const characters = computed(() => (recipient.value?.characters || []).map((c) => ({ ...c, archived: false })));
 
+// Every reference link of every character, one per line, for pasting into notes or a moodboard
+const referenceLines = computed(() =>
+  characters.value.flatMap((c) =>
+    (c.referenceLinks || [])
+      .filter((l) => /^https?:\/\//i.test(String(l.url || '')))
+      .map((l) => `${c.name}${l.label ? ` (${l.label})` : ''}: ${l.url}`)
+  )
+);
+
+async function copyReferences() {
+  const ok = await copyText(referenceLines.value.join('\n'));
+  if (ok) toast.success(`Copied ${referenceLines.value.length === 1 ? 'the link' : `${referenceLines.value.length} links`}.`);
+  else toast.error("Couldn't copy them. You can open each character's links instead.");
+}
+
+const calendarEntries = computed(() =>
+  isActive.value && event.value ? eventCalendarEntries(event.value, { kinds: ['submission'] }) : []
+);
+
+function addToCalendar() {
+  if (!downloadIcs(`${event.value.name} gift deadline`, calendarEntries.value)) {
+    toast.error("Couldn't create the calendar file.");
+  }
+}
+
+function printSheet() {
+  window.print();
+}
+
 async function copyUsername() {
   const ok = await copyText(recipient.value.communityUsername);
   if (ok) toast.success('Username copied.');
@@ -155,6 +188,9 @@ async function copyUsername() {
       </EmptyState>
 
       <template v-else-if="match && recipient">
+        <p class="print-only print-head">
+          {{ event.name }} · Gift for {{ recipient.displayName }} · Due {{ formatDateTime(deadline) }}
+        </p>
         <section class="card hero" aria-labelledby="recipient-heading">
           <p class="eyebrow">
             <Gift :size="18" aria-hidden="true" /> {{ isCompleted ? 'You made a gift for' : "You're making a gift for" }}
@@ -283,6 +319,33 @@ async function copyUsername() {
                 </RouterLink>
               </div>
               <p v-if="isCompleted" class="muted small">This event has finished, so gifts can no longer be changed.</p>
+            </section>
+
+            <section class="card panel tools" aria-labelledby="tools-heading">
+              <h2 id="tools-heading" class="panel-title small-title">Keep it handy</h2>
+              <button type="button" class="btn btn-outline btn-sm btn-block" @click="printSheet">
+                <Printer :size="16" aria-hidden="true" /> Print or save as PDF
+              </button>
+              <button
+                type="button"
+                class="btn btn-outline btn-sm btn-block"
+                :disabled="!referenceLines.length"
+                @click="copyReferences"
+              >
+                <LinkIcon :size="16" aria-hidden="true" /> Copy all reference links
+              </button>
+              <button
+                v-if="calendarEntries.length"
+                type="button"
+                class="btn btn-outline btn-sm btn-block"
+                @click="addToCalendar"
+              >
+                <CalendarPlus :size="16" aria-hidden="true" /> Add the deadline to your calendar
+              </button>
+              <p class="muted small">
+                The printout is a one-page reference sheet: their wishes, characters and links, without the site around
+                it.
+              </p>
             </section>
           </aside>
         </div>
@@ -490,6 +553,68 @@ async function copyUsername() {
   flex-direction: column;
   gap: 10px;
 }
+.tools {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tools .panel-title {
+  margin-bottom: 2px;
+}
+.print-only {
+  display: none;
+}
+
+/* The reference sheet: just the recipient, their wishes and characters, with link addresses written out */
+@media print {
+  .print-only {
+    display: block;
+  }
+  .print-head {
+    margin: 0 0 12px;
+    font-weight: 700;
+    color: #000;
+  }
+  :deep(.page-header),
+  .tools,
+  .actions,
+  .community .btn,
+  .status-panel .alert {
+    display: none !important;
+  }
+  .hero {
+    background: none;
+    padding: 0 0 12px;
+    border: 0;
+  }
+  .layout {
+    display: block;
+    margin-top: 12px;
+  }
+  .side-col {
+    position: static;
+  }
+  .panel {
+    padding: 12px 0;
+    border: 0;
+    break-inside: avoid;
+  }
+  .characters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .characters :deep(.character-card) {
+    break-inside: avoid;
+  }
+  .characters :deep(.ref-link)::after {
+    content: ' ' attr(href);
+    font-weight: 400;
+    word-break: break-all;
+  }
+  .characters :deep(.ref-link span:not(.sr-only)) {
+    max-width: none;
+  }
+}
+
 @media (max-width: 960px) {
   .layout {
     grid-template-columns: minmax(0, 1fr);
