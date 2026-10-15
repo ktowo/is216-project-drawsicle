@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { ExternalLink, ImageOff } from 'lucide-vue-next';
 import ImageLightbox from './ImageLightbox.vue';
+import ContentWarningGate from './ContentWarningGate.vue';
 import { assetUrl } from '@/api';
 import { safeUrl, linkHost, typeLabel } from '@/utils/events';
 import { formatDateTime } from '@/utils/format';
@@ -19,10 +20,11 @@ const lightboxIndex = ref(0);
 const brokenImages = ref(new Set());
 
 const images = computed(() =>
-  (props.submission.images || []).map((url) => ({
+  (props.submission.images || []).map((url, i) => ({
     url,
     title: props.submission.title || 'Untitled gift',
     caption: props.caption,
+    alt: props.submission.imageDescriptions?.[i] || '',
   }))
 );
 
@@ -44,7 +46,8 @@ function markBroken(i) {
 
 <template>
   <div class="submission">
-    <div v-if="images.length" class="images" :class="`count-${Math.min(images.length, 4)}`">
+    <ContentWarningGate v-if="images.length" :warnings="submission.contentWarnings || []">
+    <div class="images" :class="`count-${Math.min(images.length, 4)}`">
       <button
         v-for="(img, i) in images"
         :key="img.url"
@@ -57,9 +60,10 @@ function markBroken(i) {
           <ImageOff :size="22" aria-hidden="true" />
           <span>Image unavailable</span>
         </span>
-        <img v-else :src="assetUrl(img.url)" alt="" loading="lazy" @error="markBroken(i)" />
+        <img v-else :src="assetUrl(img.url)" :alt="img.alt" loading="lazy" @error="markBroken(i)" />
       </button>
     </div>
+    </ContentWarningGate>
 
     <div class="text">
       <div v-if="showTitle || submission.type" class="title-row">

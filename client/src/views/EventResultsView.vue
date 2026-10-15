@@ -11,6 +11,7 @@ import PersonLink from '@/components/events/PersonLink.vue';
 import EventBanner from '@/components/events/EventBanner.vue';
 import SubmissionDetails from '@/components/events/SubmissionDetails.vue';
 import SubmissionGallery from '@/components/events/SubmissionGallery.vue';
+import ThanksBox from '@/components/events/ThanksBox.vue';
 import { api, qs } from '@/api';
 import { EVENT_STATUS_LABELS, CREATION_TYPES } from '@shared/constants.mjs';
 import { formatDate, pluralize } from '@/utils/format';
@@ -106,6 +107,14 @@ const gallery = computed(() => results.value?.gallery || []);
 const submittedCount = computed(() => gallery.value.filter((g) => g.submission).length);
 const nameOf = (user) => user?.displayName || 'Someone';
 
+// A thank-you was saved: show it on my gift and in the gallery
+function onThanked(submission) {
+  if (results.value?.received?.submission?.id === submission.id) results.value.received.submission = submission;
+  for (const item of results.value?.gallery || []) {
+    if (item.submission?.id === submission.id) item.submission = submission;
+  }
+}
+
 // Filter the gallery by kind of gift, when there's more than one kind to choose from
 const typeFilter = ref('all');
 const typeOptions = computed(() => {
@@ -192,6 +201,14 @@ const confetti = Array.from({ length: 30 }, (_, i) => ({
             :submission="received.submission"
             :caption="`From ${nameOf(received.giver)} to you`"
           />
+          <ThanksBox
+            v-if="received.submission"
+            :event-id="event.id"
+            :submission="received.submission"
+            :name="nameOf(received.giver)"
+            mine
+            @saved="onThanked"
+          />
           <p v-else class="muted">
             {{ nameOf(received.giver) }} didn't submit a gift for you this time. The organisers may be in touch about it.
           </p>
@@ -212,6 +229,12 @@ const confetti = Array.from({ length: 30 }, (_, i) => ({
             v-if="given.submission"
             :submission="given.submission"
             :caption="`From you to ${nameOf(given.recipient)}`"
+          />
+          <ThanksBox
+            v-if="given.submission?.thanks"
+            :event-id="event.id"
+            :submission="given.submission"
+            :name="nameOf(given.recipient)"
           />
           <p v-else class="muted">You didn't submit a gift for {{ nameOf(given.recipient) }}.</p>
         </section>

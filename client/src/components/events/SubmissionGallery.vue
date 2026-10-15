@@ -3,9 +3,11 @@ import { ref, computed } from 'vue';
 import { RouterLink } from 'vue-router';
 import { ArrowRight, ExternalLink, FileText, Palette, Gift, Images } from 'lucide-vue-next';
 import ImageLightbox from './ImageLightbox.vue';
+import ContentWarningGate from './ContentWarningGate.vue';
 import PersonLink from './PersonLink.vue';
 import { assetUrl } from '@/api';
 import { safeUrl, linkHost, typeLabel } from '@/utils/events';
+import { REACTIONS } from '@shared/constants.mjs';
 
 // Every pair's gift after the reveal. items: [{ giver, recipient, submission | null, event? }]
 // With event ({ id, name }) each tile also says which exchange it was for (artist profiles).
@@ -19,6 +21,7 @@ const lightboxOpen = ref(false);
 const lightboxIndex = ref(0);
 
 const nameOf = (user) => user?.displayName || 'Someone';
+const reactionOf = (submission) => REACTIONS.find((r) => r.value === submission?.thanks?.reaction) || null;
 
 // Submitted gifts first, then the ones that never arrived
 const sorted = computed(() => [...props.items].sort((a, b) => Number(!a.submission) - Number(!b.submission)));
@@ -27,13 +30,14 @@ const sorted = computed(() => [...props.items].sort((a, b) => Number(!a.submissi
 const allImages = computed(() => {
   const list = [];
   for (const item of sorted.value) {
-    for (const url of item.submission?.images || []) {
+    (item.submission?.images || []).forEach((url, i) => {
       list.push({
         url,
         title: item.submission.title || 'Untitled gift',
         caption: `From ${nameOf(item.giver)} to ${nameOf(item.recipient)}`,
+        alt: item.submission.imageDescriptions?.[i] || '',
       });
-    }
+    });
   }
   return list;
 });
@@ -67,18 +71,27 @@ function open(tile) {
   <div>
     <ul class="gallery">
       <li v-for="tile in tiles" :key="tile.key" class="tile card" :class="{ missing: !tile.item.submission }">
-        <button
-          v-if="tile.cover"
-          type="button"
-          class="cover"
-          :aria-label="`View ${tile.item.submission.title || 'gift'} from ${nameOf(tile.item.giver)} full size`"
-          @click="open(tile)"
+        <ContentWarningGate v-if="tile.cover" :warnings="tile.item.submission.contentWarnings || []" compact>
+          <button
+            type="button"
+            class="cover"
+            :aria-label="`View ${tile.item.submission.title || 'gift'} from ${nameOf(tile.item.giver)} full size`"
+            @click="open(tile)"
+          >
+            <img :src="assetUrl(tile.cover)" alt="" loading="lazy" />
+            <span v-if="tile.imageCount > 1" class="more">
+              <Images :size="14" aria-hidden="true" /> {{ tile.imageCount }}
+            </span>
+          </button>
+        </ContentWarningGate>
+        <span
+          v-if="reactionOf(tile.item.submission)"
+          class="reaction"
+          :title="`${nameOf(tile.item.recipient)}: ${reactionOf(tile.item.submission).label}`"
         >
-          <img :src="assetUrl(tile.cover)" alt="" loading="lazy" />
-          <span v-if="tile.imageCount > 1" class="more">
-            <Images :size="14" aria-hidden="true" /> {{ tile.imageCount }}
-          </span>
-        </button>
+          <span aria-hidden="true">{{ reactionOf(tile.item.submission).emoji }}</span>
+          <span class="sr-only">{{ nameOf(tile.item.recipient) }} reacted: {{ reactionOf(tile.item.submission).label }}</span>
+        </span>
         <div v-else class="cover placeholder" aria-hidden="true">
           <component :is="tile.item.submission ? tile.icon : Gift" :size="34" :stroke-width="1.6" />
         </div>
@@ -133,6 +146,7 @@ function open(tile) {
   }
 }
 .tile {
+  position: relative;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -140,6 +154,19 @@ function open(tile) {
 }
 .tile.missing {
   opacity: 0.75;
+}
+.reaction {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  font-size: 1.1rem;
 }
 .cover {
   position: relative;

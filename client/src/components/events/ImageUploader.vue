@@ -24,7 +24,12 @@ const props = defineProps({
   disabled: { type: Boolean, default: false },
   id: { type: String, default: 'image-uploader' },
   describedBy: { type: String, default: undefined },
+  // Optional alt text per picture: a Map from the picture (its URL, or the new File) to its description.
+  // Typing in a description emits 'describe' (item, text); without the prop no description boxes show.
+  descriptions: { type: Map, default: null },
+  descriptionMax: { type: Number, default: LIMITS.imageDescription },
 });
+const emit = defineEmits(['describe']);
 
 const existing = defineModel('existing', { type: Array, default: () => [] });
 const files = defineModel('files', { type: Array, default: () => [] });
@@ -219,44 +224,59 @@ defineExpose({ open: () => input.value?.click() });
 <template>
   <div class="uploader">
     <ul v-if="total" class="previews" aria-label="Images in this submission, in order">
-      <li v-for="entry in items" :key="entry.key" class="preview">
-        <img v-if="entry.src" :src="entry.src" :alt="entry.uploaded ? `Uploaded image ${entry.index + 1}` : entry.label" />
-        <span v-if="entry.index === 0 && items.length > 1" class="tag cover-tag">Cover</span>
-        <span v-if="entry.uploaded" class="tag">Uploaded</span>
-        <span v-else class="tag new" :title="entry.file.name">{{ formatBytes(entry.file.size) }}</span>
-        <button
-          v-if="!disabled"
-          type="button"
-          class="remove"
-          :aria-label="`Remove ${entry.label}`"
-          @click="entry.uploaded ? removeExisting(entry.item) : removeFile(entry.item)"
-        >
-          <X :size="16" />
-        </button>
-        <div v-if="!disabled && items.length > 1" class="move">
+      <li v-for="entry in items" :key="entry.key" class="preview-item">
+        <div class="preview">
+          <img v-if="entry.src" :src="entry.src" :alt="entry.uploaded ? `Uploaded image ${entry.index + 1}` : entry.label" />
+          <span v-if="entry.index === 0 && items.length > 1" class="tag cover-tag">Cover</span>
+          <span v-if="entry.uploaded" class="tag">Uploaded</span>
+          <span v-else class="tag new" :title="entry.file.name">{{ formatBytes(entry.file.size) }}</span>
           <button
-            :id="`${id}-earlier-${entry.index}`"
+            v-if="!disabled"
             type="button"
-            class="move-btn"
-            :disabled="entry.index === 0"
-            :aria-label="`Move ${entry.label} earlier`"
-            title="Move earlier"
-            @click="move(entry.index, -1)"
+            class="remove"
+            :aria-label="`Remove ${entry.label}`"
+            @click="entry.uploaded ? removeExisting(entry.item) : removeFile(entry.item)"
           >
-            <ChevronLeft :size="16" />
+            <X :size="16" />
           </button>
-          <button
-            :id="`${id}-later-${entry.index}`"
-            type="button"
-            class="move-btn"
-            :disabled="entry.index === items.length - 1"
-            :aria-label="`Move ${entry.label} later`"
-            title="Move later"
-            @click="move(entry.index, 1)"
-          >
-            <ChevronRight :size="16" />
-          </button>
+          <div v-if="!disabled && items.length > 1" class="move">
+            <button
+              :id="`${id}-earlier-${entry.index}`"
+              type="button"
+              class="move-btn"
+              :disabled="entry.index === 0"
+              :aria-label="`Move ${entry.label} earlier`"
+              title="Move earlier"
+              @click="move(entry.index, -1)"
+            >
+              <ChevronLeft :size="16" />
+            </button>
+            <button
+              :id="`${id}-later-${entry.index}`"
+              type="button"
+              class="move-btn"
+              :disabled="entry.index === items.length - 1"
+              :aria-label="`Move ${entry.label} later`"
+              title="Move later"
+              @click="move(entry.index, 1)"
+            >
+              <ChevronRight :size="16" />
+            </button>
+          </div>
         </div>
+        <template v-if="descriptions && !disabled">
+          <label :for="`${id}-alt-${entry.index}`" class="sr-only">Describe {{ entry.label }}</label>
+          <textarea
+            :id="`${id}-alt-${entry.index}`"
+            class="alt-input"
+            rows="2"
+            :maxlength="descriptionMax"
+            placeholder="Describe it (for screen readers)"
+            :value="descriptions.get(entry.item) || ''"
+            @input="emit('describe', entry.item, $event.target.value)"
+          />
+        </template>
+        <p v-else-if="descriptions && descriptions.get(entry.item)" class="alt-text">{{ descriptions.get(entry.item) }}</p>
       </li>
     </ul>
     <p v-if="items.length > 1 && !disabled" class="hint order-hint">
@@ -325,7 +345,36 @@ defineExpose({ open: () => input.value?.click() });
   padding: 0;
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+}
+.preview-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.alt-input {
+  width: 100%;
+  min-height: 52px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  resize: vertical;
+}
+.alt-input:focus {
+  outline: none;
+  border-color: var(--pink);
+  box-shadow: 0 0 0 3px var(--pink-soft);
+}
+.alt-text {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 .preview {
   position: relative;

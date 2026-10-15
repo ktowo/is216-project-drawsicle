@@ -95,9 +95,58 @@ export const NOTIFICATION_TYPES = [
   'deadline_reminder',
   'submission_received',
   'gift_revealed',
+  'gift_thanked',
+  'announcement',
+  'event_invite',
+  'waitlist_promoted',
+  'backup_needed',
+  'backup_assigned',
+  'report_received',
   'role_changed',
   'test',
 ];
+
+// Reactions a recipient can leave on the gift they were given
+export const REACTIONS = [
+  { value: 'heart', label: 'Love it', emoji: '❤️' },
+  { value: 'sparkles', label: 'Amazing', emoji: '✨' },
+  { value: 'teary', label: 'So touched', emoji: '🥹' },
+  { value: 'fire', label: 'On fire', emoji: '🔥' },
+  { value: 'laugh', label: 'Made me laugh', emoji: '😂' },
+];
+export const REACTION_VALUES = REACTIONS.map((r) => r.value);
+
+// Warnings an artist can put on a gift or a character, so others can choose before looking
+export const CONTENT_WARNINGS = [
+  { value: 'blood', label: 'Blood or injury' },
+  { value: 'horror', label: 'Horror or scary themes' },
+  { value: 'mature', label: 'Mature themes' },
+  { value: 'suggestive', label: 'Suggestive' },
+  { value: 'eyestrain', label: 'Flashing or eye strain' },
+];
+export const CONTENT_WARNING_VALUES = CONTENT_WARNINGS.map((w) => w.value);
+
+// How far along a gift is; givers update it so organisers know who might need a hand
+export const PROGRESS_STAGES = [
+  { value: 'not_started', label: 'Not started' },
+  { value: 'sketch', label: 'Sketching' },
+  { value: 'lineart', label: 'Lineart' },
+  { value: 'colour', label: 'Colouring' },
+  { value: 'finishing', label: 'Finishing up' },
+];
+export const PROGRESS_VALUES = PROGRESS_STAGES.map((p) => p.value);
+
+// Why someone reported a gift, a character or a profile to the site admins
+export const REPORT_REASONS = [
+  { value: 'harassment', label: 'Harassment or hate' },
+  { value: 'stolen_art', label: 'Stolen or traced art' },
+  { value: 'inappropriate', label: 'Inappropriate content' },
+  { value: 'spam', label: 'Spam or scam' },
+  { value: 'other', label: 'Something else' },
+];
+export const REPORT_REASON_VALUES = REPORT_REASONS.map((r) => r.value);
+export const REPORT_TARGETS = ['submission', 'user', 'character', 'event'];
+export const REPORT_STATUSES = ['open', 'resolved', 'dismissed'];
 
 // ---------- Limits ----------
 
@@ -124,6 +173,14 @@ export const LIMITS = {
   submissionImages: 4,
   submissionLinks: 5,
   imageBytes: 5 * 1024 * 1024,
+  imageDescription: 300,
+  thanksMessage: 500,
+  announcement: 1000,
+  announcementsShown: 20,
+  blockedUsers: 50,
+  avoidPairs: 50,
+  reportDetails: 1000,
+  progressNote: 200,
   deactivationGraceDays: 30,
 };
 
@@ -180,4 +237,20 @@ export function orderImages(order, keep, uploaded) {
     }
   }
   return result;
+}
+
+// Descriptions (alt text) for a gift's pictures, in the same order as the pictures.
+//   images      the final list (after orderImages)
+//   keep        kept image links; uploaded: links of this save's new files ("new:<n>" keys)
+//   given       { "<link>" | "new:<n>": "text" } from the form, or undefined to keep what was there
+//   previous    { images, descriptions } before this save
+export function imageDescriptionsFor(images, keep, uploaded, given, previous = {}) {
+  const before = new Map((previous.images || []).map((url, i) => [url, previous.descriptions?.[i] || '']));
+  const keyOf = new Map([...keep.map((url) => [url, url]), ...uploaded.map((url, i) => [url, `new:${i}`])]);
+  const source = given && typeof given === 'object' && !Array.isArray(given) ? given : null;
+  return images.map((url) => {
+    const key = keyOf.get(url);
+    const text = source && key in source ? source[key] : before.get(url);
+    return String(text ?? '').trim().slice(0, LIMITS.imageDescription);
+  });
 }

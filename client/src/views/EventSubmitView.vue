@@ -29,7 +29,7 @@ import ImageUploader from '@/components/events/ImageUploader.vue';
 import SubmissionDetails from '@/components/events/SubmissionDetails.vue';
 import { api, qs } from '@/api';
 import { toast } from '@/stores/toast';
-import { LIMITS } from '@shared/constants.mjs';
+import { LIMITS, CONTENT_WARNINGS } from '@shared/constants.mjs';
 import { formatDateTime } from '@/utils/format';
 import { eventLink, inviteFrom, isPast, isHttpUrl, matchUnavailable, typeOptions } from '@/utils/events';
 import { MAX_UPLOAD_REQUEST_BYTES, totalBytes, formatBytes } from '@/utils/images';
@@ -49,10 +49,15 @@ const event = ref(null);
 const match = ref(null);
 const submission = ref(null); // what the server has now
 
-const form = reactive({ title: '', type: '', message: '', links: [] });
+const form = reactive({ title: '', type: '', message: '', links: [], contentWarnings: [] });
 const keepImages = ref([]);
 const newFiles = ref([]);
 const imageOrder = ref([]); // uploaded URLs and new files, in the order they'll be shown
+// Alt text: picture (URL or new File) -> description
+const imageDescriptions = reactive(new Map());
+function describe(item, text) {
+  imageDescriptions.set(item, text);
+}
 const preparing = ref(false);
 
 const errors = ref({});
@@ -84,6 +89,7 @@ function currentState() {
     keep: keepImages.value,
     files: newFiles.value.map((f) => `${f.name}:${f.size}`),
     order: imageOrder.value.map((item) => (typeof item === 'string' ? item : `${item.name}:${item.size}`)),
+    descriptions: imageOrder.value.map((item) => imageDescriptions.get(item) || ''),
   });
 }
 const dirty = computed(() => Boolean(snapshot.value) && currentState() !== snapshot.value);
@@ -101,7 +107,11 @@ function fillForm() {
   form.type = s?.type && (event.value?.allowedTypes || []).includes(s.type) ? s.type : defaultType();
   form.message = s?.message || '';
   form.links = (s?.links || []).map((l) => ({ label: l.label || '', url: l.url || '' }));
-  imageOrder.value = []; // the server's order is the starting point again
+  // The saved order is the starting point again (an empty list would make the page look edited)
+  imageOrder.value = [...(s?.images || [])];
+  imageDescriptions.clear();
+  (s?.images || []).forEach((url, i) => imageDescriptions.set(url, s.imageDescriptions?.[i] || ''));
+  form.contentWarnings = [...(s?.contentWarnings || [])];
   keepImages.value = [...(s?.images || [])];
   newFiles.value = [];
   errors.value = {};
@@ -277,10 +287,13 @@ async function submit() {
   data.append('links', JSON.stringify(cleanLinks()));
   data.append('keepImages', JSON.stringify(keepImages.value));
   // New files are named by their place in this upload ("new:0" is the first one sent)
+  const keyOf = (item) => (typeof item === 'string' ? item : `new:${newFiles.value.indexOf(item)}`);
+  data.append('imageOrder', JSON.stringify(imageOrder.value.map(keyOf)));
   data.append(
-    'imageOrder',
-    JSON.stringify(imageOrder.value.map((item) => (typeof item === 'string' ? item : `new:${newFiles.value.indexOf(item)}`)))
+    'imageDescriptions',
+    JSON.stringify(Object.fromEntries(imageOrder.value.map((item) => [keyOf(item), (imageDescriptions.get(item) || '').trim()])))
   );
+  data.append('contentWarnings', JSON.stringify(form.contentWarnings));
   for (const file of newFiles.value) data.append('images', file, file.name);
 
   saving.value = true;
@@ -503,8 +516,21 @@ const counter = (value, max) => `${value.trim().length} / ${max}`;
             v-model:busy="preparing"
             :max="LIMITS.submissionImages"
             :disabled="saving"
+            :descriptions="imageDescriptions"
             described-by="images-hint"
+            @describe="describe"
           />
+          <p class="hint alt-hint">
+            A short description under each picture helps people using screen readers enjoy your gift too.
+          </p>
+
+          <fieldset class="warnings">
+            <legend id="cw-legend" class="label">Content warnings <span class="optional">(optional)</span></legend>
+            <p class="hint">
+              Pick any that apply. Your pictures stay blurred behind the warning until someone chooses to look.
+            </p>
+            <ChoiceChips v-model="form.contentWarnings" :options="CONTENT_WARNINGS" aria-labelledby="cw-legend" />
+          </fieldset>
         </section>
 
         <section class="card section" aria-labelledby="sec-links">
@@ -602,6 +628,31 @@ const counter = (value, max) => `${value.trim().length} / ${max}`;
 </template>
 
 <style scoped>
+.alt-hint {
+  margin: 10px 0 0;
+}
+.warnings {
+  border: 0;
+  margin: 22px 0 0;
+  padding: 18px 0 0;
+  border-top: 1px solid var(--border);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.warnings legend {
+  padding: 0;
+  float: left;
+  width: 100%;
+}
+.warnings .hint {
+  margin: 0;
+}
+.optional {
+  font-weight: 400;
+  color: var(--muted);
+}
 .narrow {
   max-width: 860px;
 }

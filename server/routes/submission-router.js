@@ -7,10 +7,16 @@ const Submission = require('../models/Submission.js');
 const { userMini } = require('../models/User.js');
 const { requireAuth, loadEvent, requireEventRole } = require('../middleware/auth.js');
 const { organizerIds, serializeEvent, viewerContext, canViewEvent } = require('../services/events.js');
-const { notifyMany } = require('../services/notify.js');
+const { notify, notifyMany } = require('../services/notify.js');
 const { uploadImage, looksLikeImage, IMAGE_TYPES } = require('../services/storage.js');
 const { loadMatchRows, requireParticipant, loadMyMatch } = require('./match-router.js');
-const { LIMITS, orderImages } = require('../../shared/constants.mjs');
+const {
+  LIMITS,
+  CONTENT_WARNING_VALUES,
+  REACTION_VALUES,
+  orderImages,
+  imageDescriptionsFor,
+} = require('../../shared/constants.mjs');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
 
 // Mounted at /api/events/:eventId next to the application and match routers,
@@ -126,6 +132,32 @@ function readKeepImages(value, existing) {
   return keep;
 }
 
+// ["blood", "horror"] (or its JSON); unknown warnings are refused rather than dropped
+function readContentWarnings(value, fallback) {
+  const parsed = parseJsonField(value, 'Content warnings');
+  if (parsed === undefined) return [...fallback];
+  if (!Array.isArray(parsed) || parsed.some((w) => !CONTENT_WARNING_VALUES.includes(w))) {
+    throw invalid('Pick content warnings from the list.');
+  }
+  return [...new Set(parsed)];
+}
+
+// { "<image link>" | "new:<n>": "description" }
+function readImageDescriptions(value) {
+  const parsed = parseJsonField(value, 'Image descriptions');
+  if (parsed === undefined) return undefined;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw invalid('Image descriptions could not be read. Please try again.');
+  }
+  for (const text of Object.values(parsed)) {
+    if (typeof text !== 'string') throw invalid('Image descriptions must be text.');
+    if (text.trim().length > LIMITS.imageDescription) {
+      throw invalid(`Keep each image description under ${LIMITS.imageDescription} characters.`);
+    }
+  }
+  return parsed;
+}
+
 function readType(value, allowedTypes, fallback) {
   if (value === undefined || value === null || value === '') {
     return allowedTypes.includes(fallback) ? fallback : allowedTypes[0];
@@ -171,6 +203,8 @@ router.put('/submission', ...giverOnly, requireActive, upload, asyncHandler(asyn
   const links = readLinks(body.links, existing ? existing.links.map((l) => ({ label: l.label, url: l.url })) : []);
   const keep = readKeepImages(body.keepImages, existing ? [...existing.images] : []);
   const order = parseJsonField(body.imageOrder, 'Image order');
+  const descriptions = readImageDescriptions(body.imageDescriptions);
+  const contentWarnings = readContentWarnings(body.contentWarnings, existing?.contentWarnings || []);
 
   if (keep.length + files.length > LIMITS.submissionImages) throw tooManyImages();
   if (keep.length + files.length === 0 && links.length === 0) {
@@ -189,11 +223,17 @@ router.put('/submission', ...giverOnly, requireActive, upload, asyncHandler(asyn
       recipient: match.recipient,
       submittedAt: now,
     });
+  const images = orderImages(order, keep, uploaded);
   submission.set({
     title,
     message,
     type,
-    images: orderImages(order, keep, uploaded),
+    images,
+    imageDescriptions: imageDescriptionsFor(images, keep, uploaded, descriptions, {
+      images: existing?.images,
+      descriptions: existing?.imageDescriptions,
+    }),
+    contentWarnings,
     links,
     late: now > event.submissionDeadline,
   });
@@ -375,6 +415,53 @@ router.get('/results', requireAuth, loadEvent, asyncHandler(async (req, res) => 
       .filter((r) => r.submission)
       .map((r) => ({ giver: r.admin.giver, recipient: r.admin.recipient, submission: r.submission.toPublic() })),
   });
+}));
+
+// ---------- Thank-you notes (after the reveal) ----------
+
+// The gift the viewer received in a completed event
+async function loadReceivedGift(req) {
+  const { event, user } = req;
+  if (event.status !== 'completed') {
+    throw httpError(409, 'You can thank your Secret Santa once the gifts are revealed.', 'NOT_COMPLETED');
+  }
+  const match = await Match.findOne({ event: event._id, recipient: user._id, published: true });
+  const submission = match && (await Submission.findOne({ match: match._id }));
+  if (!submission) throw httpError(404, "There's no gift for you to thank in this event.", 'NOT_FOUND');
+  return submission;
+}
+
+router.put('/thanks', requireAuth, loadEvent, asyncHandler(async (req, res) => {
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const submission = await loadReceivedGift(req);
+  const message = readText(body.message, 'Thank-you note', LIMITS.thanksMessage, '');
+  const reaction = body.reaction === undefined || body.reaction === null ? '' : String(body.reaction);
+  if (reaction && !REACTION_VALUES.includes(reaction)) throw invalid('Pick a reaction from the list.');
+  if (!message && !reaction) throw invalid('Write a note or pick a reaction.');
+
+  const first = !submission.thanks?.at;
+  submission.thanks = { message, reaction, at: new Date() };
+  await submission.save();
+
+  if (first) {
+    await quietly(
+      notify(submission.giver, {
+        type: 'gift_thanked',
+        title: `${userMini(req.user).displayName} thanked you for your gift`,
+        message: message || 'They reacted to the gift you made them.',
+        link: `/events/${req.event.id}/results`,
+        email: 'eventUpdates',
+      })
+    );
+  }
+  res.json({ submission: submission.toPublic() });
+}));
+
+router.delete('/thanks', requireAuth, loadEvent, asyncHandler(async (req, res) => {
+  const submission = await loadReceivedGift(req);
+  submission.thanks = { message: '', reaction: '', at: null };
+  await submission.save();
+  res.json({ submission: submission.toPublic() });
 }));
 
 // Friendlier messages for multer's own limits; everything else goes to the shared handler
