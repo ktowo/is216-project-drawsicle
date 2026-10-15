@@ -19,8 +19,8 @@ onMounted(async () => {
 </script>
 
 <template>
-    <h1>Hello World!</h1>
-    <p>The <a :href="API_URL">server</a> says: <code>{{ response }}</code></p>
+    <h1 class="text-purple-800 text-4xl">Hello World!</h1>
+    <p>The <a :href="API_URL">server</a> says: <code class="text-blue-500">{{ response }}</code></p>
 </template>
 
 <style scoped></style>
