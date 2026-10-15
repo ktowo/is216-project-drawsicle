@@ -7,7 +7,7 @@ import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingBlock from '@/components/ui/LoadingBlock.vue';
 import ErrorBlock from '@/components/ui/ErrorBlock.vue';
 import DeadlineChip from '@/components/ui/DeadlineChip.vue';
-import UserAvatar from '@/components/UserAvatar.vue';
+import PersonLink from '@/components/events/PersonLink.vue';
 import StatTile from './StatTile.vue';
 import ReminderModal from './ReminderModal.vue';
 import SubmissionViewModal from './SubmissionViewModal.vue';
@@ -301,16 +301,10 @@ function exportCsv() {
           <ul class="m-0 p-0 list-none">
             <li v-for="r in visible" :key="r.match.id" class="row" :class="{ overdue: !r.submission && r.overdue }">
               <div class="people">
-                <span class="person">
-                  <UserAvatar :user="r.match.giver" :size="32" />
-                  <span class="truncate font-semibold">{{ personName(r.match.giver) }}</span>
-                </span>
+                <PersonLink :user="r.match.giver" :size="32" class="person" />
                 <ArrowRight :size="16" class="text-brand shrink-0" aria-hidden="true" />
                 <span class="sr-only">makes a gift for</span>
-                <span class="person">
-                  <UserAvatar :user="r.match.recipient" :size="32" />
-                  <span class="truncate">{{ personName(r.match.recipient) }}</span>
-                </span>
+                <PersonLink :user="r.match.recipient" :size="32" class="person" />
               </div>
               <div class="cell">
                 <span class="cell-label">Status</span>

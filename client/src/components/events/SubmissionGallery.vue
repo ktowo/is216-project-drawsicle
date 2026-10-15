@@ -1,12 +1,14 @@
 <script setup>
 import { ref, computed } from 'vue';
+import { RouterLink } from 'vue-router';
 import { ArrowRight, ExternalLink, FileText, Palette, Gift, Images } from 'lucide-vue-next';
 import ImageLightbox from './ImageLightbox.vue';
 import PersonLink from './PersonLink.vue';
 import { assetUrl } from '@/api';
 import { safeUrl, linkHost, typeLabel } from '@/utils/events';
 
-// Every pair's gift after the reveal. items: [{ giver, recipient, submission | null }]
+// Every pair's gift after the reveal. items: [{ giver, recipient, submission | null, event? }]
+// With event ({ id, name }) each tile also says which exchange it was for (artist profiles).
 const props = defineProps({
   items: { type: Array, default: () => [] },
 });
@@ -93,6 +95,10 @@ function open(tile) {
             <ArrowRight :size="14" class="arrow" aria-hidden="true" />
             <span class="sr-only">made a gift for</span>
             <PersonLink :user="tile.item.recipient" :size="22" class="person" />
+          </p>
+
+          <p v-if="tile.item.event" class="for-event">
+            For <RouterLink :to="`/events/${tile.item.event.id}`">{{ tile.item.event.name }}</RouterLink>
           </p>
 
           <ul v-if="tile.links.length" class="links">
@@ -261,5 +267,13 @@ button.cover:hover img {
   .cover img {
     transition: none;
   }
+}
+.for-event {
+  margin: 6px 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

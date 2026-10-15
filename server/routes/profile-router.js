@@ -58,7 +58,7 @@ function typeList(value, label) {
 
 // Update my profile. Only the fields below can be changed here; anything else in the body is ignored.
 router.patch('/', requireAuth, asyncHandler(async (req, res) => {
-  const { displayName, bio, username, socials, defaultForm, notificationPrefs } = req.body || {};
+  const { displayName, bio, username, socials, defaultForm, notificationPrefs, profilePrivacy } = req.body || {};
   const user = req.user;
 
   if (displayName !== undefined) {
@@ -118,6 +118,15 @@ router.patch('/', requireAuth, asyncHandler(async (req, res) => {
       if (notificationPrefs[key] === undefined) continue;
       if (typeof notificationPrefs[key] !== 'boolean') throw invalid(`${key} must be true or false.`);
       user.notificationPrefs[key] = notificationPrefs[key];
+    }
+  }
+
+  if (profilePrivacy !== undefined) {
+    if (!isPlainObject(profilePrivacy)) throw invalid('profilePrivacy must be an object.');
+    for (const key of ['showExchanges', 'showGifts']) {
+      if (profilePrivacy[key] === undefined) continue;
+      if (typeof profilePrivacy[key] !== 'boolean') throw invalid(`${key} must be true or false.`);
+      user.profilePrivacy[key] = profilePrivacy[key];
     }
   }
 
@@ -200,14 +209,14 @@ router.get('/export', requireAuth, asyncHandler(async (req, res) => {
   });
 }));
 
-// Someone's public profile (no email), by id or username. Deactivated accounts are hidden.
+// Someone's public profile (no email), by id or username. Deactivated and banned accounts are hidden.
 router.get('/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
   let user = null;
   if (mongoose.isObjectIdOrHexString(id)) user = await User.findById(id);
   if (!user && USERNAME_RE.test(id.toLowerCase())) user = await User.findOne({ username: id.toLowerCase() });
 
-  if (!user || user.status === 'deactivated') throw httpError(404, 'User not found.', 'NOT_FOUND');
+  if (!user || (user.status || 'active') !== 'active') throw httpError(404, 'User not found.', 'NOT_FOUND');
   res.json({ profile: user.toPublicProfile() });
 }));
 

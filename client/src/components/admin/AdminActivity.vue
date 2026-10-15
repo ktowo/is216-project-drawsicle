@@ -3,6 +3,7 @@ import { ref, watch, onMounted } from 'vue';
 import { ScrollText } from 'lucide-vue-next';
 import { api, qs } from '@/api';
 import UserAvatar from '@/components/UserAvatar.vue';
+import PersonLink from '@/components/events/PersonLink.vue';
 import LoadingBlock from '@/components/ui/LoadingBlock.vue';
 import ErrorBlock from '@/components/ui/ErrorBlock.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
@@ -63,7 +64,7 @@ onMounted(load);
         <UserAvatar :user="entry.actor" :size="32" />
         <div class="min-w-0">
           <p class="m-0">
-            <strong>{{ entry.actor.displayName }}</strong>
+            <PersonLink :user="entry.actor" :size="0" />
             {{ ACTIONS[entry.action] || entry.action }}
             <RouterLink v-if="entry.targetType === 'event' && entry.action !== 'event.delete'" :to="`/events/${entry.targetId}`">{{ entry.targetLabel }}</RouterLink>
             <strong v-else>{{ entry.targetLabel }}</strong>

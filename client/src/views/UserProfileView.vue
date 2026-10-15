@@ -15,6 +15,7 @@ import {
 import ProfileHeader from '@/components/profile/ProfileHeader.vue';
 import ProfileStats from '@/components/profile/ProfileStats.vue';
 import EventCard from '@/components/events/EventCard.vue';
+import SubmissionGallery from '@/components/events/SubmissionGallery.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import ErrorBlock from '@/components/ui/ErrorBlock.vue';
 import { auth } from '@/stores/auth';
@@ -28,7 +29,14 @@ const state = ref('loading'); // 'loading' | 'ready' | 'notfound' | 'error'
 const errorMessage = ref('');
 const profile = ref(null);
 const organizing = ref([]);
-const stats = ref({ eventsOrganized: 0, exchangesCompleted: 0 });
+const exchanges = ref([]); // empty when there are none or the artist hides them
+
+// Gift gallery: loaded after the profile, a page at a time
+const gifts = ref([]);
+const giftsHasMore = ref(false);
+const giftsLoading = ref(false);
+const giftsError = ref('');
+const stats = ref({ eventsOrganized: 0 });
 
 const handle = computed(() => String(route.params.username || '').replace(/^@/, ''));
 const name = computed(() => profile.value?.displayName || profile.value?.username || 'This artist');
@@ -41,6 +49,7 @@ const isMe = computed(() => {
   return Boolean(me.username) && me.username.toLowerCase() === String(profile.value.username || '').toLowerCase();
 });
 
+const hiddenExchanges = computed(() => Math.max(0, (stats.value.exchangesCompleted || 0) - exchanges.value.length));
 const hiddenEvents = computed(() => Math.max(0, (stats.value.eventsOrganized || 0) - organizing.value.length));
 
 // Latest request wins when someone clicks through profiles quickly
@@ -54,8 +63,13 @@ async function load() {
     if (id !== loadId) return;
     profile.value = data.profile;
     organizing.value = data.organizing || [];
-    stats.value = { eventsOrganized: 0, exchangesCompleted: 0, ...(data.stats || {}) };
+    exchanges.value = data.exchanges || [];
+    stats.value = { eventsOrganized: 0, ...(data.stats || {}) };
+    gifts.value = [];
+    giftsHasMore.value = false;
+    giftsError.value = '';
     state.value = 'ready';
+    if (data.hasGifts) loadGifts(id);
 
     // An id or different capitalisation in the link: show the real username in the address bar.
     // The router resets the tab title when it navigates, so the title is set afterwards.
@@ -69,6 +83,7 @@ async function load() {
     if (id !== loadId) return;
     profile.value = null;
     organizing.value = [];
+    exchanges.value = [];
     if (e.status === 404 || e.code === 'USER_NOT_FOUND') {
       state.value = 'notfound';
       document.title = 'Artist not found · Drawsicle';
@@ -76,6 +91,24 @@ async function load() {
       state.value = 'error';
       errorMessage.value = e.message || '';
     }
+  }
+}
+
+async function loadGifts(id = loadId) {
+  giftsLoading.value = true;
+  giftsError.value = '';
+  const last = gifts.value[gifts.value.length - 1];
+  const query = last ? `?before=${encodeURIComponent(last.submission.submittedAt)}` : '';
+  try {
+    const data = await api(`/users/${encodeURIComponent(profile.value.username || handle.value)}/gifts${query}`);
+    if (id !== loadId) return;
+    gifts.value = [...gifts.value, ...data.items];
+    giftsHasMore.value = data.hasMore;
+  } catch (e) {
+    if (id !== loadId) return;
+    giftsError.value = e.message || "Couldn't load the gifts.";
+  } finally {
+    if (id === loadId) giftsLoading.value = false;
   }
 }
 
@@ -230,6 +263,46 @@ function goToLookup() {
           </RouterLink>
         </EmptyState>
       </section>
+
+      <section
+        v-if="gifts.length || giftsLoading || giftsError"
+        class="events"
+        aria-labelledby="gifts-heading"
+        :aria-busy="giftsLoading ? 'true' : 'false'"
+      >
+        <header class="events-head">
+          <div>
+            <h2 id="gifts-heading" class="section-title">Gifts {{ name }} made</h2>
+            <p class="section-sub">From finished exchanges, shown with the permission of the people they were made for.</p>
+          </div>
+        </header>
+        <SubmissionGallery v-if="gifts.length" :items="gifts" />
+        <p v-if="giftsLoading && !gifts.length" class="hint" role="status">Loading gifts…</p>
+        <ErrorBlock v-if="giftsError" :message="giftsError" @retry="loadGifts()" />
+        <div v-if="giftsHasMore" class="more-row">
+          <button type="button" class="btn btn-outline btn-sm" :disabled="giftsLoading" @click="loadGifts()">
+            {{ giftsLoading ? 'Loading…' : 'Load more gifts' }}
+          </button>
+        </div>
+      </section>
+
+      <section v-if="exchanges.length" class="events" aria-labelledby="exchanges-heading">
+        <header class="events-head">
+          <div>
+            <h2 id="exchanges-heading" class="section-title">Exchanges {{ name }} joined</h2>
+            <p class="section-sub">
+              Finished public exchanges{{
+                hiddenExchanges ? `, latest ${exchanges.length} of ${stats.exchangesCompleted}` : ''
+              }}.
+            </p>
+          </div>
+        </header>
+        <ul class="event-grid">
+          <li v-for="event in exchanges" :key="event.id">
+            <EventCard :event="event" class="h-full" />
+          </li>
+        </ul>
+      </section>
     </template>
   </main>
 </template>
@@ -240,6 +313,11 @@ function goToLookup() {
 }
 .pad {
   padding: 24px;
+}
+.more-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
 }
 .stats-gap {
   margin-top: 20px;

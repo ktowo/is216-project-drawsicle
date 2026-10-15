@@ -55,11 +55,20 @@ import InfoLayout from '@/components/info/InfoLayout.vue';
           Your public profile: display name, username, picture, bio, social handles, the month you joined, and the public
           events you have organised.
         </li>
+        <li>
+          Finished public exchanges you took part in, and how many. You can hide these in
+          <RouterLink to="/profile">your profile</RouterLink>.
+        </li>
+        <li>
+          Gifts you made in finished public exchanges, but only if you <em>and</em> the person you made it for both turn on
+          "Allow public display of gifts". It is off unless you turn it on, and the private message with a gift is never
+          shown.
+        </li>
         <li>Public events you organise, including your display name as organiser.</li>
       </ul>
       <p class="callout">
-        Want fewer details public? Leave the bio and social handles empty in <RouterLink to="/profile">your profile</RouterLink>.
-        Only a display name and username are always shown.
+        Want fewer details public? Leave the bio and social handles empty and hide your exchanges in
+        <RouterLink to="/profile">your profile</RouterLink>. Only a display name and username are always shown.
       </p>
     </section>
 
