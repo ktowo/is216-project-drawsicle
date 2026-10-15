@@ -8,6 +8,8 @@ import ErrorBlock from '@/components/ui/ErrorBlock.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue';
 import CharacterFields from '@/components/characters/CharacterFields.vue';
+import CharacterCard from '@/components/characters/CharacterCard.vue';
+import StatusBadge from '@/components/ui/StatusBadge.vue';
 import {
   emptyCharacter,
   characterToForm,
@@ -38,6 +40,34 @@ const notFound = ref(false);
 let leaving = false; // set once saved or deleted, so the unsaved-changes check stays quiet
 
 const dirty = computed(() => JSON.stringify(characterPayload(form.value)) !== savedSnapshot.value);
+
+// How the card will look in the library and in sign-ups, as you type
+const preview = computed(() => ({
+  id: 'preview',
+  name: form.value.name.trim() || 'Your character',
+  species: form.value.species.trim(),
+  tags: form.value.tags || [],
+  description: form.value.description.trim(),
+  referenceLinks: (form.value.referenceLinks || []).filter((l) => String(l.url || '').trim()),
+  notesForArtists: form.value.notesForArtists.trim(),
+  archived: Boolean(character.value?.archived),
+}));
+
+// Tags from the rest of the library come first in the suggestions, so they stay consistent
+const ownTags = ref([]);
+async function loadOwnTags() {
+  try {
+    const { characters = [] } = await api('/characters?archived=all');
+    const counts = new Map();
+    for (const c of characters) for (const tag of c.tags || []) counts.set(tag, (counts.get(tag) || 0) + 1);
+    ownTags.value = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([tag]) => tag);
+  } catch {
+    // Suggestions are a nicety; the built-in ones still show
+  }
+}
+loadOwnTags();
+
+const usedIn = computed(() => character.value?.usedIn || []);
 
 async function load() {
   if (!isEdit.value) return;
@@ -243,40 +273,66 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
 
     <ErrorBlock v-else-if="loadError" :message="loadError" @retry="load" />
 
-    <form v-else class="card panel" novalidate @submit.prevent="save">
-      <div v-if="character?.archived" class="alert alert-info notice">
-        <Archive :size="18" aria-hidden="true" />
-        <span>This character is archived, so it can't be offered in new sign-ups.</span>
-        <button type="button" class="btn btn-outline btn-xs" @click="restore">Restore</button>
-      </div>
-      <p v-else-if="character?.eventCount" class="alert alert-info notice">
-        <CalendarHeart :size="18" aria-hidden="true" />
-        <span>Offered in {{ pluralize(character.eventCount, 'event') }}.</span>
-      </p>
+    <div v-else class="layout">
+      <form class="card panel" novalidate @submit.prevent="save">
+        <div v-if="character?.archived" class="alert alert-info notice">
+          <Archive :size="18" aria-hidden="true" />
+          <span>This character is archived, so it can't be offered in new sign-ups.</span>
+          <button type="button" class="btn btn-outline btn-xs" @click="restore">Restore</button>
+        </div>
+        <p v-else-if="character?.eventCount && !usedIn.length" class="alert alert-info notice">
+          <CalendarHeart :size="18" aria-hidden="true" />
+          <span>Offered in {{ pluralize(character.eventCount, 'event') }}.</span>
+        </p>
 
-      <CharacterFields v-model="form" :errors="errors" :id-prefix="ID_PREFIX" />
+        <CharacterFields v-model="form" :errors="errors" :id-prefix="ID_PREFIX" :tag-suggestions="ownTags" />
 
-      <p v-if="formError" class="alert alert-error form-alert" role="alert">{{ formError }}</p>
+        <p v-if="formError" class="alert alert-error form-alert" role="alert">{{ formError }}</p>
 
-      <div class="actions">
-        <button
-          v-if="isEdit && canDelete"
-          type="button"
-          class="btn btn-ghost btn-sm btn-danger-text delete-btn"
-          :disabled="saving"
-          @click="askDelete"
-        >
-          <Trash2 :size="16" aria-hidden="true" /> Delete
-        </button>
-        <span class="spacer" />
-        <RouterLink to="/characters" class="btn btn-outline">Cancel</RouterLink>
-        <button type="submit" class="btn btn-primary" :disabled="saving">
-          <Loader2 v-if="saving" :size="18" class="spin" aria-hidden="true" />
-          <Save v-else :size="18" aria-hidden="true" />
-          {{ isEdit ? 'Save changes' : 'Save character' }}
-        </button>
-      </div>
-    </form>
+        <div class="actions">
+          <button
+            v-if="isEdit && canDelete"
+            type="button"
+            class="btn btn-ghost btn-sm btn-danger-text delete-btn"
+            :disabled="saving"
+            @click="askDelete"
+          >
+            <Trash2 :size="16" aria-hidden="true" /> Delete
+          </button>
+          <span class="spacer" />
+          <RouterLink to="/characters" class="btn btn-outline">Cancel</RouterLink>
+          <button type="submit" class="btn btn-primary" :disabled="saving">
+            <Loader2 v-if="saving" :size="18" class="spin" aria-hidden="true" />
+            <Save v-else :size="18" aria-hidden="true" />
+            {{ isEdit ? 'Save changes' : 'Save character' }}
+          </button>
+        </div>
+      </form>
+
+      <aside class="side" aria-label="Preview and events">
+        <section aria-labelledby="preview-heading">
+          <h2 id="preview-heading" class="side-title">Preview</h2>
+          <p class="side-sub">How artists will see this character when you offer it in an event.</p>
+          <CharacterCard :character="preview" />
+        </section>
+
+        <section v-if="usedIn.length" class="card used-in" aria-labelledby="used-in-heading">
+          <h2 id="used-in-heading" class="side-title">
+            <CalendarHeart :size="18" aria-hidden="true" /> Offered in {{ pluralize(usedIn.length, 'event') }}
+          </h2>
+          <ul class="used-list">
+            <li v-for="use in usedIn" :key="use.eventId" class="used-item">
+              <RouterLink :to="`/events/${use.eventId}`" class="used-name">{{ use.eventName }}</RouterLink>
+              <span class="used-badges">
+                <StatusBadge :status="use.eventStatus" />
+                <StatusBadge :status="use.applicationStatus" kind="application" />
+              </span>
+            </li>
+          </ul>
+          <p class="side-sub">Edits show up in these events too, so the artist always has the latest details.</p>
+        </section>
+      </aside>
+    </div>
 
     <ConfirmDialog
       :open="confirmOpen"
@@ -292,9 +348,72 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
 </template>
 
 <style scoped>
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
 .panel {
   padding: 32px;
   max-width: 860px;
+}
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 560px;
+}
+.side-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  font-size: 1.1rem;
+}
+.side-sub {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.used-in {
+  padding: 18px 20px;
+}
+.used-list {
+  list-style: none;
+  margin: 8px 0 12px;
+  padding: 0;
+}
+.used-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.used-item:first-child {
+  border-top: 0;
+}
+.used-name {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.used-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+/* Side by side once there's room for both, with the preview following you down the form */
+@media (min-width: 1200px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+  .side {
+    position: sticky;
+    top: 96px;
+  }
 }
 .notice {
   display: flex;

@@ -12,6 +12,8 @@ const props = defineProps({
   modelValue: { type: Object, required: true },
   errors: { type: Object, default: () => ({}) },
   idPrefix: { type: String, default: '' },
+  // Tags to suggest first, e.g. ones the person already uses on their other characters
+  tagSuggestions: { type: Array, default: () => [] },
 });
 const emit = defineEmits(['update:modelValue']);
 
@@ -34,6 +36,8 @@ const TAG_SUGGESTIONS = [
   'complex markings',
   'gore',
 ];
+
+const suggestions = computed(() => [...new Set([...props.tagSuggestions, ...TAG_SUGGESTIONS])]);
 
 const form = computed(() => props.modelValue || {});
 const links = computed(() => form.value.referenceLinks || []);
@@ -132,7 +136,7 @@ const count = (value) => String(value || '').length;
           :id="fid('tags')"
           :model-value="form.tags || []"
           :max="LIMITS.tags"
-          :suggestions="TAG_SUGGESTIONS"
+          :suggestions="suggestions"
           placeholder="e.g. feral, wings (Enter to add)"
           :aria-describedby="describedby"
           @update:model-value="update('tags', $event)"
