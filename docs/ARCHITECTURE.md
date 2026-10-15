@@ -123,8 +123,8 @@ All routes are under `/api`. (auth) = must be logged in, (org) = event organiser
 | POST/DELETE | /profile/avatar | (auth) multipart `avatar` |
 | POST | /profile/deactivate | (auth) `{ password? }` → `{ ok }`; sets status `deactivated`, logs out, withdraws sign-ups (see below). Anonymised after 30 days |
 | GET | /profile/export | (auth) → `{ exportedAt, user, characters, applications: [Application + eventName], submissions: [Submission + eventName], notifications }`, for a "download my data" button |
-| GET | /profile/:id | public profile (`ArtistProfile` without `createdAt`), by id or username |
-| GET | /users/:username | (optional auth) public artist profile → `{ profile: ArtistProfile, organizing: Event[] (their public, non-draft events, newest first, max 12), stats: { eventsOrganized, exchangesCompleted } }`. The username matches in any case, with or without a leading `@`; an id works too. `exchangesCompleted` counts completed events where they were an accepted participant. 404 `USER_NOT_FOUND` for unknown or deactivated accounts |
+| GET | /profile/:id | public profile (`ArtistProfile` without `createdAt`), by id or username; 404 `NOT_FOUND` for deactivated or banned accounts |
+| GET | /users/:username | (optional auth) public artist profile → `{ profile: ArtistProfile, organizing: Event[] (their public, non-draft events, newest first, max 12), stats: { eventsOrganized, exchangesCompleted } }`. The username matches in any case, with or without a leading `@`; an id works too. `exchangesCompleted` counts completed events where they were an accepted participant. 404 `USER_NOT_FOUND` for unknown, deactivated or banned accounts |
 | GET | /notifications?limit=&before= | (auth) → `{ items: Notification[], unreadCount, hasMore }`, newest first. `before` is an ISO date cursor (items strictly older than it); 400 `VALIDATION` if it isn't a date. `hasMore` says whether an older page exists |
 | GET | /notifications/unread-count | (auth) |
 | PATCH | /notifications/:id/read | (auth) |

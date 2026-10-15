@@ -24,7 +24,8 @@ export function register(router) {
     const { state } = ctx;
     const viewer = ctx.currentUser();
     const user = findProfileUser(state, ctx.params.username);
-    if (!user || user.status === 'deactivated') throw notFound();
+    // Deactivated and banned accounts have no public profile
+    if (!user || (user.status || 'active') !== 'active') throw notFound();
 
     const organizedIds = new Set(
       state.members.filter((m) => m.user === user.id && m.roles.includes('organizer')).map((m) => m.event)

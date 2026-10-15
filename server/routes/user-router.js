@@ -27,7 +27,8 @@ async function findProfileUser(handle) {
 
 router.get('/:username', optionalAuth, asyncHandler(async (req, res) => {
   const user = await findProfileUser(req.params.username);
-  if (!user || user.status === 'deactivated') throw notFound();
+  // Deactivated and banned accounts have no public profile
+  if (!user || (user.status || 'active') !== 'active') throw notFound();
 
   const organizedIds = await EventMember.distinct('event', { user: user._id, roles: 'organizer' });
   const [events, eventsOrganized, participatedIn] = await Promise.all([

@@ -2,7 +2,7 @@
 // Run: cd client && pnpm exec vitest run tests/mock.test.js
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN_EMAIL, DEMO_PASSWORD } from '@shared/demo-data.mjs';
-import { getState } from '../src/mock/db.js';
+import { getState, saveState } from '../src/mock/db.js';
 import { mockRequest, resetMockData, setMockLatency } from '../src/mock/index.js';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -496,6 +496,22 @@ describe('build-out additions', () => {
     await loginAs('mika');
     await ok('/profile/deactivate', { method: 'POST', body: { password: DEMO_PASSWORD } });
     expect((await fails('/users/mika')).code).toBe('USER_NOT_FOUND');
+  });
+
+  it('hides banned artists until they are unbanned', async () => {
+    // Saved, because a failed request throws away unsaved changes
+    const setStatus = (status) => {
+      getState().users.find((u) => u.username === 'kit').status = status;
+      saveState();
+    };
+    const kitId = (await ok('/users/kit')).profile.id;
+    setStatus('banned');
+    expect((await fails('/users/kit')).code).toBe('USER_NOT_FOUND');
+    expect((await fails(`/profile/${kitId}`)).code).toBe('NOT_FOUND');
+    expect((await fails(`/users/${kitId}`)).code).toBe('USER_NOT_FOUND');
+
+    setStatus('active');
+    expect((await ok('/users/kit')).profile.username).toBe('kit');
   });
 
   it('lists where a character was offered, on the single-character route only', async () => {

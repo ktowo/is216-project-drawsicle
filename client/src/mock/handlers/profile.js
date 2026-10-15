@@ -179,14 +179,14 @@ export function register(router) {
     };
   });
 
-  // Someone's public profile (no email), by id or username. Deactivated accounts are hidden.
+  // Someone's public profile (no email), by id or username. Deactivated and banned accounts are hidden.
   router.get('/profile/:id', (ctx) => {
     const { id } = ctx.params;
     let user = isId(id) ? findUser(ctx.state, id) : null;
     if (!user && USERNAME_RE.test(id.toLowerCase())) {
       user = ctx.state.users.find((u) => u.username === id.toLowerCase()) || null;
     }
-    if (!user || user.status === 'deactivated') throw httpError(404, 'User not found.', 'NOT_FOUND');
+    if (!user || (user.status || 'active') !== 'active') throw httpError(404, 'User not found.', 'NOT_FOUND');
     return { profile: userProfile(user) };
   });
 

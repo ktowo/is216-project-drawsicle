@@ -105,6 +105,26 @@ test('public profiles show public events, stats and socials, never private detai
   assert.equal((await h.request(app).get('/api/users/mika_draws').expect(404)).body.code, 'USER_NOT_FOUND');
 });
 
+test('banned artists have no public profile until they are unbanned', async () => {
+  const mika = await signUpAs('Mika', { username: 'mika_draws' });
+
+  await User.updateOne({ _id: mika.id }, { $set: { status: 'banned', bannedAt: new Date() } });
+  for (const handle of ['mika_draws', mika.id]) {
+    const res = await h.request(app).get(`/api/users/${handle}`).expect(404);
+    assert.equal(res.body.code, 'USER_NOT_FOUND');
+  }
+
+  await User.updateOne({ _id: mika.id }, { $set: { status: 'active', bannedAt: null } });
+  await h.request(app).get('/api/users/mika_draws').expect(200);
+});
+
+test('the short public profile hides banned accounts too', async () => {
+  const mika = await signUpAs('Mika', { username: 'mika_draws', status: 'banned' });
+  for (const handle of ['mika_draws', mika.id]) {
+    assert.equal((await h.request(app).get(`/api/profile/${handle}`).expect(404)).body.code, 'NOT_FOUND');
+  }
+});
+
 test('profiles list at most 12 events', async () => {
   const busy = await signUpAs('Busy', { username: 'busy_bee' });
   for (let i = 0; i < 14; i++) await makeEvent(busy.id, { name: `Swap ${i}` });
