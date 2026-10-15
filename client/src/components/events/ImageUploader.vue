@@ -1,6 +1,6 @@
 <script setup>
-import { ref, computed, watch, onBeforeUnmount } from 'vue';
-import { ImagePlus, X, Upload, LoaderCircle } from 'lucide-vue-next';
+import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue';
+import { ImagePlus, X, Upload, LoaderCircle, ChevronLeft, ChevronRight } from 'lucide-vue-next';
 import { LIMITS } from '@shared/constants.mjs';
 import { assetUrl } from '@/api';
 import {
@@ -15,7 +15,9 @@ import {
 // Pictures for a submission: images already uploaded (URLs) plus new files picked here.
 // New files are shrunk with prepareImage() as they are added, and the new files together
 // must fit in one upload request (MAX_UPLOAD_REQUEST_BYTES).
-//   <ImageUploader v-model:existing="keepImages" v-model:files="newFiles" v-model:busy="preparing" />
+// The pictures can be put in any order (the first is the gift's cover); v-model:order has them as
+// a mix of uploaded URLs and new File objects.
+//   <ImageUploader v-model:existing="keepImages" v-model:files="newFiles" v-model:order="order" v-model:busy="preparing" />
 const props = defineProps({
   max: { type: Number, default: LIMITS.submissionImages },
   maxRequestBytes: { type: Number, default: MAX_UPLOAD_REQUEST_BYTES },
@@ -28,6 +30,7 @@ const existing = defineModel('existing', { type: Array, default: () => [] });
 const files = defineModel('files', { type: Array, default: () => [] });
 // True while picked files are being shrunk, so the form can wait before sending
 const busy = defineModel('busy', { type: Boolean, default: false });
+const order = defineModel('order', { type: Array, default: () => [] });
 
 const input = ref(null);
 const dragging = ref(false);
@@ -61,6 +64,45 @@ watch(
   },
   { immediate: true }
 );
+
+// Keep the order in step with what's there: drop removed pictures, add new ones at the end
+watch(
+  [existing, files],
+  () => {
+    const present = [...existing.value, ...files.value];
+    const kept = order.value.filter((item) => present.includes(item));
+    const next = [...kept, ...present.filter((item) => !kept.includes(item))];
+    if (next.length !== order.value.length || next.some((item, i) => item !== order.value[i])) order.value = next;
+  },
+  { immediate: true }
+);
+
+const items = computed(() =>
+  order.value.map((item, index) => {
+    if (typeof item === 'string') {
+      return { key: item, index, src: assetUrl(item), label: `uploaded image ${index + 1}`, uploaded: true, item };
+    }
+    const preview = previews.value.find((p) => p.file === item);
+    return { key: preview?.url || `file-${index}`, index, src: preview?.url || '', label: item.name, file: item, item };
+  })
+);
+
+// Moves a picture one place; focus follows it so the keyboard can keep going
+async function move(index, step) {
+  const to = index + step;
+  if (to < 0 || to >= order.value.length) return;
+  const next = [...order.value];
+  [next[index], next[to]] = [next[to], next[index]];
+  order.value = next;
+  await nextTick();
+  const end = to === 0 || to === next.length - 1;
+  const dir = step < 0 ? 'earlier' : 'later';
+  const other = step < 0 ? 'later' : 'earlier';
+  (document.getElementById(`${props.id}-${dir}-${to}`) && !end
+    ? document.getElementById(`${props.id}-${dir}-${to}`)
+    : document.getElementById(`${props.id}-${other}-${to}`)
+  )?.focus();
+}
 
 // The form was saved or reset: old warnings no longer apply
 watch(
@@ -176,34 +218,50 @@ defineExpose({ open: () => input.value?.click() });
 
 <template>
   <div class="uploader">
-    <ul v-if="total" class="previews" aria-label="Images in this submission">
-      <li v-for="(url, i) in existing" :key="url" class="preview">
-        <img :src="assetUrl(url)" :alt="`Uploaded image ${i + 1}`" />
-        <span class="tag">Uploaded</span>
+    <ul v-if="total" class="previews" aria-label="Images in this submission, in order">
+      <li v-for="entry in items" :key="entry.key" class="preview">
+        <img v-if="entry.src" :src="entry.src" :alt="entry.uploaded ? `Uploaded image ${entry.index + 1}` : entry.label" />
+        <span v-if="entry.index === 0 && items.length > 1" class="tag cover-tag">Cover</span>
+        <span v-if="entry.uploaded" class="tag">Uploaded</span>
+        <span v-else class="tag new" :title="entry.file.name">{{ formatBytes(entry.file.size) }}</span>
         <button
           v-if="!disabled"
           type="button"
           class="remove"
-          :aria-label="`Remove uploaded image ${i + 1}`"
-          @click="removeExisting(url)"
+          :aria-label="`Remove ${entry.label}`"
+          @click="entry.uploaded ? removeExisting(entry.item) : removeFile(entry.item)"
         >
           <X :size="16" />
         </button>
-      </li>
-      <li v-for="p in previews" :key="p.url" class="preview">
-        <img :src="p.url" :alt="p.file.name" />
-        <span class="tag new" :title="p.file.name">{{ formatBytes(p.file.size) }}</span>
-        <button
-          v-if="!disabled"
-          type="button"
-          class="remove"
-          :aria-label="`Remove ${p.file.name}`"
-          @click="removeFile(p.file)"
-        >
-          <X :size="16" />
-        </button>
+        <div v-if="!disabled && items.length > 1" class="move">
+          <button
+            :id="`${id}-earlier-${entry.index}`"
+            type="button"
+            class="move-btn"
+            :disabled="entry.index === 0"
+            :aria-label="`Move ${entry.label} earlier`"
+            title="Move earlier"
+            @click="move(entry.index, -1)"
+          >
+            <ChevronLeft :size="16" />
+          </button>
+          <button
+            :id="`${id}-later-${entry.index}`"
+            type="button"
+            class="move-btn"
+            :disabled="entry.index === items.length - 1"
+            :aria-label="`Move ${entry.label} later`"
+            title="Move later"
+            @click="move(entry.index, 1)"
+          >
+            <ChevronRight :size="16" />
+          </button>
+        </div>
       </li>
     </ul>
+    <p v-if="items.length > 1 && !disabled" class="hint order-hint">
+      The first picture is the cover in the gallery. Use the arrows to change the order.
+    </p>
 
     <div
       v-if="!disabled && (remaining > 0 || busy)"
@@ -296,6 +354,45 @@ defineExpose({ open: () => input.value?.click() });
 }
 .tag.new {
   background: rgba(217, 82, 125, 0.88);
+}
+.cover-tag {
+  bottom: auto;
+  top: 6px;
+  background: var(--pink);
+}
+.move {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+  gap: 4px;
+}
+.move-btn {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 0;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+.move-btn:hover:not(:disabled) {
+  background: var(--surface);
+  color: var(--pink-dark);
+}
+.move-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.move-btn:focus-visible {
+  outline: 3px solid var(--pink);
+  outline-offset: 2px;
+}
+.order-hint {
+  margin-top: -6px;
 }
 .remove {
   position: absolute;

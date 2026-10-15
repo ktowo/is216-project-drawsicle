@@ -51,6 +51,7 @@ const submission = ref(null); // what the server has now
 const form = reactive({ title: '', type: '', message: '', links: [] });
 const keepImages = ref([]);
 const newFiles = ref([]);
+const imageOrder = ref([]); // uploaded URLs and new files, in the order they'll be shown
 const preparing = ref(false);
 
 const errors = ref({});
@@ -81,6 +82,7 @@ function currentState() {
     form,
     keep: keepImages.value,
     files: newFiles.value.map((f) => `${f.name}:${f.size}`),
+    order: imageOrder.value.map((item) => (typeof item === 'string' ? item : `${item.name}:${item.size}`)),
   });
 }
 const dirty = computed(() => Boolean(snapshot.value) && currentState() !== snapshot.value);
@@ -98,6 +100,7 @@ function fillForm() {
   form.type = s?.type && (event.value?.allowedTypes || []).includes(s.type) ? s.type : defaultType();
   form.message = s?.message || '';
   form.links = (s?.links || []).map((l) => ({ label: l.label || '', url: l.url || '' }));
+  imageOrder.value = []; // the server's order is the starting point again
   keepImages.value = [...(s?.images || [])];
   newFiles.value = [];
   errors.value = {};
@@ -272,6 +275,11 @@ async function submit() {
   data.append('type', form.type);
   data.append('links', JSON.stringify(cleanLinks()));
   data.append('keepImages', JSON.stringify(keepImages.value));
+  // New files are named by their place in this upload ("new:0" is the first one sent)
+  data.append(
+    'imageOrder',
+    JSON.stringify(imageOrder.value.map((item) => (typeof item === 'string' ? item : `new:${newFiles.value.indexOf(item)}`)))
+  );
   for (const file of newFiles.value) data.append('images', file, file.name);
 
   saving.value = true;
@@ -490,6 +498,7 @@ const counter = (value, max) => `${value.trim().length} / ${max}`;
             id="submit-images"
             v-model:existing="keepImages"
             v-model:files="newFiles"
+            v-model:order="imageOrder"
             v-model:busy="preparing"
             :max="LIMITS.submissionImages"
             :disabled="saving"

@@ -10,7 +10,7 @@ const { organizerIds, serializeEvent, viewerContext, canViewEvent } = require('.
 const { notifyMany } = require('../services/notify.js');
 const { uploadImage, looksLikeImage, IMAGE_TYPES } = require('../services/storage.js');
 const { loadMatchRows, requireParticipant, loadMyMatch } = require('./match-router.js');
-const { LIMITS } = require('../../shared/constants.mjs');
+const { LIMITS, orderImages } = require('../../shared/constants.mjs');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
 
 // Mounted at /api/events/:eventId next to the application and match routers,
@@ -170,6 +170,7 @@ router.put('/submission', ...giverOnly, requireActive, upload, asyncHandler(asyn
   const type = readType(body.type, event.allowedTypes, existing?.type);
   const links = readLinks(body.links, existing ? existing.links.map((l) => ({ label: l.label, url: l.url })) : []);
   const keep = readKeepImages(body.keepImages, existing ? [...existing.images] : []);
+  const order = parseJsonField(body.imageOrder, 'Image order');
 
   if (keep.length + files.length > LIMITS.submissionImages) throw tooManyImages();
   if (keep.length + files.length === 0 && links.length === 0) {
@@ -192,7 +193,7 @@ router.put('/submission', ...giverOnly, requireActive, upload, asyncHandler(asyn
     title,
     message,
     type,
-    images: [...keep, ...uploaded],
+    images: orderImages(order, keep, uploaded),
     links,
     late: now > event.submissionDeadline,
   });

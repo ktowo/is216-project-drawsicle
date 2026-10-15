@@ -362,6 +362,26 @@ test('submission: upload images and links, then update, keep and replace images'
   assert.equal(second.links.length, 1);
   assert.equal(await Notification.countDocuments({ type: 'submission_received' }), 1, 'organisers are told once');
 
+  // Put a new upload first: imageOrder names kept images by URL and new files as "new:<n>"
+  const reordered = await giver.agent
+    .put(url)
+    .field('keepImages', JSON.stringify(second.images))
+    .field('imageOrder', JSON.stringify(['new:0', second.images[1], second.images[0]]))
+    .attach('images', ...png('third.png'))
+    .expect(200);
+  const third = remember(reordered.body.submission);
+  assert.equal(third.images.length, 3);
+  assert.match(third.images[0], /^\/uploads\/submissions\/.+\.png$/);
+  assert.ok(!second.images.includes(third.images[0]), 'the new upload is the cover');
+  assert.deepEqual(third.images.slice(1), [second.images[1], second.images[0]]);
+
+  // An order that doesn't match the pictures is ignored rather than losing any
+  const ignored = await giver.agent
+    .put(url)
+    .send({ keepImages: second.images, imageOrder: [second.images[0], 'new:3'] })
+    .expect(200);
+  assert.deepEqual(ignored.body.submission.images, second.images);
+
   // Drop the first image; JSON bodies work too
   const trimmed = await giver.agent
     .put(url)

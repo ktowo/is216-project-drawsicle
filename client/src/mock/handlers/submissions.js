@@ -1,5 +1,5 @@
 // /events/:eventId/submission(s), /reminders and /results (server/routes/submission-router.js)
-import { LIMITS } from '@shared/constants.mjs';
+import { LIMITS, orderImages } from '@shared/constants.mjs';
 import { newId } from '../db.js';
 import { IMAGE_TYPES, filesFrom, imageToDataUrl, looksLikeImage } from '../files.js';
 import {
@@ -178,6 +178,7 @@ export function register(router) {
     const type = readType(field(ctx, 'type'), event.allowedTypes, existing?.type);
     const links = readLinks(field(ctx, 'links'), existing ? existing.links.map((l) => ({ ...l })) : []);
     const keep = readKeepImages(field(ctx, 'keepImages'), existing ? [...existing.images] : []);
+    const order = parseJsonField(field(ctx, 'imageOrder'), 'Image order');
 
     if (keep.length + files.length > LIMITS.submissionImages) throw tooManyImages();
     if (keep.length + files.length === 0 && links.length === 0) {
@@ -204,7 +205,7 @@ export function register(router) {
       title,
       message,
       type,
-      images: [...keep, ...uploaded],
+      images: orderImages(order, keep, uploaded),
       links,
       late: ctx.now > new Date(event.submissionDeadline),
       updatedAt: at,

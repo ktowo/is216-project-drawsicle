@@ -156,3 +156,28 @@ export function signupsOpen(event, now = new Date()) {
 export function labelFor(list, value) {
   return list.find((x) => x.value === value)?.label ?? value;
 }
+
+// The order a gift's pictures are shown in, the first being its cover. `order` lists the kept image
+// links and "new:<n>" for the nth file uploaded with this save. Anything that isn't exactly those
+// pictures, once each, falls back to the kept ones first and then the new ones.
+export function orderImages(order, keep, uploaded) {
+  const fallback = [...keep, ...uploaded];
+  if (!Array.isArray(order) || order.length !== fallback.length) return fallback;
+  const seen = new Set();
+  const result = [];
+  for (const entry of order) {
+    if (typeof entry !== 'string' || seen.has(entry)) return fallback;
+    seen.add(entry);
+    const upload = /^new:(\d+)$/.exec(entry);
+    if (upload) {
+      const index = Number(upload[1]);
+      if (index >= uploaded.length) return fallback;
+      result.push(uploaded[index]);
+    } else if (keep.includes(entry)) {
+      result.push(entry);
+    } else {
+      return fallback;
+    }
+  }
+  return result;
+}
