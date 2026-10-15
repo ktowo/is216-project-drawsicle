@@ -7,6 +7,7 @@
 //
 // An entry: { uid, title, start: Date, durationMinutes, description, url, kind?, alarmMinutesBefore? }
 import { eventLink } from './events.js';
+import { saveFile } from './download.js';
 
 const PRODID = '-//Drawisicle//Events//EN';
 const CRLF = '\r\n';
@@ -193,22 +194,6 @@ export function icsFilename(name) {
 // browser refused, so the page can say so.
 export function downloadIcs(filename, entries, options = {}) {
   const list = (entries || []).filter((e) => validDate(e?.start));
-  if (!list.length || typeof document === 'undefined') return false;
-  try {
-    const blob = new Blob([buildIcs(list, options)], { type: 'text/calendar;charset=utf-8' });
-    const href = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = href;
-    link.download = icsFilename(filename);
-    link.rel = 'noopener';
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    // Some browsers start the download after click() returns, so free the URL a little later
-    setTimeout(() => URL.revokeObjectURL(href), 1000);
-    return true;
-  } catch {
-    return false;
-  }
+  if (!list.length) return false;
+  return saveFile(icsFilename(filename), [buildIcs(list, options)], 'text/calendar;charset=utf-8');
 }

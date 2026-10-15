@@ -1,6 +1,7 @@
 // Small helpers shared by the organiser panels (manage page, event form, dashboard).
 import { CREATION_TYPES, labelFor } from '@shared/constants.mjs';
 import { toLocalInput } from '@/utils/format';
+import { saveFile } from '@/utils/download';
 
 export const MANAGE_TABS = ['overview', 'participants', 'matching', 'submissions', 'settings'];
 
@@ -34,15 +35,7 @@ export function toCsv(rows) {
 
 export function downloadCsv(filename, rows) {
   // The BOM makes Excel open the file as UTF-8 (names with accents, emoji, etc.)
-  const blob = new Blob(['\uFEFF', toCsv(rows)], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return saveFile(filename, ['\uFEFF', toCsv(rows)], 'text/csv;charset=utf-8');
 }
 
 export function fileSlug(name, fallback = 'event') {
