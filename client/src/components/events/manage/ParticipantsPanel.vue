@@ -1,6 +1,6 @@
 <script setup>
 import { ref, reactive, computed, watch, useId } from 'vue';
-import { Check, X, UserMinus, Download, Search, Users, Eye } from 'lucide-vue-next';
+import { Check, X, UserMinus, Download, Search, Users, Eye, Loader2 } from 'lucide-vue-next';
 import TabNav from '@/components/ui/TabNav.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
@@ -144,7 +144,8 @@ async function confirmReject() {
   if (ok) confirm.open = false;
 }
 
-async function setStatus(app, status, onError) {
+// quiet: no toast or page refresh for this one (bulk actions sum up at the end)
+async function setStatus(app, status, onError, { quiet = false } = {}) {
   const name = personName(app.user);
   const previous = app.status;
   busyId.value = app.id;
@@ -171,6 +172,7 @@ async function setStatus(app, status, onError) {
         [updated.status]: (counts.value[updated.status] || 0) + 1,
       };
     }
+    if (quiet) return res.matchesCleared ? 'cleared' : true;
     if (status === 'accepted') toast.success(`${name} is in!`);
     else if (previous === 'accepted') toast.success(`${name} was removed from the event.`);
     else toast.success(`${name}'s sign-up was rejected.`);
@@ -183,11 +185,69 @@ async function setStatus(app, status, onError) {
     return true;
   } catch (e) {
     if (onError) onError(e.message);
-    else toast.error(e.message);
+    else if (!quiet) toast.error(e.message);
     return false;
   } finally {
     busyId.value = null;
   }
+}
+
+// ---- Bulk accept / reject (pending sign-ups only) ----
+const picked = ref([]);
+const pendingShown = computed(() => (canReview.value ? visible.value.filter((a) => a.status === 'pending') : []));
+const allPicked = computed(() => pendingShown.value.length > 0 && pendingShown.value.every((a) => picked.value.includes(a.id)));
+const somePicked = computed(() => picked.value.length > 0 && !allPicked.value);
+
+// Only pending sign-ups that are still on screen stay selected
+watch(pendingShown, (list) => {
+  const ids = new Set(list.map((a) => a.id));
+  if (picked.value.some((id) => !ids.has(id))) picked.value = picked.value.filter((id) => ids.has(id));
+});
+
+function togglePick(id) {
+  picked.value = picked.value.includes(id) ? picked.value.filter((x) => x !== id) : [...picked.value, id];
+}
+function toggleAll() {
+  picked.value = allPicked.value ? [] : pendingShown.value.map((a) => a.id);
+}
+
+const bulk = reactive({ running: false, status: '', done: 0, total: 0, confirmReject: false });
+const bulkLabel = computed(() =>
+  bulk.status === 'accepted' ? `Accepting ${bulk.done + 1} of ${bulk.total}…` : `Rejecting ${bulk.done + 1} of ${bulk.total}…`
+);
+
+// One request at a time, so a failure part-way is clear and the server's checks (capacity) apply in order
+async function runBulk(status) {
+  const apps = applications.value.filter((a) => picked.value.includes(a.id) && a.status === 'pending');
+  if (!apps.length || bulk.running) return;
+  bulk.running = true;
+  bulk.status = status;
+  bulk.done = 0;
+  bulk.total = apps.length;
+  let ok = 0;
+  let cleared = false;
+  const failures = [];
+  for (const app of apps) {
+    const result = await setStatus(app, status, (msg) => failures.push(`${personName(app.user)}: ${msg}`), { quiet: true });
+    if (result) ok++;
+    if (result === 'cleared') cleared = true;
+    bulk.done++;
+  }
+  bulk.running = false;
+  bulk.confirmReject = false;
+  picked.value = [];
+
+  const verb = status === 'accepted' ? 'Accepted' : 'Rejected';
+  if (ok) toast.success(`${verb} ${pluralize(ok, 'sign-up')}.`);
+  if (failures.length) {
+    toast.error(`${pluralize(failures.length, 'sign-up')} couldn't be changed. ${failures[0]}`, { duration: 8000 });
+  }
+  if (cleared) {
+    toast.info('Draft matches were cleared because the participant list changed. Generate them again on the Matching tab.', {
+      duration: 7000,
+    });
+  }
+  if (ok) emit('reload');
 }
 
 // ---- Export ----
@@ -256,7 +316,32 @@ function exportCsv() {
         {{ search ? 'Nobody matches that search.' : `No ${filter === 'all' ? '' : filter + ' '}sign-ups.` }}
       </p>
 
-      <div v-else class="card overflow-hidden">
+      <div v-if="visible.length && pendingShown.length" class="bulk-bar card" role="group" aria-label="Review several sign-ups">
+        <label class="bulk-check">
+          <input
+            type="checkbox"
+            :checked="allPicked"
+            :indeterminate.prop="somePicked"
+            :disabled="bulk.running"
+            @change="toggleAll"
+          />
+          <span>{{ picked.length ? `${picked.length} selected` : `Select all ${pendingShown.length} pending` }}</span>
+        </label>
+        <p v-if="bulk.running" class="bulk-progress" role="status">
+          <Loader2 :size="16" class="spin" aria-hidden="true" /> {{ bulkLabel }}
+        </p>
+        <div v-else-if="picked.length" class="bulk-actions">
+          <button type="button" class="btn btn-primary btn-xs" @click="runBulk('accepted')">
+            <Check :size="15" aria-hidden="true" /> Accept {{ picked.length }}
+          </button>
+          <button type="button" class="btn btn-outline btn-xs btn-danger-text" @click="bulk.confirmReject = true">
+            <X :size="15" aria-hidden="true" /> Reject {{ picked.length }}
+          </button>
+          <button type="button" class="btn btn-ghost btn-xs" @click="picked = []">Clear</button>
+        </div>
+      </div>
+
+      <div v-if="visible.length" class="card overflow-hidden">
         <div class="row head" aria-hidden="true">
           <span>Artist</span>
           <span>Community username</span>
@@ -269,6 +354,15 @@ function exportCsv() {
         <ul class="m-0 p-0 list-none">
           <li v-for="app in visible" :key="app.id" class="row" :class="{ 'is-busy': busyId === app.id }">
             <div class="cell-artist">
+              <input
+                v-if="canReview && app.status === 'pending'"
+                type="checkbox"
+                class="pick"
+                :checked="picked.includes(app.id)"
+                :disabled="bulk.running"
+                :aria-label="`Select ${personName(app.user)}`"
+                @change="togglePick(app.id)"
+              />
               <UserAvatar :user="app.user" :size="40" />
               <div class="min-w-0">
                 <button type="button" class="name-btn" @click="selectedId = app.id">
@@ -357,6 +451,17 @@ function exportCsv() {
     />
 
     <ConfirmDialog
+      :open="bulk.confirmReject"
+      :title="`Reject ${pluralize(picked.length, 'sign-up')}?`"
+      message="Each person is told their sign-up wasn't accepted, and they can't sign up again for this event."
+      :confirm-label="`Reject ${picked.length}`"
+      danger
+      :loading="bulk.running"
+      @confirm="runBulk('rejected')"
+      @cancel="bulk.confirmReject = false"
+    />
+
+    <ConfirmDialog
       :open="confirm.open"
       :title="confirmText.title"
       :message="confirmText.message"
@@ -377,6 +482,42 @@ function exportCsv() {
 <style scoped>
 .search .input {
   padding: 10px 0;
+}
+.bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 10px 18px;
+}
+.bulk-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.bulk-check input,
+.pick {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--pink);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.bulk-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--muted);
+  font-weight: 600;
 }
 .row {
   display: grid;
@@ -410,7 +551,8 @@ li.row:first-child {
   color: var(--text);
   cursor: pointer;
   text-align: left;
-  overflow-wrap: anywhere;
+  /* Whole words, so the column never shrinks to one letter per line */
+  overflow-wrap: break-word;
 }
 .name-btn:hover {
   color: var(--pink-dark);
@@ -443,7 +585,7 @@ li.row:first-child {
   .row,
   .row.head {
     display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.2fr) 90px 150px 110px minmax(180px, auto);
+    grid-template-columns: minmax(170px, 2fr) minmax(0, 1.3fr) minmax(0, 1.2fr) 90px 150px 110px minmax(180px, auto);
     gap: 14px;
   }
   .row.head {
