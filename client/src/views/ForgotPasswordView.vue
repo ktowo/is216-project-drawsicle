@@ -1,10 +1,11 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, computed, onBeforeUnmount } from 'vue';
 import { RouterLink } from 'vue-router';
-import { Mail, MailCheck, ArrowLeft, Loader2 } from 'lucide-vue-next';
+import { Mail, MailCheck, ArrowLeft, Loader2, RotateCw } from 'lucide-vue-next';
 import AuthLayout from '@/components/AuthLayout.vue';
 import TextField from '@/components/TextField.vue';
 import { api } from '@/api';
+import { toast } from '@/stores/toast';
 
 const email = ref('');
 const loading = ref(false);
@@ -12,6 +13,27 @@ const error = ref('');
 const sent = ref(false);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const RESEND_WAIT_SECONDS = 30;
+
+// Seconds until "Send it again" works
+const wait = ref(0);
+let timer = null;
+function startWait() {
+  wait.value = RESEND_WAIT_SECONDS;
+  clearInterval(timer);
+  timer = setInterval(() => {
+    wait.value -= 1;
+    if (wait.value <= 0) clearInterval(timer);
+  }, 1000);
+}
+onBeforeUnmount(() => clearInterval(timer));
+
+const resendLabel = computed(() => (wait.value > 0 ? `Send it again in ${wait.value}s` : 'Send it again'));
+
+async function send() {
+  await api('/auth/forgot-password', { method: 'POST', body: { email: email.value.trim() } });
+  startWait();
+}
 
 async function submit() {
   error.value = '';
@@ -21,8 +43,22 @@ async function submit() {
   }
   loading.value = true;
   try {
-    await api('/auth/forgot-password', { method: 'POST', body: { email: email.value.trim() } });
+    await send();
     sent.value = true;
+  } catch (e) {
+    error.value = e.message;
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function resend() {
+  if (wait.value > 0 || loading.value) return;
+  error.value = '';
+  loading.value = true;
+  try {
+    await send();
+    toast.success('Sent again. Only the newest link works.');
   } catch (e) {
     error.value = e.message;
   } finally {
@@ -42,7 +78,15 @@ async function submit() {
         If an account exists for <strong>{{ email }}</strong>, a reset link is on its way.
         Check your spam folder if it doesn't show up in a minute.
       </p>
-      <button type="button" class="btn btn-outline btn-block" @click="sent = false">Use a different email</button>
+      <p v-if="error" class="alert alert-error" role="alert">{{ error }}</p>
+      <div class="sent-actions">
+        <button type="button" class="btn btn-primary btn-block" :disabled="wait > 0 || loading" @click="resend">
+          <Loader2 v-if="loading" :size="18" class="spin" aria-hidden="true" />
+          <RotateCw v-else :size="18" aria-hidden="true" />
+          {{ resendLabel }}
+        </button>
+        <button type="button" class="btn btn-outline btn-block" @click="sent = false">Use a different email</button>
+      </div>
     </div>
 
     <form v-else novalidate @submit.prevent="submit">
@@ -85,6 +129,14 @@ async function submit() {
 .sent p {
   margin: 0 0 24px;
   line-height: 1.6;
+}
+.sent .alert {
+  margin: 0 0 16px;
+}
+.sent-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 .back {
   display: inline-flex;
