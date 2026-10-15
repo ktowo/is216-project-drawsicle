@@ -54,7 +54,7 @@ async function connectDB() {
       storageEngine: 'wiredTiger',
     },
   });
-  await mongoose.connect(memoryServer.getUri('drawisicle'));
+  await mongoose.connect(memoryServer.getUri('drawsicle'));
   return { mode: 'local', dbPath };
 }
 

@@ -1,4 +1,4 @@
-// Generated artwork for the demo data: soft abstract shapes in the Drawisicle palette.
+// Generated artwork for the demo data: soft abstract shapes in the Drawsicle palette.
 // The same seed always draws the same picture, so the server seed script (which writes
 // .svg files) and mock mode (which stores data URLs) show identical images.
 
@@ -69,7 +69,7 @@ function wavePath(rand, width, height, baseY, amplitude) {
 }
 
 export function demoArtSvg({ seed, title = '', width = 800, height = 600 } = {}) {
-  const rand = randomFrom(seed ?? 'drawisicle');
+  const rand = randomFrom(seed ?? 'drawsicle');
   const [bgA, bgB, soft, strong, accent] = PALETTES[Math.floor(rand() * PALETTES.length)];
   const w = Math.max(16, r0(width));
   const h = Math.max(16, r0(height));

@@ -1,6 +1,6 @@
-# Drawisicle
+# Drawsicle
 
-Drawisicle runs **art exchange events** for online art communities: Secret Santas, Valentine swaps,
+Drawsicle runs **art exchange events** for online art communities: Secret Santas, Valentine swaps,
 seasonal trades. It replaces the usual pile of spreadsheets, Google Forms and Discord messages with one
 place that collects everyone's preferences, matches artists automatically and keeps track of deadlines
 and gifts until the big reveal.
@@ -85,7 +85,7 @@ You need **Node.js 22.18 or newer** (24 LTS recommended) from [nodejs.org](https
 ./Start-all.sh
 ```
 
-Then open <http://localhost:5173> and log in as **mika@demo.test** / **drawisicle123**.
+Then open <http://localhost:5173> and log in as **mika@demo.test** / **drawsicle123**.
 
 What the first run does:
 
@@ -116,7 +116,7 @@ simply killed can lose them. If the database doesn't answer, the script falls ba
 
 ## Demo accounts
 
-Every demo account uses the password **drawisicle123**. Dates are relative to when the demo data was
+Every demo account uses the password **drawsicle123**. Dates are relative to when the demo data was
 created, so deadlines always look current.
 
 | Email | Name | Organises | Takes part in |
@@ -270,7 +270,7 @@ is216-project/
 │   │   ├── components/     Navbar, Footer, NotificationBell, ui/, events/, characters/, profile/, info/
 │   │   ├── stores/         auth, notifications, toasts
 │   │   ├── utils/          formatting, calendar (.ics) files, event templates, social links
-│   │   ├── assets/         drawisicle.css design system + Tailwind theme
+│   │   ├── assets/         drawsicle.css design system + Tailwind theme
 │   │   └── mock/           the in-browser API used in mock mode
 │   └── tests/              Vitest tests
 ├── server/                 Express API

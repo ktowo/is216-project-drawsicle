@@ -14,7 +14,7 @@ defineProps({
   <main id="main" class="auth-page">
     <RouterLink to="/" class="home-link">
       <span class="home-tile"><Palette :size="18" aria-hidden="true" /></span>
-      <span>Drawisicle</span>
+      <span>Drawsicle</span>
     </RouterLink>
 
     <div class="auth-inner">

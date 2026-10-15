@@ -64,14 +64,14 @@ async function load() {
       await router.replace({ name: 'user', params: { username: real }, hash: route.hash });
       if (id !== loadId) return;
     }
-    document.title = `${name.value} · Drawisicle`;
+    document.title = `${name.value} · Drawsicle`;
   } catch (e) {
     if (id !== loadId) return;
     profile.value = null;
     organizing.value = [];
     if (e.status === 404 || e.code === 'USER_NOT_FOUND') {
       state.value = 'notfound';
-      document.title = 'Artist not found · Drawisicle';
+      document.title = 'Artist not found · Drawsicle';
     } else {
       state.value = 'error';
       errorMessage.value = e.message || '';

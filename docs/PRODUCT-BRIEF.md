@@ -1,14 +1,14 @@
-# Drawisicle | Event-based Art Exchange Platform
+# Drawsicle | Event-based Art Exchange Platform
 
 ## Project Overview
 
-Drawisicle is a web platform for running art exchange events (e.g. Secret Santa, Valentine swaps, seasonal exchanges)
+Drawsicle is a web platform for running art exchange events (e.g. Secret Santa, Valentine swaps, seasonal exchanges)
 within online art communities. It replaces spreadsheets, Google Forms, and manual Discord tracking with a single system
 that collects participant preferences, matches artists automatically, and tracks deadlines and submissions.
 
 It solves common issues such as manual matching which takes effort and may not be efficient, participants requesting
 characters artists cannot draw, organisers juggling multiple tools, and character references being re-submitted every
-event. Drawisicle centralises all of this into one workflow.
+event. Drawsicle centralises all of this into one workflow.
 
 ## Target Users
 

@@ -162,7 +162,7 @@ async function sendTestNotification() {
       <div class="min-w-0">
         <h1 class="welcome">{{ greeting }}, {{ firstName }}</h1>
         <p class="lead">
-          {{ isNewUser && !loading ? 'Welcome to Drawisicle! Find an exchange to join, or start your own.' : "Here's what's happening in your art exchanges." }}
+          {{ isNewUser && !loading ? 'Welcome to Drawsicle! Find an exchange to join, or start your own.' : "Here's what's happening in your art exchanges." }}
         </p>
       </div>
       <RouterLink to="/events/new" class="btn btn-primary">

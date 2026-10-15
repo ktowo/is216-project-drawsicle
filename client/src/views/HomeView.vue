@@ -115,7 +115,7 @@ onMounted(loadOpenEvents);
           </p>
           <h1 class="hero-title">Art exchanges, <span class="accent">minus the spreadsheets</span></h1>
           <p class="lead">
-            Drawisicle collects sign-ups and character references, matches artists with characters they can actually
+            Drawsicle collects sign-ups and character references, matches artists with characters they can actually
             draw, and keeps everyone on track until the reveal.
           </p>
           <div class="hero-cta">

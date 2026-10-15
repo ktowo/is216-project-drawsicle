@@ -7,7 +7,7 @@ import InfoLayout from '@/components/info/InfoLayout.vue';
 <template>
   <InfoLayout
     title="Terms of use"
-    intro="Plain-language terms for a student project. By using Drawisicle you agree to them."
+    intro="Plain-language terms for a student project. By using Drawsicle you agree to them."
     :icon="ScrollText"
     updated="12 October 2026"
     current="terms"
@@ -15,7 +15,7 @@ import InfoLayout from '@/components/info/InfoLayout.vue';
     <section id="about-service">
       <h2>What this is</h2>
       <p>
-        Drawisicle is a free web app built by students for the IS216 module at SMU. It helps people run and join art
+        Drawsicle is a free web app built by students for the IS216 module at SMU. It helps people run and join art
         exchange events. It is a learning project, not a company, and these terms are written to be short and readable
         rather than legal.
       </p>
@@ -34,7 +34,7 @@ import InfoLayout from '@/components/info/InfoLayout.vue';
     <section id="your-content">
       <h2>Your content stays yours</h2>
       <p>
-        You own the characters, art, writing and text you add. By uploading something you give Drawisicle
+        You own the characters, art, writing and text you add. By uploading something you give Drawsicle
         permission to store it and show it to the people it is meant for (for example, your gift to your recipient and the
         event's organisers) so the site can work. We don't claim any other rights.
       </p>
@@ -48,7 +48,7 @@ import InfoLayout from '@/components/info/InfoLayout.vue';
       <h2>Organisers run their own events</h2>
       <p>
         Each event belongs to its organisers. They set the rules, choose who joins and decide how matches and deadlines
-        work. Drawisicle provides the tools but isn't a party to any exchange and can't guarantee that anyone will deliver
+        work. Drawsicle provides the tools but isn't a party to any exchange and can't guarantee that anyone will deliver
         a gift. Disputes are best settled between the people involved and the organisers.
       </p>
     </section>
@@ -80,7 +80,7 @@ import InfoLayout from '@/components/info/InfoLayout.vue';
       <h2>Changes and contact</h2>
       <p>
         We may update these terms as the project changes, and the date at the top shows when. If you keep using the
-        site after a change, that means you accept it. Questions go to the Drawisicle team through whoever shared the link
+        site after a change, that means you accept it. Questions go to the Drawsicle team through whoever shared the link
         with you.
       </p>
     </section>

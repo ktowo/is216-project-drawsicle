@@ -182,9 +182,9 @@ watch(
   <header ref="header" class="topbar" @focusout="onFocusOut">
     <a href="#main" class="skip-link" @click.prevent="skipToContent">Skip to content</a>
     <div class="bar">
-      <RouterLink :to="homeLink" class="brand" aria-label="Drawisicle home">
+      <RouterLink :to="homeLink" class="brand" aria-label="Drawsicle home">
         <span class="brand-tile"><Palette :size="24" aria-hidden="true" /></span>
-        <span class="brand-name">Drawisicle</span>
+        <span class="brand-name">Drawsicle</span>
       </RouterLink>
 
       <nav class="desktop-nav" aria-label="Main">

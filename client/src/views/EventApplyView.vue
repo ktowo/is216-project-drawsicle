@@ -152,7 +152,7 @@ async function load() {
     event.value = eventRes.value.event;
     application.value = appRes.value.application;
     library.value = charRes.value.characters || [];
-    document.title = `Sign up: ${event.value.name} · Drawisicle`;
+    document.title = `Sign up: ${event.value.name} · Drawsicle`;
     prefill();
   }
   loading.value = false;

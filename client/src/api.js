@@ -27,7 +27,7 @@ const STATUS_MESSAGES = {
 };
 
 // Fired when a logged-in session has ended on the server; App.vue listens and sends the person to log in
-export const SESSION_EXPIRED_EVENT = 'drawisicle:session-expired';
+export const SESSION_EXPIRED_EVENT = 'drawsicle:session-expired';
 
 // Small wrapper around fetch for our Express API.
 //   await api('/auth/login', { method: 'POST', body: { email, password } })

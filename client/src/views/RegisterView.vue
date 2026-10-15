@@ -69,7 +69,7 @@ async function submit() {
   loading.value = true;
   try {
     const user = await register(email.value.trim(), password.value, displayName.value);
-    toast.success(`Welcome to Drawisicle, ${user.displayName}!`);
+    toast.success(`Welcome to Drawsicle, ${user.displayName}!`);
     router.replace(redirectTo.value);
   } catch (e) {
     error.value = e.message;

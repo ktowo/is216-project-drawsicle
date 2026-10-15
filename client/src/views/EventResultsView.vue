@@ -88,7 +88,7 @@ async function load() {
     else if (reason.status === 403 || reason.status === 409) blocked.value = blockedFor(reason, event.value);
     else error.value = reason.message;
   }
-  if (event.value) document.title = `The reveal: ${event.value.name} · Drawisicle`;
+  if (event.value) document.title = `The reveal: ${event.value.name} · Drawsicle`;
   loading.value = false;
 }
 

@@ -7,7 +7,7 @@ import { auth } from '@/stores/auth';
 
 <template>
   <InfoLayout
-    title="About Drawisicle"
+    title="About Drawsicle"
     intro="A home for art exchanges: Secret Santas, Valentine swaps and seasonal trades for online art communities."
     :icon="Info"
     updated="12 October 2026"
@@ -16,7 +16,7 @@ import { auth } from '@/stores/auth';
     <section id="what">
       <h2>What it is</h2>
       <p>
-        Drawisicle runs art exchange events from start to finish. Organisers set up an event and share one link. Artists
+        Drawsicle runs art exchange events from start to finish. Organisers set up an event and share one link. Artists
         sign up, say what they can draw and which characters they would like to receive art of. When sign-ups close, the
         site pairs everyone up, keeps track of deadlines and collects the finished gifts for the reveal.
       </p>
@@ -35,7 +35,7 @@ import { auth } from '@/stores/auth';
         <li>Everyone pastes the same character references into a new form every event.</li>
       </ul>
       <p>
-        Drawisicle puts all of that in one place. Characters are saved once in a private library, matching respects what
+        Drawsicle puts all of that in one place. Characters are saved once in a private library, matching respects what
         each artist can and can't draw, and reminders go out before deadlines.
       </p>
     </section>
@@ -80,7 +80,7 @@ import { auth } from '@/stores/auth';
     <section id="project">
       <h2>Who built it</h2>
       <p>
-        Drawisicle is a student project for the IS216 module at Singapore Management University (SMU).
+        Drawsicle is a student project for the IS216 module at Singapore Management University (SMU).
         It is built with Vue, Express and MongoDB by a small team, and it is a learning project rather than a
         commercial service. That is also why the <RouterLink to="/terms">terms</RouterLink> are short and the
         <RouterLink to="/privacy">privacy page</RouterLink> says exactly what is stored.

@@ -235,7 +235,7 @@ async function load() {
     }
     event.value = data.event;
     resetForm(formFromEvent(data.event));
-    document.title = `Edit ${data.event.name} · Drawisicle`;
+    document.title = `Edit ${data.event.name} · Drawsicle`;
   } catch (e) {
     if (id !== requestId) return;
     if (e.status === 404 || e.code === 'INVALID_ID') notFound.value = true;

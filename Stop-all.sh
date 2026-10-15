@@ -194,7 +194,7 @@ fi
 rm -f "$RUN_DIR"/*.pid 2>/dev/null
 
 if ((STOPPED == 0)); then
-  echo "Nothing to stop: Drawisicle isn't running."
+  echo "Nothing to stop: Drawsicle isn't running."
 else
-  echo "Drawisicle has stopped. Logs are kept in .run/."
+  echo "Drawsicle has stopped. Logs are kept in .run/."
 fi

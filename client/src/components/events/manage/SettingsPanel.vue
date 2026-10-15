@@ -194,7 +194,7 @@ async function confirmDelete() {
       </h2>
       <p class="section-sub text-sm">
         Organisers can change the details, review sign-ups, make matches and send reminders. Add co-organisers by
-        the email or username on their Drawisicle account.
+        the email or username on their Drawsicle account.
       </p>
 
       <LoadingBlock v-if="loading" label="Loading organisers…" />

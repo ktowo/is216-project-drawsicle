@@ -2,7 +2,7 @@ import { reactive, watch } from 'vue';
 
 // Per-browser display choices: colour theme and the sparkle cursor.
 // theme: 'light' | 'dark' | null (null = follow the device setting)
-const KEY = 'drawisicle-preferences';
+const KEY = 'drawsicle-preferences';
 
 function readSaved() {
   try {

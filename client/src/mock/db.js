@@ -8,8 +8,8 @@
 import { buildDemoData, DEMO_PASSWORD } from '@shared/demo-data.mjs';
 import { demoArtDataUrl } from '@shared/demo-art.mjs';
 
-export const STATE_KEY = 'drawisicle-mock-v1';
-export const SESSION_KEY = 'drawisicle-mock-session';
+export const STATE_KEY = 'drawsicle-mock-v1';
+export const SESSION_KEY = 'drawsicle-mock-session';
 const STATE_VERSION = 1;
 
 const HOUR = 60 * 60 * 1000;
@@ -28,7 +28,7 @@ function pickStore() {
   try {
     const ls = globalThis.localStorage;
     if (!ls) return memoryStore;
-    const probe = '__drawisicle_probe__';
+    const probe = '__drawsicle_probe__';
     ls.setItem(probe, '1');
     ls.removeItem(probe);
     return ls;

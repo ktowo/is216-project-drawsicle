@@ -3,7 +3,7 @@ import { computed } from 'vue';
 import { passwordStrength } from '@/utils/password';
 
 // The meter under a new-password field. Empty until something is typed; it stays in the page
-// so screen readers hear each change. (.password-strength + .field in drawisicle.css keeps the
+// so screen readers hear each change. (.password-strength + .field in drawsicle.css keeps the
 // usual gap before the next field.)
 const props = defineProps({
   password: { type: String, default: '' },

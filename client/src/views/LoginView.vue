@@ -15,7 +15,7 @@ import { safeRedirect } from '@/router';
 const route = useRoute();
 const router = useRouter();
 
-const DEMO = { email: 'mika@demo.test', password: 'drawisicle123' };
+const DEMO = { email: 'mika@demo.test', password: 'drawsicle123' };
 
 // Codes the server puts in ?error= when a Google/Discord sign-in fails
 const PROVIDER_ERRORS = {

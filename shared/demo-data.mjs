@@ -3,7 +3,7 @@
 // Records point at each other by `key`; each side swaps keys for real ids when it loads them.
 // Every date is relative to `now`, so deadlines look fresh after a reset.
 
-export const DEMO_PASSWORD = 'drawisicle123';
+export const DEMO_PASSWORD = 'drawsicle123';
 export const DEMO_LOGIN_EMAIL = 'mika@demo.test';
 
 const HOUR = 60 * 60 * 1000;
@@ -140,7 +140,7 @@ export function buildDemoData(now = new Date()) {
       key: 'ada',
       role: 'admin',
       displayName: 'Ada (site admin)',
-      bio: 'Keeps Drawisicle tidy: moderates events and helps with account problems.',
+      bio: 'Keeps Drawsicle tidy: moderates events and helps with account problems.',
       socials: { discord: 'ada_admin', bluesky: 'ada-admin' },
       defaultForm: { communityUsername: 'ada_admin', canCreate: ['art'], wantsTypes: ['art'], likes: '', avoid: '', cannotDraw: [] },
     },

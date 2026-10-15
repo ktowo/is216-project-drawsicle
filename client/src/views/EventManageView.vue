@@ -78,7 +78,7 @@ watch(
 watch(
   () => [event.value?.name, route.fullPath],
   ([name]) => {
-    if (name && route.name === 'event-manage') document.title = `Manage ${name} · Drawisicle`;
+    if (name && route.name === 'event-manage') document.title = `Manage ${name} · Drawsicle`;
   }
 );
 

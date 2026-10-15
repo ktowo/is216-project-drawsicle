@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Starts Drawisicle: installs anything missing, creates server/.env, then runs the API
+# Starts Drawsicle: installs anything missing, creates server/.env, then runs the API
 # (with its own local MongoDB unless server/.env has DB set) and the Vue client in the background.
 # Works in Terminal on macOS/Linux and in Git Bash on Windows (Windows cmd: Start-all.bat).
 #
@@ -63,7 +63,7 @@ command -v node >/dev/null 2>&1 ||
 NODE_VERSION="$(node -p 'process.versions.node')"
 IFS=. read -r NODE_MAJOR NODE_MINOR _ <<<"$NODE_VERSION"
 if ((NODE_MAJOR < 22 || (NODE_MAJOR == 22 && NODE_MINOR < 18))); then
-  fail "Node $NODE_VERSION is too old. Drawisicle needs Node 22.18 or newer (24 LTS recommended): https://nodejs.org"
+  fail "Node $NODE_VERSION is too old. Drawsicle needs Node 22.18 or newer (24 LTS recommended): https://nodejs.org"
 fi
 
 # ---------- Package manager ----------
@@ -83,7 +83,7 @@ else
   fail "No package manager found. Install Node.js from https://nodejs.org (it includes npm), then run this again."
 fi
 
-echo "Drawisicle: Node $NODE_VERSION, ${PM[*]}"
+echo "Drawsicle: Node $NODE_VERSION, ${PM[*]}"
 
 # ---------- Dependencies ----------
 
@@ -272,7 +272,7 @@ fi
 # ---------- Summary ----------
 
 echo ""
-echo "Drawisicle is running."
+echo "Drawsicle is running."
 echo "  App:         $CLIENT_URL"
 if ((MOCK == 1)); then
   echo "  Mode:        mock (the API runs in your browser; data is kept in this browser only)"
@@ -282,7 +282,7 @@ fi
 if ((MOCK == 0 && EXTERNAL_DB == 1)); then
   echo "  Database:    the one in server/.env (demo accounts: run '${PM[*]} run seed' in server/ to add them)"
 fi
-echo "  Demo login:  mika@demo.test / drawisicle123 (every demo account uses drawisicle123)"
+echo "  Demo login:  mika@demo.test / drawsicle123 (every demo account uses drawsicle123)"
 if ((MOCK == 0)); then
   echo "  Logs:        .run/server.log and .run/client.log"
 else

@@ -1,11 +1,11 @@
-# Drawisicle architecture
+# Drawsicle architecture
 
-Drawisicle runs art exchange events (Secret Santa, Valentine swaps, seasonal exchanges) for online art
+Drawsicle runs art exchange events (Secret Santa, Valentine swaps, seasonal exchanges) for online art
 communities: sign-ups, a private character library, automatic matching, deadlines, submissions and the reveal.
 
 ```
 is216-project/
-├── client/          Vue 3 + Vite + Vue Router, Tailwind v4 utilities + src/assets/drawisicle.css
+├── client/          Vue 3 + Vite + Vue Router, Tailwind v4 utilities + src/assets/drawsicle.css
 │   └── src/
 │       ├── api.js               fetch wrapper: api(path, { method, body, form }), qs(), assetUrl()
 │       ├── router/index.js      every page route
@@ -45,7 +45,7 @@ is216-project/
   Routers end with `router.use(apiErrorHandler)`; throw `httpError(status, message)` from `utils/helpers.js`
   (attach `.code` when useful). Mongoose `ValidationError`s become 400s automatically.
 - **IDs**: JSON uses `id` strings, never `_id`. Dates are ISO strings.
-- **Auth**: an httpOnly JWT cookie (`drawisicle_token`, 7 days). The client sends `credentials: 'include'`;
+- **Auth**: an httpOnly JWT cookie (`drawsicle_token`, 7 days). The client sends `credentials: 'include'`;
   in dev Vite proxies `/api` and `/uploads` to `http://localhost:8000`; on Vercel both sides share one domain.
 - **Uploaded files** come back as URLs: `/uploads/...` (local disk), `/api/files/<id>.<ext>` (GridFS, used whenever
   the database is a shared one such as Atlas) or an Azure blob URL. The client passes them through `assetUrl()`.

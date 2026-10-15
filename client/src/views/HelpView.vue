@@ -145,7 +145,7 @@ const SUGGESTIONS = ['deadline', 'matching', 'password', 'private', 'character']
         <h2 class="still-title">Still stuck?</h2>
         <p>
           Ask the organiser of the event you are in, they can see your sign-up and its status. For a problem with the
-          site itself, contact the Drawisicle team through whoever shared the link with you.
+          site itself, contact the Drawsicle team through whoever shared the link with you.
         </p>
         <p class="still-links">
           <RouterLink to="/guidelines#reporting">Reporting a problem</RouterLink>

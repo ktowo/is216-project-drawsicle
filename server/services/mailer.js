@@ -35,7 +35,7 @@ async function sendMail({ to, subject, text, html }) {
     return;
   }
   await t.sendMail({
-    from: process.env.MAIL_FROM || 'Drawisicle <no-reply@drawisicle.app>',
+    from: process.env.MAIL_FROM || 'Drawsicle <no-reply@drawsicle.app>',
     to,
     subject,
     text,

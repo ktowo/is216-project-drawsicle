@@ -72,7 +72,7 @@ async function load({ quiet = false } = {}) {
     const data = await api(`/events/${route.params.id}${qs({ invite: invite.value })}`);
     if (id !== requestId) return;
     event.value = data.event;
-    document.title = `${data.event.name} · Drawisicle`;
+    document.title = `${data.event.name} · Drawsicle`;
   } catch (e) {
     if (id !== requestId) return;
     if (e.status === 404 || e.code === 'INVALID_ID') notFound.value = true;
@@ -141,7 +141,7 @@ async function share() {
     const url = absoluteEventUrl(router, event.value, { invite: isPrivate.value ? event.value.inviteCode : undefined });
     const result = await shareOrCopy({
       title: event.value.name,
-      text: `Join ${event.value.name}, an art exchange on Drawisicle.`,
+      text: `Join ${event.value.name}, an art exchange on Drawsicle.`,
       url,
     });
     if (result === 'failed') {

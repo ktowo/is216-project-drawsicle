@@ -7,7 +7,7 @@ import InfoLayout from '@/components/info/InfoLayout.vue';
 <template>
   <InfoLayout
     title="Privacy"
-    intro="What Drawisicle stores about you, who can see it, and how to take it with you or delete it."
+    intro="What Drawsicle stores about you, who can see it, and how to take it with you or delete it."
     :icon="ShieldCheck"
     updated="12 October 2026"
     current="privacy"
@@ -66,7 +66,7 @@ import InfoLayout from '@/components/info/InfoLayout.vue';
     <section id="cookies">
       <h2>Cookies</h2>
       <p>
-        Drawisicle sets one cookie: a login cookie that keeps you signed in for up to 7 days. It is marked httpOnly, so
+        Drawsicle sets one cookie: a login cookie that keeps you signed in for up to 7 days. It is marked httpOnly, so
         scripts on the page can't read it, and it is only used to know who you are. We don't use advertising or analytics
         cookies.
       </p>
@@ -104,7 +104,7 @@ import InfoLayout from '@/components/info/InfoLayout.vue';
     <section id="contact">
       <h2>Questions</h2>
       <p>
-        Drawisicle is a university project run by a small student team. If you have a question about your data, want
+        Drawsicle is a university project run by a small student team. If you have a question about your data, want
         something corrected or want your account removed sooner, contact the team through whoever shared the link with you.
         See also the <RouterLink to="/terms">terms</RouterLink> and the
         <RouterLink to="/help#privacy-faq">privacy questions in the FAQ</RouterLink>.

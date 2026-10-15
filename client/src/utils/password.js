@@ -13,7 +13,7 @@ const COMMON = [
   'iloveyou',
   'letmein1',
   'abcdefgh',
-  'drawisicle',
+  'drawsicle',
   '11111111',
   'sunshine',
   'princess',

@@ -21,7 +21,7 @@ let counter = 0;
 
 async function startTestDb() {
   mongod = await MongoMemoryServer.create();
-  await mongoose.connect(mongod.getUri('drawisicle-test'));
+  await mongoose.connect(mongod.getUri('drawsicle-test'));
 }
 
 async function stopTestDb() {
@@ -31,7 +31,7 @@ async function stopTestDb() {
 }
 
 // The test database address, for code that makes its own connection (server.js)
-const testDbUri = () => mongod.getUri('drawisicle-test');
+const testDbUri = () => mongod.getUri('drawsicle-test');
 
 async function clearDb() {
   const collections = await mongoose.connection.db.collections();

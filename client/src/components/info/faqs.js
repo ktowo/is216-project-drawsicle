@@ -362,7 +362,7 @@ export const FAQ_GROUPS = [
         id: 'faq-something-else',
         q: "Something else is wrong",
         a: [
-          'For anything about a particular event, talk to its organisers first. For a problem with the site, contact the Drawisicle team through whoever shared the link with you, and mention what you were doing and what you saw.',
+          'For anything about a particular event, talk to its organisers first. For a problem with the site, contact the Drawsicle team through whoever shared the link with you, and mention what you were doing and what you saw.',
           { links: [{ to: '/guidelines#reporting', label: 'Reporting a problem' }] },
         ],
       },

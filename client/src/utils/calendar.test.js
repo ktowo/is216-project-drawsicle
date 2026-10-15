@@ -21,7 +21,7 @@ describe('eventCalendarEntries', () => {
     const entries = eventCalendarEntries(event(), { now: NOW, url: 'https://example.test/events/evt1' });
     expect(entries.map((e) => e.kind)).toEqual(['signup', 'submission']);
     expect(entries[0].start).toBeInstanceOf(Date);
-    expect(entries[0].uid).toBe('evt1-signup@drawisicle');
+    expect(entries[0].uid).toBe('evt1-signup@drawsicle');
     expect(entries[1].url).toBe('https://example.test/events/evt1');
   });
 
@@ -38,7 +38,7 @@ describe('buildIcs', () => {
   const text = buildIcs(
     [
       {
-        uid: 'a@drawisicle',
+        uid: 'a@drawsicle',
         title: 'Gifts due: Cats, dogs; and more',
         start: new Date('2026-12-12T18:00:00Z'),
         durationMinutes: 30,
@@ -54,7 +54,7 @@ describe('buildIcs', () => {
     expect(text.endsWith('\r\n')).toBe(true);
     expect(text.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/);
     expect(lines[0]).toBe('BEGIN:VCALENDAR');
-    expect(lines).toContain('PRODID:-//Drawisicle//Events//EN');
+    expect(lines).toContain('PRODID:-//Drawsicle//Events//EN');
     expect(lines).toContain('VERSION:2.0');
     expect(lines.at(-2)).toBe('END:VCALENDAR');
   });
@@ -82,6 +82,6 @@ describe('buildIcs', () => {
 describe('icsFilename', () => {
   it('makes a safe file name', () => {
     expect(icsFilename('Winter Secret Santa 2026!')).toBe('winter-secret-santa-2026.ics');
-    expect(icsFilename('')).toBe('drawisicle-deadlines.ics');
+    expect(icsFilename('')).toBe('drawsicle-deadlines.ics');
   });
 });

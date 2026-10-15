@@ -169,7 +169,7 @@ test('accounts without a password can set one', async () => {
 
   // Logged in the way the OAuth callback would be, with the same kind of cookie
   const jwt = require('jsonwebtoken');
-  const cookie = `drawisicle_token=${jwt.sign({ sub: user._id.toString(), v: 0 }, process.env.JWT_SECRET)}`;
+  const cookie = `drawsicle_token=${jwt.sign({ sub: user._id.toString(), v: 0 }, process.env.JWT_SECRET)}`;
   await h.request(app).get('/api/auth/me').set('Cookie', cookie).expect(200);
 
   await h.request(app)

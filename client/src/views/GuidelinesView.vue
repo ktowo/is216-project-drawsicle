@@ -17,7 +17,7 @@ import InfoLayout from '@/components/info/InfoLayout.vue';
       <p>
         Everyone here is making something for a stranger, usually for free, in their spare time. Assume good intentions,
         say thank you, and keep feedback gentle. Harassment, hate and putting down someone's art or characters have no
-        place on Drawisicle or in the communities around it.
+        place on Drawsicle or in the communities around it.
       </p>
     </section>
 
@@ -82,11 +82,11 @@ import InfoLayout from '@/components/info/InfoLayout.vue';
       </p>
       <p>
         If the problem is with an organiser, or with the site itself, check the
-        <RouterLink to="/help#troubleshooting">troubleshooting section</RouterLink> and contact the Drawisicle team
+        <RouterLink to="/help#troubleshooting">troubleshooting section</RouterLink> and contact the Drawsicle team
         through whoever shared the link with you. Accounts that break these guidelines can be deactivated.
       </p>
       <p class="callout">
-        Drawisicle has no messaging between users. Take conversations to the event's community, and never share your
+        Drawsicle has no messaging between users. Take conversations to the event's community, and never share your
         password with anyone, including organisers.
       </p>
     </section>

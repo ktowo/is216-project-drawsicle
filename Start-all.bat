@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions
-rem Starts Drawisicle from cmd.exe or a double-click: installs anything missing, creates
+rem Starts Drawsicle from cmd.exe or a double-click: installs anything missing, creates
 rem server\.env, then runs the API (with its own local MongoDB unless server\.env sets DB_MONGODB_URI)
 rem and the Vue client in two minimised windows. Git Bash, macOS and Linux: Start-all.sh
 rem
@@ -68,7 +68,7 @@ if not defined PM (
   echo Error: no package manager found. Install Node.js from https://nodejs.org, which includes npm, and run this again.
   goto :fail
 )
-echo Drawisicle: Node %NODE_VERSION%, %PM%
+echo Drawsicle: Node %NODE_VERSION%, %PM%
 
 rem ---------- Dependencies ----------
 
@@ -150,7 +150,7 @@ if "%EXTERNAL_DB%"=="0" if "%MONGO_CACHED%"=="0" (
   echo   First run: the local MongoDB is downloaded once, about 800 MB on Windows.
   echo   This can take several minutes. Later starts take a few seconds.
 )
-start "Drawisicle API" /min cmd /c "cd /d "%ROOT%server" && %PM% run dev > "%RUN_DIR%\server.log" 2>&1"
+start "Drawsicle API" /min cmd /c "cd /d "%ROOT%server" && %PM% run dev > "%RUN_DIR%\server.log" 2>&1"
 call :wait_for API "%API_URL%/api/health" %API_WAIT_SECONDS% "%RUN_DIR%\server.log" ok
 if errorlevel 1 (
   echo Error: the API didn't start. Fix the problem above, then run Stop-all.bat and Start-all.bat again.
@@ -170,7 +170,7 @@ if not errorlevel 1 (
 )
 
 echo Starting the client on %CLIENT_URL% using %CLIENT_SCRIPT% ...
-start "Drawisicle client" /min cmd /c "cd /d "%ROOT%client" && %PM% run %CLIENT_SCRIPT% > "%RUN_DIR%\client.log" 2>&1"
+start "Drawsicle client" /min cmd /c "cd /d "%ROOT%client" && %PM% run %CLIENT_SCRIPT% > "%RUN_DIR%\client.log" 2>&1"
 call :wait_for client "%CLIENT_URL%" %CLIENT_WAIT_SECONDS% "%RUN_DIR%\client.log" up
 if errorlevel 1 (
   echo Error: the client didn't start. Fix the problem above, then run Stop-all.bat and Start-all.bat again.
@@ -181,7 +181,7 @@ rem ---------- Summary ----------
 
 :summary
 echo.
-echo Drawisicle is running.
+echo Drawsicle is running.
 echo   App:         %CLIENT_URL%
 if "%MOCK%"=="1" (
   echo   Mode:        mock - the API runs in your browser and data stays in this browser
@@ -189,16 +189,16 @@ if "%MOCK%"=="1" (
   echo   API:         %API_URL%/api/health
 )
 if "%MOCK%"=="0" if "%EXTERNAL_DB%"=="1" echo   Database:    the one in server\.env. To add the demo accounts, run "%PM% run seed" in server\
-echo   Demo login:  mika@demo.test / drawisicle123, every demo account uses drawisicle123
+echo   Demo login:  mika@demo.test / drawsicle123, every demo account uses drawsicle123
 if "%MOCK%"=="0" (
   echo   Logs:        .run\server.log and .run\client.log
 ) else (
   echo   Logs:        .run\client.log
 )
 if "%MOCK%"=="0" (
-  echo   Windows:     "Drawisicle API" and "Drawisicle client", minimised on the taskbar
+  echo   Windows:     "Drawsicle API" and "Drawsicle client", minimised on the taskbar
 ) else (
-  echo   Window:      "Drawisicle client", minimised on the taskbar
+  echo   Window:      "Drawsicle client", minimised on the taskbar
 )
 echo.
 echo Stop with Stop-all.bat
@@ -225,7 +225,7 @@ echo Stop everything with Stop-all.bat
 exit /b 0
 
 :old_node
-echo Error: Node %NODE_VERSION% is too old. Drawisicle needs Node 22.18 or newer, 24 LTS recommended: https://nodejs.org
+echo Error: Node %NODE_VERSION% is too old. Drawsicle needs Node 22.18 or newer, 24 LTS recommended: https://nodejs.org
 goto :fail
 
 :fail

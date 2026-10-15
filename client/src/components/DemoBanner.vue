@@ -6,7 +6,7 @@ import { DEMO_LOGIN_EMAIL, DEMO_PASSWORD } from '@shared/demo-data.mjs';
 import { auth } from '../stores/auth';
 
 // Shown by App.vue in mock mode only (VITE_API_MODE=mock)
-const DISMISS_KEY = 'drawisicle-demo-banner-hidden';
+const DISMISS_KEY = 'drawsicle-demo-banner-hidden';
 
 function readDismissed() {
   try {

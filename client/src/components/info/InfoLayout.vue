@@ -136,8 +136,8 @@ const tocLabel = computed(() => `On this page: ${props.title}`);
 
         <slot name="after" />
 
-        <nav class="info-more" aria-label="More about Drawisicle">
-          <p class="more-title">More about Drawisicle</p>
+        <nav class="info-more" aria-label="More about Drawsicle">
+          <p class="more-title">More about Drawsicle</p>
           <ul>
             <li v-for="p in morePages" :key="p.key">
               <RouterLink :to="p.to" class="more-link">{{ p.label }}</RouterLink>

@@ -55,7 +55,7 @@ function sendNotificationEmail(user, { title, message, link }) {
     html:
       `<p><strong>${escapeHtml(title)}</strong></p>` +
       (message ? `<p>${escapeHtml(message)}</p>` : '') +
-      `<p><a href="${escapeHtml(url)}">Open Drawisicle</a></p>` +
+      `<p><a href="${escapeHtml(url)}">Open Drawsicle</a></p>` +
       `<p style="color:#8a7a70;font-size:12px">You can choose which emails you get in your ` +
       `<a href="${escapeHtml(settingsUrl)}">notification settings</a>.</p>`,
   }).catch((err) => console.error('Notification email failed:', err.message));

@@ -51,7 +51,7 @@ const SORTS = [
 const TAG_CHIPS_MAX = 12;
 
 // Sort order and card size are remembered on this device
-const PREFS_KEY = 'drawisicle:characters-view';
+const PREFS_KEY = 'drawsicle:characters-view';
 function readPrefs() {
   try {
     const saved = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');

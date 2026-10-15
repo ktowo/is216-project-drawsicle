@@ -56,7 +56,7 @@ function getContainer() {
   if (!conn) throw new Error('UPLOAD_STORAGE is azure but AZURE_STORAGE_CONNECTION_STRING is not set.');
   if (!containerClient) {
     containerClient = BlobServiceClient.fromConnectionString(conn).getContainerClient(
-      process.env.AZURE_STORAGE_CONTAINER || 'drawisicle'
+      process.env.AZURE_STORAGE_CONTAINER || 'drawsicle'
     );
   }
   return containerClient;

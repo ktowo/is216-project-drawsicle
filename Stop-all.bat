@@ -3,7 +3,7 @@ setlocal EnableExtensions
 rem Stops everything Start-all.bat (or Start-all.sh in Git Bash) started: the API, the client and
 rem the local MongoDB. Safe to run more than once.
 rem
-rem It closes the "Drawisicle ..." windows with everything running in them, then stops anything
+rem It closes the "Drawsicle ..." windows with everything running in them, then stops anything
 rem still listening on the API, client and local database ports (a MongoDB can be left over
 rem when the API is killed).
 
@@ -32,10 +32,10 @@ rem killed outright and could lose its last writes. If that fails, the steps bel
 call :stop_local_db
 
 rem The windows Start-all.bat opened, with pnpm, nodemon, node and MongoDB inside them
-tasklist /fi "WINDOWTITLE eq Drawisicle*" /nh 2>nul | findstr /i /c:".exe" >nul
+tasklist /fi "WINDOWTITLE eq Drawsicle*" /nh 2>nul | findstr /i /c:".exe" >nul
 if not errorlevel 1 (
-  taskkill /fi "WINDOWTITLE eq Drawisicle*" /t /f >nul 2>nul
-  echo Closed the Drawisicle windows.
+  taskkill /fi "WINDOWTITLE eq Drawsicle*" /t /f >nul 2>nul
+  echo Closed the Drawsicle windows.
   set "STOPPED=1"
 )
 
@@ -55,9 +55,9 @@ for /f "usebackq delims=" %%p in (`powershell -NoProfile -NonInteractive -Comman
 if exist ".run\*.pid" del /q ".run\*.pid" >nul 2>nul
 
 if "%STOPPED%"=="0" (
-  echo Nothing to stop: Drawisicle isn't running.
+  echo Nothing to stop: Drawsicle isn't running.
 ) else (
-  echo Drawisicle has stopped. Logs are kept in .run\
+  echo Drawsicle has stopped. Logs are kept in .run\
 )
 if "%PAUSE_AT_END%"=="1" pause
 exit /b 0

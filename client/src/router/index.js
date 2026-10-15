@@ -94,7 +94,7 @@ router.beforeEach(async (to) => {
 });
 
 router.afterEach((to) => {
-  document.title = to.meta.title ? `${to.meta.title} · Drawisicle` : 'Drawisicle';
+  document.title = to.meta.title ? `${to.meta.title} · Drawsicle` : 'Drawsicle';
 });
 
 // Only follow redirects inside our own app (stops ?redirect=https://evil.com)

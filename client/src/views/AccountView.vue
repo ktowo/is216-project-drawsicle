@@ -158,7 +158,7 @@ async function downloadData() {
   exportError.value = '';
   try {
     const data = await api('/profile/export');
-    if (saveJson(`drawisicle-data-${dateStamp()}.json`, data)) {
+    if (saveJson(`drawsicle-data-${dateStamp()}.json`, data)) {
       toast.success('Your data is downloading.');
     } else {
       exportError.value = "Your browser didn't let us save the file. Try again, or try another browser.";
@@ -328,7 +328,7 @@ async function deactivate() {
     <section class="card panel" aria-labelledby="data-heading">
       <h2 id="data-heading" class="section-title">Your data</h2>
       <p class="section-sub data-sub">
-        One file with everything Drawisicle keeps about you: your profile, characters, sign-up forms, the gifts
+        One file with everything Drawsicle keeps about you: your profile, characters, sign-up forms, the gifts
         you've made and your notifications. It's a JSON file, readable in any text editor.
       </p>
       <button type="button" class="btn btn-outline" :disabled="exporting" @click="downloadData">

@@ -9,7 +9,7 @@
 import { eventLink } from './events.js';
 import { saveFile } from './download.js';
 
-const PRODID = '-//Drawisicle//Events//EN';
+const PRODID = '-//Drawsicle//Events//EN';
 const CRLF = '\r\n';
 const MAX_LINE_OCTETS = 75;
 
@@ -54,7 +54,7 @@ export function eventCalendarEntries(event, { url, now = new Date(), kinds = ['s
   ) {
     entries.push({
       kind: 'signup',
-      uid: `${event.id}-signup@drawisicle`,
+      uid: `${event.id}-signup@drawsicle`,
       title: `Sign-ups close: ${name}`,
       start: signup,
       durationMinutes: 30,
@@ -67,7 +67,7 @@ export function eventCalendarEntries(event, { url, now = new Date(), kinds = ['s
   if (kinds.includes('submission') && submission && submission.getTime() > nowMs && event.status !== 'completed') {
     entries.push({
       kind: 'submission',
-      uid: `${event.id}-submission@drawisicle`,
+      uid: `${event.id}-submission@drawsicle`,
       title: `Gifts due: ${name}`,
       start: submission,
       durationMinutes: 30,
@@ -142,7 +142,7 @@ function eventLines(entry, stamp) {
   const end = new Date(start.getTime() + minutes * 60 * 1000);
   const lines = [
     'BEGIN:VEVENT',
-    `UID:${escapeIcsText(entry.uid || `${start.getTime()}-${Math.random().toString(36).slice(2)}@drawisicle`)}`,
+    `UID:${escapeIcsText(entry.uid || `${start.getTime()}-${Math.random().toString(36).slice(2)}@drawsicle`)}`,
     `DTSTAMP:${stamp}`,
     `DTSTART:${formatIcsDate(start)}`,
     `DTEND:${formatIcsDate(end)}`,
@@ -187,7 +187,7 @@ export function icsFilename(name) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 60);
-  return `${slug || 'drawisicle-deadlines'}.ics`;
+  return `${slug || 'drawsicle-deadlines'}.ics`;
 }
 
 // Saves the entries as a .ics file. Returns false when there was nothing to save or the

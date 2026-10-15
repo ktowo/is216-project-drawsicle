@@ -180,9 +180,9 @@ router.post('/forgot-password', authLimiter, asyncHandler(async (req, res) => {
     const link = `${clientUrl()}/reset-password?token=${token}`;
     await sendMail({
       to: user.email,
-      subject: 'Reset your Drawisicle password',
-      text: `Someone asked to reset your Drawisicle password.\n\nReset it here (link works for 1 hour):\n${link}\n\nIf this wasn't you, ignore this email.`,
-      html: `<p>Someone asked to reset your Drawisicle password.</p><p><a href="${link}">Reset your password</a> (link works for 1 hour)</p><p>If this wasn't you, ignore this email.</p>`,
+      subject: 'Reset your Drawsicle password',
+      text: `Someone asked to reset your Drawsicle password.\n\nReset it here (link works for 1 hour):\n${link}\n\nIf this wasn't you, ignore this email.`,
+      html: `<p>Someone asked to reset your Drawsicle password.</p><p><a href="${link}">Reset your password</a> (link works for 1 hour)</p><p>If this wasn't you, ignore this email.</p>`,
     });
   }
 

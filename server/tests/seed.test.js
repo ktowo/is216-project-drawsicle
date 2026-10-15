@@ -23,7 +23,7 @@ beforeEach(h.clearDb);
 // Demo artwork goes to a temporary folder instead of server/uploads
 let artDir;
 before(async () => {
-  artDir = await fs.mkdtemp(path.join(os.tmpdir(), 'drawisicle-seed-'));
+  artDir = await fs.mkdtemp(path.join(os.tmpdir(), 'drawsicle-seed-'));
 });
 after(async () => {
   if (artDir) await fs.rm(artDir, { recursive: true, force: true });

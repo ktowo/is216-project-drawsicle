@@ -1,7 +1,7 @@
 {
-  "name": "drawisicle-server",
+  "name": "drawsicle-server",
   "version": "1.0.0",
-  "description": "Backend server for Drawisicle.",
+  "description": "Backend server for Drawsicle.",
   "license": "ISC",
   "author": "",
   "type": "commonjs",

@@ -84,7 +84,7 @@ async function load() {
     event.value = null;
   } else {
     event.value = eventRes.value.event;
-    document.title = `Your match: ${event.value.name} · Drawisicle`;
+    document.title = `Your match: ${event.value.name} · Drawsicle`;
     if (matchRes.status === 'fulfilled') {
       match.value = matchRes.value.match;
     } else {

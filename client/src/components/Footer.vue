@@ -35,9 +35,9 @@ const COLUMNS = [
   <footer class="site-footer">
     <div class="inner">
       <div class="brand-col">
-        <RouterLink to="/" class="brand" aria-label="Drawisicle home">
+        <RouterLink to="/" class="brand" aria-label="Drawsicle home">
           <span class="brand-tile"><Palette :size="20" aria-hidden="true" /></span>
-          <span class="brand-name">Drawisicle</span>
+          <span class="brand-name">Drawsicle</span>
         </RouterLink>
         <p class="tagline">Art exchanges for online art communities, without the spreadsheets.</p>
       </div>
@@ -56,7 +56,7 @@ const COLUMNS = [
 
     <div class="bottom">
       <div class="bottom-inner">
-        <p>© {{ year }} Drawisicle · An IS216 project at SMU</p>
+        <p>© {{ year }} Drawsicle · An IS216 project at SMU</p>
         <ul class="legal" aria-label="Legal">
           <li><RouterLink to="/privacy">Privacy</RouterLink></li>
           <li><RouterLink to="/terms">Terms</RouterLink></li>

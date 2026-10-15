@@ -140,7 +140,7 @@ async function load() {
   }
 
   event.value = eventRes.value.event;
-  document.title = `Submit your gift: ${event.value.name} · Drawisicle`;
+  document.title = `Submit your gift: ${event.value.name} · Drawsicle`;
 
   if (matchRes.status === 'rejected') {
     const reason = matchRes.reason;
