@@ -161,6 +161,8 @@ function purgeDeactivated(state, now) {
       password: '',
       socials: emptySocials(),
       defaultForm: { communityUsername: '', canCreate: [], wantsTypes: [], likes: '', avoid: '', cannotDraw: [] },
+      // A deleted account can't agree to anything being shown
+      profilePrivacy: { showExchanges: false, showGifts: false },
       sessionVersion: (user.sessionVersion || 0) + 1,
     });
     changed = true;

@@ -62,6 +62,8 @@ async function anonymiseUser(userId, filter = {}) {
         bio: '',
         socials,
         defaultForm: { communityUsername: '', canCreate: [], wantsTypes: [], likes: '', avoid: '', cannotDraw: [] },
+        // A deleted account can't agree to anything being shown
+        profilePrivacy: { showExchanges: false, showGifts: false },
       },
       $unset: {
         username: 1,
