@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router';
 import {
   Pencil,
   Link2,
+  UserX,
   CalendarPlus,
   Compass,
   House,
@@ -37,6 +38,9 @@ const giftsHasMore = ref(false);
 const giftsLoading = ref(false);
 const giftsError = ref('');
 const stats = ref({ eventsOrganized: 0 });
+// What the logged-in viewer has set about this person (just "blocked" for now)
+const viewerFlags = ref(null);
+const blocking = ref(false);
 
 const handle = computed(() => String(route.params.username || '').replace(/^@/, ''));
 const name = computed(() => profile.value?.displayName || profile.value?.username || 'This artist');
@@ -54,6 +58,27 @@ const hiddenEvents = computed(() => Math.max(0, (stats.value.eventsOrganized || 
 
 // Latest request wins when someone clicks through profiles quickly
 let loadId = 0;
+// Keep this person off my matches (or let them back on); private to me
+async function toggleBlock() {
+  if (!viewerFlags.value || blocking.value) return;
+  blocking.value = true;
+  try {
+    if (viewerFlags.value.blocked) {
+      await api(`/profile/blocks/${profile.value.id}`, { method: 'DELETE' });
+      viewerFlags.value = { ...viewerFlags.value, blocked: false };
+      toast.success(`You can be matched with ${name.value} again.`);
+    } else {
+      await api('/profile/blocks', { method: 'POST', body: { userId: profile.value.id } });
+      viewerFlags.value = { ...viewerFlags.value, blocked: true };
+      toast.success(`You won't be matched with ${name.value}. Only you can see this.`);
+    }
+  } catch (e) {
+    toast.error(e.message);
+  } finally {
+    blocking.value = false;
+  }
+}
+
 async function load() {
   const id = ++loadId;
   state.value = 'loading';
@@ -65,6 +90,7 @@ async function load() {
     organizing.value = data.organizing || [];
     exchanges.value = data.exchanges || [];
     stats.value = { eventsOrganized: 0, ...(data.stats || {}) };
+    viewerFlags.value = data.viewer || null;
     gifts.value = [];
     giftsHasMore.value = false;
     giftsError.value = '';
@@ -212,6 +238,18 @@ function goToLookup() {
         </template>
         <button type="button" class="btn btn-outline btn-sm" @click="copyLink">
           <Link2 :size="16" aria-hidden="true" /> Copy profile link
+        </button>
+        <button
+          v-if="viewerFlags"
+          type="button"
+          class="btn btn-ghost btn-sm"
+          :aria-pressed="viewerFlags.blocked ? 'true' : 'false'"
+          :disabled="blocking"
+          :title="viewerFlags.blocked ? 'You won\'t be matched with them' : 'Private: they are never told'"
+          @click="toggleBlock"
+        >
+          <UserX :size="16" aria-hidden="true" />
+          {{ viewerFlags.blocked ? 'Allow matching with them again' : "Don't match me with them" }}
         </button>
       </ProfileHeader>
 

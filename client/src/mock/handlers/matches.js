@@ -1,5 +1,6 @@
 // /events/:eventId/matches and /my-match (server/routes/match-router.js)
 import { generateMatches, scorePair, skippedAccountsWarning } from '@shared/matching.mjs';
+import { LIMITS } from '@shared/constants.mjs';
 import { newId } from '../db.js';
 import {
   characterPublic,
@@ -26,12 +27,50 @@ export function adminMatches(state, eventId, { publishedOnly = false } = {}) {
 
 const adminList = (state, eventId) => adminMatches(state, eventId).map((row) => row.admin);
 
+// Who mustn't be matched with whom (block lists both ways, plus the organisers' rules) and
+// earlier pairs from the same organisers' exchanges. Same as pairRules() on the server.
+function pairRules(state, event, userIds) {
+  const ids = new Set(userIds);
+  const personal = new Map(userIds.map((id) => [id, new Set()]));
+  for (const id of userIds) {
+    for (const other of findUser(state, id)?.blockedUsers || []) {
+      if (!ids.has(other)) continue;
+      personal.get(id).add(other);
+      personal.get(other).add(id);
+    }
+  }
+  const blocked = new Map([...personal].map(([id, set]) => [id, new Set(set)]));
+  for (const { a, b } of event.matchingRules?.avoidPairs || []) {
+    if (ids.has(a) && ids.has(b)) {
+      blocked.get(a).add(b);
+      blocked.get(b).add(a);
+    }
+  }
+  const previous = new Map(userIds.map((id) => [id, new Set()]));
+  if (event.matchingRules?.avoidRepeats !== false) {
+    const organisers = new Set(
+      state.members.filter((m) => m.event === event.id && m.roles.includes('organizer')).map((m) => m.user)
+    );
+    const earlier = new Set(
+      state.members
+        .filter((m) => organisers.has(m.user) && m.roles.includes('organizer') && m.event !== event.id)
+        .map((m) => m.event)
+    );
+    for (const m of state.matches) {
+      if (m.published && earlier.has(m.event)) previous.get(m.giver)?.add(m.recipient);
+    }
+  }
+  return { personal, blocked, previous };
+}
+
 // What the matching algorithm sees. Only types the event allows count, so nobody is
 // matched on something they couldn't submit.
-function toParticipant(state, application, allowedTypes) {
+function toParticipant(state, application, allowedTypes, rules = null) {
   const allowed = new Set(allowedTypes);
   return {
     id: application.user,
+    blockedIds: [...(rules?.blocked.get(application.user) || [])],
+    previousRecipients: [...(rules?.previous.get(application.user) || [])],
     name: miniOf(state, application.user).displayName,
     canCreate: application.canCreate.filter((t) => allowed.has(t)),
     wantsTypes: application.wantsTypes.filter((t) => allowed.has(t)),
@@ -79,8 +118,9 @@ export function register(router) {
     const given = rawSeed === undefined || rawSeed === null || rawSeed === '' ? NaN : Number(rawSeed);
     const seed = Number.isFinite(given) ? Math.floor(given) : randomSeed();
 
+    const rules = pairRules(state, event, applications.map((a) => a.user));
     const result = generateMatches(
-      applications.map((a) => toParticipant(state, a, event.allowedTypes)),
+      applications.map((a) => toParticipant(state, a, event.allowedTypes, rules)),
       { seed }
     );
 
@@ -118,6 +158,43 @@ export function register(router) {
     };
   });
 
+  router.put('/events/:eventId/matching-rules', (ctx) => {
+    const { user, event } = organizerOnly(ctx);
+    const { state } = ctx;
+    if (!['draft', 'open', 'matching'].includes(event.status)) {
+      throw httpError(409, 'Matches are already published, so the rules no longer apply.', 'WRONG_STATUS');
+    }
+    const body = ctx.body || {};
+    const rules = {
+      avoidPairs: [...(event.matchingRules?.avoidPairs || [])],
+      avoidRepeats: event.matchingRules?.avoidRepeats !== false,
+    };
+    if (body.avoidRepeats !== undefined) {
+      if (typeof body.avoidRepeats !== 'boolean') throw invalid('avoidRepeats must be true or false.');
+      rules.avoidRepeats = body.avoidRepeats;
+    }
+    if (body.avoidPairs !== undefined) {
+      if (!Array.isArray(body.avoidPairs)) throw invalid('avoidPairs must be a list.');
+      if (body.avoidPairs.length > LIMITS.avoidPairs) throw invalid(`Keep it to ${LIMITS.avoidPairs} pairs.`);
+      const signedUp = new Set(state.applications.filter((x) => x.event === event.id).map((x) => x.user));
+      const seen = new Set();
+      rules.avoidPairs = [];
+      for (const pair of body.avoidPairs) {
+        const a = String(pair?.a ?? '');
+        const b = String(pair?.b ?? '');
+        if (!signedUp.has(a) || !signedUp.has(b)) throw invalid('Pick two people who signed up for this event.');
+        if (a === b) throw invalid('Pick two different people.');
+        const key = [a, b].sort().join('|');
+        if (seen.has(key)) continue;
+        seen.add(key);
+        rules.avoidPairs.push({ a, b });
+      }
+    }
+    event.matchingRules = rules;
+    event.updatedAt = ctx.now.toISOString();
+    return { event: serializeEvent(state, event, user) };
+  });
+
   router.get('/events/:eventId/matches', (ctx) => {
     const { event } = organizerOnly(ctx);
     const matches = adminList(ctx.state, event.id);
@@ -145,6 +222,10 @@ export function register(router) {
 
     if (a.giver === b.recipient || b.giver === a.recipient) {
       throw httpError(400, 'That swap would have someone making a gift for themselves.', 'SELF_MATCH');
+    }
+    const { personal } = pairRules(state, event, [...new Set([a.giver, a.recipient, b.giver, b.recipient])]);
+    if (personal.get(a.giver).has(b.recipient) || personal.get(b.giver).has(a.recipient)) {
+      throw httpError(409, "One of these people asked not to be matched with the other, so this swap isn't possible.", 'BLOCKED_PAIR');
     }
 
     const participantFor = (applicationId, userId) => {

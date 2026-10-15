@@ -5,10 +5,14 @@
 //   generateMatches(participants, { seed }) -> { pairs, unmatched, warnings, stats }
 //
 //   participant: { id, name?, canCreate[], wantsTypes[], cannotDraw[], likes, avoid,
-//                  characters: [{ id, name, species, tags[] }] }
+//                  characters: [{ id, name, species, tags[] }],
+//                  blockedIds?: [],          people they must never be matched with (either way)
+//                  previousRecipients?: [] } people they made gifts for in earlier exchanges
 //
-// Hard rules: nobody gives to themselves, the giver can make at least one thing the recipient
-// asked for, and if the recipient offered characters the giver can draw at least one of them.
+// Hard rules: nobody gives to themselves, nobody is matched with someone either of them blocked
+// (or the organisers kept apart), the giver can make at least one thing the recipient asked for,
+// and if the recipient offered characters the giver can draw at least one of them. Making a gift
+// for the same person as in an earlier exchange is allowed but scores much lower.
 // generateMatches tries to put everyone in one big loop (A gives to B, B to C, ... back to A) so
 // nobody is making a gift for the person making theirs. When that's impossible it settles for
 // several smaller loops and reports anyone it couldn't place. The same input and seed always give
@@ -23,6 +27,7 @@ const CHARACTER_POINTS = 25;
 const INTEREST_POINTS = 5;
 const MAX_INTERESTS = 3;
 const BLOCKED = -1;
+const REPEAT_PENALTY = 35;
 
 const TYPE_WORDS = { art: 'art', adoptable: 'adoptables', writing: 'writing' };
 
@@ -122,6 +127,8 @@ function prepare(p) {
     likeWords,
     interests,
     avoid: new Set(words(p?.avoid).map(stem)),
+    blocked: new Set(asList(p?.blockedIds).map(String)),
+    previous: new Set(asList(p?.previousRecipients).map(String)),
   };
 }
 
@@ -139,6 +146,9 @@ function typeOverlap(giver, recipient) {
 function assess(giver, recipient, explain) {
   if (giver.id === recipient.id) {
     return { ok: false, score: 0, reasons: [], blockers: ['They are the same person'] };
+  }
+  if (giver.blocked.has(recipient.id) || recipient.blocked.has(giver.id)) {
+    return { ok: false, score: 0, reasons: [], blockers: ["They can't be matched with each other"] };
   }
 
   const blockers = [];
@@ -160,11 +170,16 @@ function assess(giver, recipient, explain) {
     }
   }
 
-  const score = Math.round(
-    BASE_SCORE +
-      Math.min(MAX_TYPE_POINTS, EXTRA_TYPE_POINTS * (types.length - 1)) +
-      (total ? (CHARACTER_POINTS * drawable) / total : CHARACTER_POINTS) +
-      INTEREST_POINTS * shared.length
+  const repeat = giver.previous.has(recipient.id);
+  const score = Math.max(
+    1,
+    Math.round(
+      BASE_SCORE +
+        Math.min(MAX_TYPE_POINTS, EXTRA_TYPE_POINTS * (types.length - 1)) +
+        (total ? (CHARACTER_POINTS * drawable) / total : CHARACTER_POINTS) +
+        INTEREST_POINTS * shared.length -
+        (repeat ? REPEAT_PENALTY : 0)
+    )
   );
 
   const reasons = [];
@@ -174,6 +189,7 @@ function assess(giver, recipient, explain) {
     else if (total > 1 && drawable === total) reasons.push(`Can draw all ${total} offered characters`);
     else if (total > 1) reasons.push(`Can draw ${drawable} of ${total} offered characters`);
     if (shared.length) reasons.push(`Shared interest${shared.length > 1 ? 's' : ''}: ${shared.join(', ')}`);
+    if (repeat) reasons.push('Heads up: made a gift for them in an earlier exchange');
   }
 
   return { ok: true, score, reasons, blockers: [] };

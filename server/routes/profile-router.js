@@ -7,7 +7,7 @@ const Character = require('../models/Character.js');
 const Application = require('../models/Application.js');
 const Submission = require('../models/Submission.js');
 const Notification = require('../models/Notification.js');
-const { USERNAME_RE, SOCIAL_KEYS } = User;
+const { USERNAME_RE, SOCIAL_KEYS, userMini } = User;
 const { requireAuth } = require('../middleware/auth.js');
 const { uploadImage, looksLikeImage, IMAGE_TYPES } = require('../services/storage.js');
 const { withdrawApplications } = require('../services/accounts.js');
@@ -210,6 +210,43 @@ router.get('/export', requireAuth, asyncHandler(async (req, res) => {
 }));
 
 // Someone's public profile (no email), by id or username. Deactivated and banned accounts are hidden.
+// ---------- People I won't be matched with ----------
+// Private: nobody else (organisers included) can see who is on the list. Matching keeps the two
+// people apart in both directions.
+
+async function blockList(user) {
+  const people = await User.find({ _id: { $in: user.blockedUsers || [] } }).select('displayName username avatarUrl email');
+  const byId = new Map(people.map((p) => [p._id.toString(), p]));
+  return (user.blockedUsers || []).map((id) => byId.get(id.toString())).filter(Boolean).map(userMini);
+}
+
+router.get('/blocks', requireAuth, asyncHandler(async (req, res) => {
+  res.json({ blocks: await blockList(req.user) });
+}));
+
+router.post('/blocks', requireAuth, asyncHandler(async (req, res) => {
+  const raw = String(req.body?.username ?? req.body?.userId ?? '').trim().replace(/^@/, '');
+  let other = null;
+  if (USERNAME_RE.test(raw.toLowerCase())) other = await User.findOne({ username: raw.toLowerCase() });
+  if (!other && mongoose.isObjectIdOrHexString(raw)) other = await User.findById(raw);
+  if (!other) throw httpError(404, "We couldn't find anyone with that username.", 'USER_NOT_FOUND');
+  if (other._id.equals(req.user._id)) throw invalid("You can't add yourself.");
+  const list = req.user.blockedUsers || [];
+  if (!list.some((id) => id.equals(other._id))) {
+    if (list.length >= LIMITS.blockedUsers) throw invalid(`You can keep up to ${LIMITS.blockedUsers} people on this list.`);
+    req.user.blockedUsers.push(other._id);
+    await req.user.save();
+  }
+  res.json({ blocks: await blockList(req.user) });
+}));
+
+router.delete('/blocks/:userId', requireAuth, asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+  req.user.blockedUsers = (req.user.blockedUsers || []).filter((id) => id.toString() !== userId);
+  await req.user.save();
+  res.json({ blocks: await blockList(req.user) });
+}));
+
 router.get('/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
   let user = null;
