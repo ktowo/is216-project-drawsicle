@@ -6,12 +6,13 @@ import PageHeader from '@/components/ui/PageHeader.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingBlock from '@/components/ui/LoadingBlock.vue';
 import ErrorBlock from '@/components/ui/ErrorBlock.vue';
-import UserAvatar from '@/components/UserAvatar.vue';
+import ChoiceChips from '@/components/ui/ChoiceChips.vue';
+import PersonLink from '@/components/events/PersonLink.vue';
 import EventBanner from '@/components/events/EventBanner.vue';
 import SubmissionDetails from '@/components/events/SubmissionDetails.vue';
 import SubmissionGallery from '@/components/events/SubmissionGallery.vue';
 import { api, qs } from '@/api';
-import { EVENT_STATUS_LABELS } from '@shared/constants.mjs';
+import { EVENT_STATUS_LABELS, CREATION_TYPES } from '@shared/constants.mjs';
 import { formatDate, pluralize } from '@/utils/format';
 import { eventLink, inviteFrom } from '@/utils/events';
 
@@ -104,6 +105,30 @@ const given = computed(() => results.value?.given || null);
 const gallery = computed(() => results.value?.gallery || []);
 const submittedCount = computed(() => gallery.value.filter((g) => g.submission).length);
 const nameOf = (user) => user?.displayName || 'Someone';
+
+// Filter the gallery by kind of gift, when there's more than one kind to choose from
+const typeFilter = ref('all');
+const typeOptions = computed(() => {
+  const present = CREATION_TYPES.filter((t) => gallery.value.some((g) => g.submission?.type === t.value));
+  return present.length > 1 ? [{ value: 'all', label: 'All gifts' }, ...present] : [];
+});
+const shownGallery = computed(() =>
+  typeFilter.value === 'all' ? gallery.value : gallery.value.filter((g) => g.submission?.type === typeFilter.value)
+);
+
+// A burst of paper confetti over the header (CSS only, and none for people who prefer less motion)
+const CONFETTI_COLOURS = ['var(--pink)', 'var(--info)', 'var(--success)', 'var(--warning)', 'var(--purple-ink)'];
+const confetti = Array.from({ length: 30 }, (_, i) => ({
+  round: i % 3 === 0,
+  style: {
+    left: `${(i * 37 + 5) % 100}%`,
+    animationDelay: `${(i % 8) * 0.11}s`,
+    animationDuration: `${2.2 + (i % 5) * 0.35}s`,
+    background: CONFETTI_COLOURS[i % CONFETTI_COLOURS.length],
+    '--spin': `${(i * 47) % 360}deg`,
+    '--drift': `${((i * 29) % 80) - 40}px`,
+  },
+}));
 </script>
 
 <template>
@@ -135,6 +160,9 @@ const nameOf = (user) => user?.displayName || 'Someone';
       <RouterLink :to="backTo" class="back-link"><ArrowLeft :size="16" aria-hidden="true" /> Back to event</RouterLink>
 
       <header class="card hero">
+        <div class="confetti" aria-hidden="true">
+          <span v-for="(piece, i) in confetti" :key="i" :class="{ round: piece.round }" :style="piece.style" />
+        </div>
         <EventBanner :event="event" :height="150" class="hero-banner" />
         <div class="hero-body">
           <p class="eyebrow"><PartyPopper :size="18" aria-hidden="true" /> The reveal</p>
@@ -155,8 +183,7 @@ const nameOf = (user) => user?.displayName || 'Someone';
               <h2 id="received-heading" class="panel-title">Your gift</h2>
               <p class="from">
                 from
-                <UserAvatar :user="received.giver" :size="26" />
-                <strong>{{ nameOf(received.giver) }}</strong>
+                <PersonLink :user="received.giver" :size="26" class="from-person" />
               </p>
             </div>
           </div>
@@ -177,8 +204,7 @@ const nameOf = (user) => user?.displayName || 'Someone';
               <h2 id="given-heading" class="panel-title">What you made</h2>
               <p class="from">
                 for
-                <UserAvatar :user="given.recipient" :size="26" />
-                <strong>{{ nameOf(given.recipient) }}</strong>
+                <PersonLink :user="given.recipient" :size="26" class="from-person" />
               </p>
             </div>
           </div>
@@ -194,9 +220,17 @@ const nameOf = (user) => user?.displayName || 'Someone';
       <section class="gallery-section" aria-labelledby="gallery-heading">
         <div class="gallery-head">
           <h2 id="gallery-heading" class="section-heading">Every gift</h2>
-          <p class="muted">Select a picture to see it full size. Use the arrow keys to move between them.</p>
+          <p class="muted">Select a picture to see it full size or download it. Use the arrow keys to move between them.</p>
         </div>
-        <SubmissionGallery v-if="gallery.length" :items="gallery" />
+        <ChoiceChips
+          v-if="typeOptions.length"
+          v-model="typeFilter"
+          :options="typeOptions"
+          :multiple="false"
+          label="Show gifts of type"
+          class="type-filter"
+        />
+        <SubmissionGallery v-if="shownGallery.length" :key="typeFilter" :items="shownGallery" />
         <EmptyState
           v-else
           :icon="Images"
@@ -221,7 +255,55 @@ const nameOf = (user) => user?.displayName || 'Someone';
   color: var(--pink-dark);
 }
 .hero {
+  position: relative;
   overflow: hidden;
+}
+.confetti {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+.confetti span {
+  position: absolute;
+  top: -16px;
+  width: 8px;
+  height: 14px;
+  border-radius: 2px;
+  opacity: 0;
+  animation-name: confetti-fall;
+  animation-timing-function: cubic-bezier(0.25, 0.6, 0.5, 1);
+  animation-fill-mode: forwards;
+}
+.confetti span.round {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+@keyframes confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotate(var(--spin));
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--drift), 380px, 0) rotate(calc(var(--spin) + 540deg));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .confetti {
+    display: none;
+  }
+}
+.from-person {
+  font-weight: 700;
+}
+.type-filter {
+  margin-bottom: 18px;
 }
 .hero-body {
   padding: 24px 32px 28px;
@@ -310,10 +392,6 @@ const nameOf = (user) => user?.displayName || 'Someone';
   align-items: center;
   gap: 6px;
   color: var(--muted);
-}
-.from strong {
-  color: var(--text);
-  overflow-wrap: anywhere;
 }
 .muted {
   margin: 0;

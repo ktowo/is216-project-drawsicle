@@ -1,6 +1,6 @@
 <script setup>
 import { computed, watch, onBeforeUnmount } from 'vue';
-import { ChevronLeft, ChevronRight, ExternalLink } from 'lucide-vue-next';
+import { ChevronLeft, ChevronRight, ExternalLink, Download } from 'lucide-vue-next';
 import BaseModal from '@/components/ui/BaseModal.vue';
 import { assetUrl } from '@/api';
 
@@ -17,6 +17,17 @@ const current = computed(() => props.images[Math.min(Math.max(props.index, 0), c
 const src = computed(() => (current.value ? assetUrl(current.value.url) : ''));
 // Browsers refuse to open data: images (used by the demo artwork) in a new tab, so only real URLs get the link
 const openHref = computed(() => (/^https?:\/\//i.test(src.value) || /^\/(?!\/)/.test(src.value) ? src.value : ''));
+
+// "moth-lantern-2.webp": the title plus the picture's number, keeping the file's own extension
+const downloadName = computed(() => {
+  const slug = String(current.value?.title || 'artwork')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 50) || 'artwork';
+  const ext = /\.(png|jpe?g|webp|gif|svg)(?:$|[?#])/i.exec(src.value)?.[1]?.toLowerCase() || 'png';
+  return `${slug}${count.value > 1 ? `-${props.index + 1}` : ''}.${ext}`;
+});
 
 function go(step) {
   if (count.value < 2) return;
@@ -64,6 +75,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
           <span v-if="count > 1" aria-live="polite">{{ index + 1 }} of {{ count }}</span>
           <a v-if="openHref" :href="openHref" target="_blank" rel="noopener noreferrer" class="open-link">
             Open full size <ExternalLink :size="14" aria-hidden="true" />
+          </a>
+          <a v-if="openHref" :href="openHref" :download="downloadName" class="open-link">
+            Download <Download :size="14" aria-hidden="true" />
           </a>
         </span>
       </figcaption>

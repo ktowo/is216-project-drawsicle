@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue';
 import { ArrowRight, ExternalLink, FileText, Palette, Gift, Images } from 'lucide-vue-next';
 import ImageLightbox from './ImageLightbox.vue';
-import UserAvatar from '@/components/UserAvatar.vue';
+import PersonLink from './PersonLink.vue';
 import { assetUrl } from '@/api';
 import { safeUrl, linkHost, typeLabel } from '@/utils/events';
 
@@ -16,7 +16,6 @@ const TYPE_ICONS = { writing: FileText, art: Palette, adoptable: Gift };
 const lightboxOpen = ref(false);
 const lightboxIndex = ref(0);
 
-const avatarUser = (user) => ({ ...(user || {}), avatarUrl: user?.avatarUrl ? assetUrl(user.avatarUrl) : null });
 const nameOf = (user) => user?.displayName || 'Someone';
 
 // Submitted gifts first, then the ones that never arrived
@@ -90,16 +89,10 @@ function open(tile) {
           <p v-else class="tile-title muted">No gift submitted</p>
 
           <p class="pair">
-            <span class="person">
-              <UserAvatar :user="avatarUser(tile.item.giver)" :size="22" />
-              <span class="person-name">{{ nameOf(tile.item.giver) }}</span>
-            </span>
+            <PersonLink :user="tile.item.giver" :size="22" class="person" />
             <ArrowRight :size="14" class="arrow" aria-hidden="true" />
             <span class="sr-only">made a gift for</span>
-            <span class="person">
-              <UserAvatar :user="avatarUser(tile.item.recipient)" :size="22" />
-              <span class="person-name">{{ nameOf(tile.item.recipient) }}</span>
-            </span>
+            <PersonLink :user="tile.item.recipient" :size="22" class="person" />
           </p>
 
           <ul v-if="tile.links.length" class="links">
@@ -230,7 +223,7 @@ button.cover:hover img {
   min-width: 0;
   max-width: 100%;
 }
-.person-name {
+.person :deep(.person-name) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
