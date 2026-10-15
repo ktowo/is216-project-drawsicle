@@ -19,6 +19,7 @@ import {
   PartyPopper,
   Settings2,
   UserRound,
+  CalendarArrowDown,
 } from 'lucide-vue-next';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import DeadlineChip from '@/components/ui/DeadlineChip.vue';
@@ -27,12 +28,15 @@ import LoadingBlock from '@/components/ui/LoadingBlock.vue';
 import ErrorBlock from '@/components/ui/ErrorBlock.vue';
 import StatTile from '@/components/events/manage/StatTile.vue';
 import EventBanner from '@/components/events/EventBanner.vue';
+import GettingStarted from '@/components/dashboard/GettingStarted.vue';
+import RecentActivity from '@/components/dashboard/RecentActivity.vue';
 import { auth } from '@/stores/auth';
 import { notifications, refreshUnreadCount, loadNotifications } from '@/stores/notifications';
 import { toast } from '@/stores/toast';
 import { api, isMockMode } from '@/api';
 import { formatDateTime, timeUntil, pluralize } from '@/utils/format';
 import { eventLink, nextDeadline, isPast } from '@/utils/events';
+import { downloadIcs, defaultEventUrl } from '@/utils/calendar';
 
 const data = ref(null);
 const loading = ref(true);
@@ -139,6 +143,29 @@ function dayParts(at) {
 }
 const upcomingLabel = (kind) => (kind === 'signup' ? 'Sign-ups close' : 'Gifts due');
 
+// Every upcoming deadline (not just the ones shown) in one calendar file
+function addAllToCalendar() {
+  const entries = (data.value?.upcoming || [])
+    .filter((u) => u.at && !isPast(u.at))
+    .map((u) => {
+      const url = defaultEventUrl({ id: u.eventId });
+      return {
+        kind: u.kind,
+        uid: `${u.eventId}-${u.kind}@drawsicle`,
+        title: `${upcomingLabel(u.kind)}: ${u.eventName}`,
+        start: new Date(u.at),
+        durationMinutes: 30,
+        description: `${upcomingLabel(u.kind)} for ${u.eventName}.${url ? `\n${url}` : ''}`,
+        url,
+      };
+    });
+  if (downloadIcs('drawsicle-deadlines', entries, { name: 'Drawsicle deadlines' })) {
+    toast.success(`Saved ${pluralize(entries.length, 'deadline')} as a calendar file.`);
+  } else {
+    toast.error('There are no upcoming deadlines to add.');
+  }
+}
+
 // ---- Dev helper (the route answers 404 in production) ----
 const showDevTools = import.meta.env.DEV && !isMockMode;
 const sendingTest = ref(false);
@@ -170,7 +197,9 @@ async function sendTestNotification() {
       </RouterLink>
     </header>
 
-    <section v-if="!auth.user.profileComplete" class="card nudge" aria-labelledby="nudge-title">
+    <GettingStarted v-if="data" :counts="counts" />
+
+    <section v-if="!auth.user.profileComplete && data && !isNewUser" class="card nudge" aria-labelledby="nudge-title">
       <span class="nudge-icon" aria-hidden="true"><UserRound :size="22" /></span>
       <div class="min-w-0 flex-1">
         <h2 id="nudge-title" class="nudge-title">Finish setting up your profile</h2>
@@ -342,7 +371,12 @@ async function sendTestNotification() {
                 </div>
               </li>
             </ol>
+            <button v-if="upcoming.length" type="button" class="btn btn-outline btn-sm calendar-btn" @click="addAllToCalendar">
+              <CalendarArrowDown :size="16" aria-hidden="true" /> Add all to your calendar
+            </button>
           </section>
+
+          <RecentActivity />
 
           <!-- Quick actions -->
           <section class="card panel" aria-labelledby="quick-title">
@@ -387,6 +421,10 @@ async function sendTestNotification() {
 </template>
 
 <style scoped>
+.calendar-btn {
+  margin-top: 14px;
+  width: 100%;
+}
 .hello {
   display: flex;
   flex-wrap: wrap;
