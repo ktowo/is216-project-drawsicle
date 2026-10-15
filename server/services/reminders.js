@@ -11,6 +11,7 @@ const User = require('../models/User.js');
 const Application = require('../models/Application.js');
 const Match = require('../models/Match.js');
 const Submission = require('../models/Submission.js');
+const JobRun = require('../models/JobRun.js');
 const { organizerIds } = require('./events.js');
 const { notifyMany } = require('./notify.js');
 const { LIMITS } = require('../../shared/constants.mjs');
@@ -19,6 +20,7 @@ const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 const FIRST_RUN_DELAY_MS = 10 * 1000;
 const MAX_TIMER_MS = 2 ** 31 - 1; // setInterval can't wait longer than this
+const JOB = 'reminders'; // its JobRun record
 
 const KEYS = {
   signupWarning: 'signup-48h',
@@ -278,14 +280,60 @@ async function runReminders(now = new Date()) {
 }
 
 async function tick() {
-  if (running || mongoose.connection.readyState !== 1) return;
+  if (running || mongoose.connection.readyState !== 1) return null;
   running = true;
   try {
+    await JobRun.updateOne({ _id: JOB }, { $set: { lastRunAt: new Date() } }, { upsert: true });
     const summary = await runReminders(new Date());
     const done = Object.entries(summary).filter(([, n]) => n > 0);
     if (done.length) console.log(`Reminders: ${done.map(([k, n]) => `${k} ${n}`).join(', ')}`);
+    return summary;
   } catch (err) {
     console.error('Reminders run failed:', err);
+    return null;
+  } finally {
+    running = false;
+  }
+}
+
+// Takes the next run if the last one (by any server instance) was at least `minutes` ago.
+// Atomic, so two instances woken by requests at the same moment can't both run it.
+async function claimRun(now, minutes) {
+  const cutoff = new Date(now.getTime() - minutes * 60 * 1000);
+  try {
+    const { modifiedCount, upsertedCount } = await JobRun.updateOne(
+      { _id: JOB, $or: [{ lastRunAt: null }, { lastRunAt: { $lte: cutoff } }] },
+      { $set: { lastRunAt: now } },
+      { upsert: true }
+    );
+    return modifiedCount + upsertedCount === 1;
+  } catch (err) {
+    if (err?.code === 11000) return false; // the record exists and ran recently: the upsert hit its _id
+    throw err;
+  }
+}
+
+// For serverless hosting (Vercel), where nothing stays running between requests: server.js calls
+// this on incoming requests and it runs a pass at most every REMINDER_INTERVAL_MINUTES.
+// Returns the summary, or null when it wasn't due.
+async function runRemindersIfDue(now = new Date()) {
+  const minutes = intervalMinutes();
+  if (minutes === 0 || running || mongoose.connection.readyState !== 1) return null;
+  try {
+    if (!(await claimRun(now, minutes))) return null;
+  } catch (err) {
+    console.error('Reminders: could not check the schedule:', err.message);
+    return null;
+  }
+  running = true;
+  try {
+    const summary = await runReminders(now);
+    const done = Object.entries(summary).filter(([, n]) => n > 0);
+    if (done.length) console.log(`Reminders: ${done.map(([k, n]) => `${k} ${n}`).join(', ')}`);
+    return summary;
+  } catch (err) {
+    console.error('Reminders run failed:', err);
+    return null;
   } finally {
     running = false;
   }
@@ -323,4 +371,11 @@ function stopReminders() {
   intervalTimer = null;
 }
 
-module.exports = { startReminders, stopReminders, runReminders, REMINDER_KEYS: KEYS };
+module.exports = {
+  startReminders,
+  stopReminders,
+  runReminders,
+  runRemindersIfDue,
+  runRemindersNow: tick,
+  REMINDER_KEYS: KEYS,
+};
