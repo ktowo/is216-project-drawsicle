@@ -79,3 +79,86 @@ describe('gifts', () => {
     );
   });
 });
+
+describe('organisers reaching people', () => {
+  it('posts updates that members hear about, and deletes them', async () => {
+    await loginAs('mika');
+    const winter = await eventByName('Winter Secret Santa 2026');
+    const url = `/events/${winter.id}/announcements`;
+    const { announcement } = await ok(url, { method: 'POST', body: { message: 'Deadline moved to Friday' } });
+    expect(announcement.author.displayName).toBe('Mika');
+
+    await loginAs('sol');
+    expect((await fails(url, { method: 'POST', body: { message: 'Hi' } })).status).toBe(403);
+    const { announcements } = await ok(url);
+    expect(announcements.map((a) => a.message)).toEqual(['Deadline moved to Friday']);
+    const { items } = await ok('/notifications?limit=50');
+    expect(items.some((n) => n.type === 'announcement')).toBe(true);
+
+    await loginAs('mika');
+    await ok(`${url}/${announcement.id}`, { method: 'DELETE' });
+    expect((await ok(url)).announcements).toEqual([]);
+  });
+
+  it('invites the people from an earlier exchange once, only into open events', async () => {
+    await loginAs('juniper'); // organises the completed Spring Bloom Exchange
+    const spring = await eventByName('Spring Bloom Exchange');
+    const { event: next } = await ok('/events', {
+      method: 'POST',
+      body: {
+        name: 'Spring Bloom 2027',
+        signupDeadline: new Date(Date.now() + 10 * 864e5).toISOString(),
+        submissionDeadline: new Date(Date.now() + 30 * 864e5).toISOString(),
+        timeZone: 'Asia/Singapore',
+      },
+    });
+    expect(next.timeZone).toBe('Asia/Singapore');
+    const url = `/events/${next.id}/invite-from`;
+    expect((await fails(url, { method: 'POST', body: { fromEventId: spring.id } })).code).toBe('WRONG_STATUS');
+    await ok(`/events/${next.id}/status`, { method: 'POST', body: { status: 'open' } });
+    const { sent } = await ok(url, { method: 'POST', body: { fromEventId: spring.id } });
+    expect(sent).toBeGreaterThan(0);
+    expect((await fails(url, { method: 'POST', body: { fromEventId: spring.id } })).code).toBe('ALREADY_INVITED');
+    expect((await fails(`/events/${next.id}`, { method: 'PATCH', body: { timeZone: 'Nowhere/Land' } })).code).toBe('VALIDATION');
+    expect(
+      (await fails(`/events/${next.id}`, { method: 'PATCH', body: { discordWebhookUrl: 'https://example.com' } })).code
+    ).toBe('VALIDATION');
+  });
+});
+
+describe('who gets matched with whom', () => {
+  it('keeps a private block list that matching respects', async () => {
+    await loginAs('sol');
+    const { blocks } = await ok('/profile/blocks', { method: 'POST', body: { username: 'noor' } });
+    expect(blocks.map((b) => b.username)).toEqual(['noor']);
+    expect((await ok('/users/noor')).viewer).toEqual({ blocked: true });
+
+    // Summer Splash Swap is waiting for matches; Sol and Noor are both in it
+    await loginAs('mika');
+    const summer = await eventByName('Summer Splash Swap');
+    for (const seed of [1, 2, 3, 4]) {
+      const { matches } = await ok(`/events/${summer.id}/matches/generate`, { method: 'POST', body: { seed } });
+      const sol = matches.find((m) => m.giver.username === 'sol');
+      const noor = matches.find((m) => m.giver.username === 'noor');
+      if (sol) expect(sol.recipient.username).not.toBe('noor');
+      if (noor) expect(noor.recipient.username).not.toBe('sol');
+    }
+    await loginAs('sol');
+    const noorId = (await ok('/profile/blocks')).blocks[0].id;
+    expect((await ok(`/profile/blocks/${noorId}`, { method: 'DELETE' })).blocks).toEqual([]);
+  });
+
+  it('saves organiser rules for keeping people apart', async () => {
+    await loginAs('mika');
+    const summer = await eventByName('Summer Splash Swap');
+    const { applications } = await ok(`/events/${summer.id}/applications`);
+    const [a, b] = [applications[0].user.id, applications[1].user.id];
+    const { event } = await ok(`/events/${summer.id}/matching-rules`, {
+      method: 'PUT',
+      body: { avoidPairs: [{ a, b }, { a: b, b: a }], avoidRepeats: false },
+    });
+    expect(event.matchingRules).toEqual({ avoidPairs: [{ a, b }], avoidRepeats: false });
+    const bad = await fails(`/events/${summer.id}/matching-rules`, { method: 'PUT', body: { avoidPairs: [{ a, b: a }] } });
+    expect(bad.code).toBe('VALIDATION');
+  });
+});

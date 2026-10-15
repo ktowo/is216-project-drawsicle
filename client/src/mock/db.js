@@ -278,8 +278,13 @@ export function buildState(now = new Date()) {
     matches,
     submissions,
     notifications,
+    announcements: [],
+    reports: [],
   };
 }
+
+// Collections added after the first release; older saved demos get them empty
+const LATER_COLLECTIONS = ['announcements', 'reports'];
 
 // ---------- Loading and saving ----------
 
@@ -315,6 +320,7 @@ export function getState() {
     state = buildState(new Date());
     writeState(state);
   }
+  for (const key of LATER_COLLECTIONS) state[key] ||= [];
   cache = state;
   return cache;
 }
