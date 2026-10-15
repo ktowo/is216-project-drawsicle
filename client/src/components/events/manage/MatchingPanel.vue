@@ -19,7 +19,7 @@ import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingBlock from '@/components/ui/LoadingBlock.vue';
 import ErrorBlock from '@/components/ui/ErrorBlock.vue';
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue';
-import UserAvatar from '@/components/UserAvatar.vue';
+import PersonLink from '@/components/events/PersonLink.vue';
 import StatTile from './StatTile.vue';
 import { api } from '@/api';
 import { toast } from '@/stores/toast';
@@ -379,7 +379,7 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
           </p>
           <ul class="m-0 mt-3 p-0 list-none flex flex-wrap gap-2">
             <li v-for="u in unmatched" :key="u.id" class="person-chip">
-              <UserAvatar :user="u" :size="24" /> {{ personName(u) }}
+              <PersonLink :user="u" :size="24" />
             </li>
           </ul>
         </div>
@@ -455,16 +455,10 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
                 <span class="sr-only">Select {{ personName(m.giver) }}'s match for swapping</span>
               </label>
               <div class="people">
-                <span class="person">
-                  <UserAvatar :user="m.giver" :size="34" />
-                  <span class="truncate font-semibold">{{ personName(m.giver) }}</span>
-                </span>
+                <PersonLink :user="m.giver" :size="34" class="person" />
                 <ArrowRight :size="18" class="arrow" aria-hidden="true" />
                 <span class="sr-only">makes a gift for</span>
-                <span class="person">
-                  <UserAvatar :user="m.recipient" :size="34" />
-                  <span class="truncate font-semibold">{{ personName(m.recipient) }}</span>
-                </span>
+                <PersonLink :user="m.recipient" :size="34" class="person" />
               </div>
               <div class="score">
                 <span class="score-bar" aria-hidden="true"><span :style="{ width: `${scorePercent(m)}%` }" /></span>
@@ -521,16 +515,10 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
         <li v-for="m in visible" :key="m.id" class="card pair">
           <div class="pair-main">
             <div class="people">
-              <span class="person">
-                <UserAvatar :user="m.giver" :size="34" />
-                <span class="truncate font-semibold">{{ personName(m.giver) }}</span>
-              </span>
+              <PersonLink :user="m.giver" :size="34" class="person" />
               <ArrowRight :size="18" class="arrow" aria-hidden="true" />
                 <span class="sr-only">makes a gift for</span>
-              <span class="person">
-                <UserAvatar :user="m.recipient" :size="34" />
-                <span class="truncate font-semibold">{{ personName(m.recipient) }}</span>
-              </span>
+              <PersonLink :user="m.recipient" :size="34" class="person" />
             </div>
             <div class="flex flex-wrap items-center gap-2">
               <StatusBadge :status="m.status" kind="match" />

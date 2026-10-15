@@ -3,7 +3,7 @@ import { computed } from 'vue';
 import { ArrowRight, ExternalLink, ImageOff } from 'lucide-vue-next';
 import BaseModal from '@/components/ui/BaseModal.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
-import UserAvatar from '@/components/UserAvatar.vue';
+import PersonLink from '@/components/events/PersonLink.vue';
 import { assetUrl } from '@/api';
 import { formatDateTime } from '@/utils/format';
 import { safeUrl, linkHost, typeLabel } from '@/utils/events';
@@ -35,14 +35,10 @@ function imageHref(url) {
   <BaseModal :open="open" :title="title" size="lg" @close="emit('close')">
     <div v-if="sub" class="flex flex-col gap-5">
       <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span class="inline-flex items-center gap-2 font-semibold">
-          <UserAvatar :user="giver" :size="28" /> {{ personName(giver) }}
-        </span>
+        <PersonLink :user="giver" :size="28" />
         <ArrowRight :size="16" class="text-brand" aria-hidden="true" />
         <span class="sr-only">made a gift for</span>
-        <span class="inline-flex items-center gap-2 font-semibold">
-          <UserAvatar :user="recipient" :size="28" /> {{ personName(recipient) }}
-        </span>
+        <PersonLink :user="recipient" :size="28" />
       </div>
 
       <div class="flex flex-wrap items-center gap-2 text-sm text-cocoa">
