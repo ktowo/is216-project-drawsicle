@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, ExternalLink, Download } from 'lucide-vue-ne
 import BaseModal from '@/components/ui/BaseModal.vue';
 import { assetUrl } from '@/api';
 
-// Full-size image viewer. images: [{ url, title, caption }]. Left/right arrow keys move between them.
+// Full-size image viewer. images: [{ url, title, caption, alt? }] (alt: the artist's description). Left/right arrow keys move between them.
 const props = defineProps({
   open: { type: Boolean, default: false },
   images: { type: Array, default: () => [] },
@@ -59,7 +59,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
   <BaseModal :open="open && Boolean(current)" :title="current?.title || 'Artwork'" size="lg" @close="emit('close')">
     <figure v-if="current" class="viewer">
       <div class="stage">
-        <img :src="src" :alt="current.title ? `${current.title}, image ${index + 1}` : `Image ${index + 1}`" class="full" />
+        <img
+          :src="src"
+          :alt="current.alt || (current.title ? `${current.title}, image ${index + 1}` : `Image ${index + 1}`)"
+          class="full"
+        />
         <template v-if="count > 1">
           <button type="button" class="nav prev" aria-label="Previous image" @click="go(-1)">
             <ChevronLeft :size="22" />
@@ -81,12 +85,19 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
           </a>
         </span>
       </figcaption>
+      <p v-if="current.alt" class="description">{{ current.alt }}</p>
       <p v-if="count > 1" class="hint keys">Tip: use the left and right arrow keys to move between images.</p>
     </figure>
   </BaseModal>
 </template>
 
 <style scoped>
+.description {
+  margin: 8px 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+  white-space: pre-line;
+}
 .viewer {
   margin: 0;
 }

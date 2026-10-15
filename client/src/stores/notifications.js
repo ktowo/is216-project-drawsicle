@@ -11,6 +11,11 @@ import {
   Clock,
   ImageUp,
   PartyPopper,
+  Heart,
+  Megaphone,
+  MailPlus,
+  LifeBuoy,
+  Flag,
 } from 'lucide-vue-next';
 import { api, qs } from '../api';
 
@@ -44,6 +49,13 @@ const KINDS = {
   match_assigned: { icon: Gift, group: 'matches', tone: 'pink' },
   submission_received: { icon: ImageUp, group: 'matches', tone: 'info' },
   gift_revealed: { icon: PartyPopper, group: 'matches', tone: 'pink' },
+  gift_thanked: { icon: Heart, group: 'matches', tone: 'pink' },
+  backup_needed: { icon: LifeBuoy, group: 'matches', tone: 'warning' },
+  backup_assigned: { icon: Gift, group: 'matches', tone: 'pink' },
+  waitlist_promoted: { icon: CircleCheck, group: 'signups', tone: 'success' },
+  announcement: { icon: Megaphone, group: 'events', tone: 'info' },
+  event_invite: { icon: MailPlus, group: 'events', tone: 'pink' },
+  report_received: { icon: Flag, group: 'events', tone: 'warning' },
   deadline_reminder: { icon: Clock, group: 'reminders', tone: 'warning' },
   event_status: { icon: CalendarHeart, group: 'events', tone: 'pink' },
   organizer_added: { icon: Users, group: 'events', tone: 'info' },
