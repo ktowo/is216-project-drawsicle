@@ -27,6 +27,7 @@ import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingBlock from '@/components/ui/LoadingBlock.vue';
 import ErrorBlock from '@/components/ui/ErrorBlock.vue';
 import UserAvatar from '@/components/UserAvatar.vue';
+import PersonLink from '@/components/events/PersonLink.vue';
 import CharacterCard from '@/components/characters/CharacterCard.vue';
 import { api, qs } from '@/api';
 import { toast } from '@/stores/toast';
@@ -198,7 +199,9 @@ async function copyUsername() {
           <div class="who">
             <UserAvatar :user="recipient" :size="76" class="who-avatar" />
             <div class="who-text">
-              <h2 id="recipient-heading" class="who-name">{{ recipient.displayName }}</h2>
+              <h2 id="recipient-heading" class="who-name">
+                <PersonLink :user="recipient" :size="0" fallback="your recipient" />
+              </h2>
               <p v-if="recipient.username" class="who-handle">@{{ recipient.username }}</p>
               <div v-if="recipient.communityUsername" class="community">
                 <span class="community-label">On {{ community }}:</span>

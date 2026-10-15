@@ -41,6 +41,10 @@ function profileFromUser(user) {
     username: user?.username || '',
     bio: user?.bio || '',
     socials: Object.fromEntries(SOCIALS.map((s) => [s.key, user?.socials?.[s.key] || ''])),
+    privacy: {
+      showExchanges: user?.profilePrivacy?.showExchanges !== false,
+      showGifts: Boolean(user?.profilePrivacy?.showGifts),
+    },
   };
 }
 
@@ -109,6 +113,7 @@ async function saveProfile() {
     displayName: profile.displayName.trim(),
     bio: profile.bio.trim(),
     socials: Object.fromEntries(SOCIALS.map((s) => [s.key, cleanHandle(profile.socials[s.key])])),
+    profilePrivacy: { ...profile.privacy },
   };
   const handle = profile.username.trim().toLowerCase();
   if (handle) body.username = handle;
@@ -445,6 +450,43 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
         </div>
       </fieldset>
 
+      <fieldset class="privacy">
+        <legend class="label">What your public profile shows</legend>
+        <div class="privacy-row">
+          <label class="switch" for="privacy-exchanges">
+            <input
+              id="privacy-exchanges"
+              v-model="profile.privacy.showExchanges"
+              type="checkbox"
+              role="switch"
+              aria-describedby="privacy-exchanges-hint"
+            />
+            <span class="track" aria-hidden="true"><span class="thumb" /></span>
+            <span class="switch-label">Show exchanges I've joined on my profile</span>
+          </label>
+          <p id="privacy-exchanges-hint" class="hint">
+            Finished public exchanges you took part in, and how many. Private events are never listed.
+          </p>
+        </div>
+        <div class="privacy-row">
+          <label class="switch" for="privacy-gifts">
+            <input
+              id="privacy-gifts"
+              v-model="profile.privacy.showGifts"
+              type="checkbox"
+              role="switch"
+              aria-describedby="privacy-gifts-hint"
+            />
+            <span class="track" aria-hidden="true"><span class="thumb" /></span>
+            <span class="switch-label">Allow public display of gifts I made or received</span>
+          </label>
+          <p id="privacy-gifts-hint" class="hint">
+            A gift only appears on its artist's profile when both the artist and the person it was made for allow it.
+            Turning this off hides those gifts straight away.
+          </p>
+        </div>
+      </fieldset>
+
       <p v-if="profileError" class="alert alert-error form-alert" role="alert">{{ profileError }}</p>
 
       <div class="actions">
@@ -462,6 +504,14 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
       <p class="preview-sub">
         How your public profile looks with the changes above<template v-if="profileDirty"> (not saved yet)</template>.
         Your email, characters and sign-up forms are never shown there.
+      </p>
+      <p class="preview-sub">
+        {{ profile.privacy.showExchanges ? 'Exchanges you joined are listed.' : 'Exchanges you joined are hidden.' }}
+        {{
+          profile.privacy.showGifts
+            ? 'Gifts you made show up once their recipient allows it too.'
+            : "Gifts you made aren't shown."
+        }}
       </p>
       <ProfileHeader :profile="preview" heading-tag="h3" />
     </section>
@@ -674,6 +724,65 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
   flex-wrap: wrap;
   gap: 14px;
   margin-top: 28px;
+}
+.privacy {
+  border: 0;
+  margin: 24px 0 0;
+  padding: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.privacy-row .hint {
+  margin: 4px 0 0 54px;
+}
+/* Same switch as the event form's settings */
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  position: relative;
+  width: fit-content;
+}
+.switch input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+.switch-label {
+  font-weight: 600;
+}
+.track {
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  position: relative;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  transition: transform 0.15s;
+}
+.switch input:checked + .track {
+  background: var(--pink);
+}
+.switch input:checked + .track .thumb {
+  transform: translateX(18px);
+}
+.switch input:focus-visible + .track {
+  box-shadow: var(--focus-ring);
 }
 .unsaved {
   color: var(--muted);

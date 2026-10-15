@@ -119,12 +119,13 @@ All routes are under `/api`. (auth) = must be logged in, (org) = event organiser
 | POST | /auth/change-password | (auth) `{ currentPassword, newPassword }` → `{ user }`, logs out other devices |
 | GET | /auth/google, /auth/google/callback | optional (GOOGLE_CLIENT_ID/SECRET) |
 | GET | /auth/discord, /auth/discord/callback | optional (DISCORD_CLIENT_ID/SECRET), scope `identify email` |
-| PATCH | /profile | (auth) any of `{ displayName, bio, username, socials{...}, defaultForm{...}, notificationPrefs{...} }` → `{ user }`; 409 `USERNAME_TAKEN` |
+| PATCH | /profile | (auth) any of `{ displayName, bio, username, socials{...}, defaultForm{...}, notificationPrefs{...}, profilePrivacy{...} }` → `{ user }`; 409 `USERNAME_TAKEN` |
 | POST/DELETE | /profile/avatar | (auth) multipart `avatar` |
 | POST | /profile/deactivate | (auth) `{ password? }` → `{ ok }`; sets status `deactivated`, logs out, withdraws sign-ups (see below). Anonymised after 30 days |
 | GET | /profile/export | (auth) → `{ exportedAt, user, characters, applications: [Application + eventName], submissions: [Submission + eventName], notifications }`, for a "download my data" button |
-| GET | /profile/:id | public profile (`ArtistProfile` without `createdAt`), by id or username |
-| GET | /users/:username | (optional auth) public artist profile → `{ profile: ArtistProfile, organizing: Event[] (their public, non-draft events, newest first, max 12), stats: { eventsOrganized, exchangesCompleted } }`. The username matches in any case, with or without a leading `@`; an id works too. `exchangesCompleted` counts completed events where they were an accepted participant. 404 `USER_NOT_FOUND` for unknown or deactivated accounts |
+| GET | /profile/:id | public profile (`ArtistProfile` without `createdAt`), by id or username; 404 `NOT_FOUND` for deactivated or banned accounts |
+| GET | /users/:username | (optional auth) public artist profile → `{ profile: ArtistProfile, organizing: Event[] (their public, non-draft events, newest first, max 12), exchanges?: Event[] (finished public exchanges they were accepted into, newest completion first, max 12), stats: { eventsOrganized, exchangesCompleted? }, hasGifts }`. The username matches in any case, with or without a leading `@`; an id works too. `exchangesCompleted` counts the same events as `exchanges` (public, completed, not disabled). Both are left out when the artist turned off `profilePrivacy.showExchanges`. `hasGifts` says whether the gift gallery below has anything to show. 404 `USER_NOT_FOUND` for unknown, deactivated or banned accounts |
+| GET | /users/:username/gifts?limit=&before= | (optional auth) the artist's public gift gallery → `{ items: [{ submission: { id, title, type, images, links, submittedAt }, event: { id, name }, giver: UserMini, recipient: UserMini }], hasMore }`, newest first, 12 per page (max 48). `before` is an ISO date cursor (gifts submitted strictly earlier). Only gifts they *made*, in public, completed, non-disabled events, where both they and the recipient have `profilePrivacy.showGifts` and the recipient's account is active; never the private message or verification details. Same answer for every viewer. 400 `VALIDATION` for a bad `before`; 404 `USER_NOT_FOUND` like the profile |
 | GET | /notifications?limit=&before= | (auth) → `{ items: Notification[], unreadCount, hasMore }`, newest first. `before` is an ISO date cursor (items strictly older than it); 400 `VALIDATION` if it isn't a date. `hasMore` says whether an older page exists |
 | GET | /notifications/unread-count | (auth) |
 | PATCH | /notifications/:id/read | (auth) |
@@ -140,7 +141,8 @@ Rejected applications are left alone, and logging back in does not restore withd
 `user` (from `User.toPublic()`): `{ id, email, username, role, status, displayName, avatarUrl, bio,
 socials{twitter,instagram,bluesky,discord,deviantart,toyhouse,tumblr}, defaultForm{communityUsername, canCreate[],
 wantsTypes[], likes, avoid, cannotDraw[]}, notificationPrefs{emailReminders, emailMatches, emailEventUpdates},
-providers{google,discord}, profileComplete, createdAt }`
+profilePrivacy{showExchanges (default true), showGifts (default false)}, providers{google,discord}, profileComplete,
+createdAt }`. `profilePrivacy` only ever appears in the owner's own `user`, never in `ArtistProfile`.
 
 ### Characters: `routes/character-router.js` (auth, owner only; other people's characters are 404)
 

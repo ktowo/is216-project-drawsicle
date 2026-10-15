@@ -60,6 +60,13 @@ const userSchema = new mongoose.Schema(
       cannotDraw: { type: [String], default: [] },
     },
 
+    // What the public artist profile may show. Gifts only appear publicly when both the
+    // artist who made them and the person they were made for allow it.
+    profilePrivacy: {
+      showExchanges: { type: Boolean, default: true },
+      showGifts: { type: Boolean, default: false },
+    },
+
     // In-app notifications are always on; these control the email copies.
     notificationPrefs: {
       emailReminders: { type: Boolean, default: true },
@@ -104,6 +111,10 @@ userSchema.methods.toPublic = function () {
       emailReminders: this.notificationPrefs?.emailReminders !== false,
       emailMatches: this.notificationPrefs?.emailMatches !== false,
       emailEventUpdates: Boolean(this.notificationPrefs?.emailEventUpdates),
+    },
+    profilePrivacy: {
+      showExchanges: this.profilePrivacy?.showExchanges !== false,
+      showGifts: Boolean(this.profilePrivacy?.showGifts),
     },
     providers: { google: Boolean(this.googleId), discord: Boolean(this.discordId) },
     profileComplete: Boolean(this.displayName && this.bio),
