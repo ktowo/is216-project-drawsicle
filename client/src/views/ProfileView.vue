@@ -1,11 +1,13 @@
 <script setup>
-import { ref, reactive, computed, nextTick } from 'vue';
-import { Save, Upload, Trash2, Loader2, AtSign, Smile } from 'lucide-vue-next';
+import { ref, reactive, computed, nextTick, watch, onBeforeUnmount } from 'vue';
+import { RouterLink, onBeforeRouteLeave } from 'vue-router';
+import { Save, Upload, Trash2, Loader2, AtSign, Smile, ExternalLink, Eye } from 'lucide-vue-next';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import FormField from '@/components/ui/FormField.vue';
 import ChoiceChips from '@/components/ui/ChoiceChips.vue';
 import TagInput from '@/components/ui/TagInput.vue';
 import UserAvatar from '@/components/UserAvatar.vue';
+import ProfileHeader from '@/components/profile/ProfileHeader.vue';
 import { auth, setUser } from '@/stores/auth';
 import { toast } from '@/stores/toast';
 import { api } from '@/api';
@@ -253,11 +255,50 @@ async function saveDefaults() {
 }
 
 const count = (value) => String(value || '').length;
+
+// ---------- Preview and leaving with unsaved changes ----------
+
+// What visitors to /users/<username> would see with the changes typed so far
+const preview = computed(() => ({
+  displayName: profile.displayName.trim() || auth.user?.displayName || '',
+  username: profile.username.trim().toLowerCase() || auth.user?.username || '',
+  bio: profile.bio,
+  socials: Object.fromEntries(SOCIALS.map((s) => [s.key, cleanHandle(profile.socials[s.key])])),
+  avatarUrl: auth.user?.avatarUrl || null,
+  createdAt: auth.user?.createdAt,
+}));
+const publicLink = computed(() => (auth.user?.username ? `/users/${auth.user.username}` : ''));
+
+const anyDirty = computed(() => profileDirty.value || defaultsDirty.value);
+
+onBeforeRouteLeave(() => {
+  if (!anyDirty.value) return true;
+  return window.confirm('You have unsaved changes on your profile. Leave without saving?');
+});
+
+function onBeforeUnload(e) {
+  if (anyDirty.value) e.preventDefault();
+}
+watch(
+  anyDirty,
+  (dirty) => {
+    if (dirty) window.addEventListener('beforeunload', onBeforeUnload);
+    else window.removeEventListener('beforeunload', onBeforeUnload);
+  },
+  { immediate: true }
+);
+onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload));
 </script>
 
 <template>
   <div v-if="auth.user" class="profile-view">
-    <PageHeader title="Your profile" subtitle="How you appear to organisers and other artists." />
+    <PageHeader title="Your profile" subtitle="How you appear to organisers and other artists.">
+      <template v-if="publicLink" #actions>
+        <RouterLink :to="publicLink" class="btn btn-outline">
+          <ExternalLink :size="18" aria-hidden="true" /> View public profile
+        </RouterLink>
+      </template>
+    </PageHeader>
 
     <form class="card panel" novalidate aria-labelledby="profile-heading" @submit.prevent="saveProfile">
       <h2 id="profile-heading" class="section-title">Public profile</h2>
@@ -415,6 +456,15 @@ const count = (value) => String(value || '').length;
         </button>
       </div>
     </form>
+
+    <section class="preview" aria-labelledby="preview-heading">
+      <h2 id="preview-heading" class="preview-title"><Eye :size="18" aria-hidden="true" /> Preview</h2>
+      <p class="preview-sub">
+        How your public profile looks with the changes above<template v-if="profileDirty"> (not saved yet)</template>.
+        Your email, characters and sign-up forms are never shown there.
+      </p>
+      <ProfileHeader :profile="preview" heading-tag="h3" />
+    </section>
 
     <form class="card panel" novalidate aria-labelledby="defaults-heading" @submit.prevent="saveDefaults">
       <h2 id="defaults-heading" class="section-title">Sign-up form defaults</h2>
@@ -629,6 +679,18 @@ const count = (value) => String(value || '').length;
   color: var(--muted);
   font-size: 0.92rem;
   font-weight: 600;
+}
+.preview-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1.15rem;
+}
+.preview-sub {
+  margin: 4px 0 14px;
+  color: var(--muted);
+  font-size: 0.92rem;
 }
 
 @media (max-width: 640px) {

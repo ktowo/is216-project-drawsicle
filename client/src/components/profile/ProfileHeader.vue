@@ -9,6 +9,8 @@ import { formatMonthYear } from '@/utils/format';
 // Buttons (edit, share) go in the default slot.
 const props = defineProps({
   profile: { type: Object, required: true },
+  // 'h2' when the header is a preview inside another page
+  headingTag: { type: String, default: 'h1' },
 });
 
 const name = computed(() => props.profile.displayName || props.profile.username || 'Artist');
@@ -21,7 +23,7 @@ const bio = computed(() => (props.profile.bio || '').trim());
     <UserAvatar :user="profile" :size="112" class="head-avatar" />
 
     <div class="head-main">
-      <h1 class="head-name">{{ name }}</h1>
+      <component :is="headingTag" class="head-name">{{ name }}</component>
       <p v-if="profile.username" class="head-handle">@{{ profile.username }}</p>
       <p v-if="since" class="head-since">
         <CalendarDays :size="15" aria-hidden="true" /> Member since {{ since }}
