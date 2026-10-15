@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
-import { Mail, Lock, KeyRound, Loader2, TriangleAlert, CircleCheck, Circle } from 'lucide-vue-next';
+import { Mail, Lock, KeyRound, Loader2, TriangleAlert, CircleCheck, Circle, Download } from 'lucide-vue-next';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue';
 import TextField from '@/components/TextField.vue';
@@ -9,6 +9,7 @@ import { auth, setUser } from '@/stores/auth';
 import { toast } from '@/stores/toast';
 import { api } from '@/api';
 import { formatDate } from '@/utils/format';
+import { saveJson, dateStamp } from '@/utils/download';
 import { LIMITS } from '@shared/constants.mjs';
 
 const router = useRouter();
@@ -142,6 +143,29 @@ async function savePassword() {
     }
   } finally {
     savingPassword.value = false;
+  }
+}
+
+// ---------- Your data ----------
+
+const exporting = ref(false);
+const exportError = ref('');
+
+async function downloadData() {
+  if (exporting.value) return;
+  exporting.value = true;
+  exportError.value = '';
+  try {
+    const data = await api('/profile/export');
+    if (saveJson(`drawisicle-data-${dateStamp()}.json`, data)) {
+      toast.success('Your data is downloading.');
+    } else {
+      exportError.value = "Your browser didn't let us save the file. Try again, or try another browser.";
+    }
+  } catch (e) {
+    exportError.value = e.message;
+  } finally {
+    exporting.value = false;
   }
 }
 
@@ -299,6 +323,20 @@ async function deactivate() {
       </div>
     </form>
 
+    <section class="card panel" aria-labelledby="data-heading">
+      <h2 id="data-heading" class="section-title">Your data</h2>
+      <p class="section-sub data-sub">
+        One file with everything Drawisicle keeps about you: your profile, characters, sign-up forms, the gifts
+        you've made and your notifications. It's a JSON file, readable in any text editor.
+      </p>
+      <button type="button" class="btn btn-outline" :disabled="exporting" @click="downloadData">
+        <Loader2 v-if="exporting" :size="18" class="spin" aria-hidden="true" />
+        <Download v-else :size="18" aria-hidden="true" />
+        Download my data
+      </button>
+      <p v-if="exportError" class="alert alert-error form-alert" role="alert">{{ exportError }}</p>
+    </section>
+
     <section class="card panel danger-zone" aria-labelledby="danger-heading">
       <h2 id="danger-heading" class="section-title">
         <TriangleAlert :size="20" aria-hidden="true" /> Deactivate account
@@ -307,6 +345,10 @@ async function deactivate() {
         You'll be logged out everywhere and your profile is hidden. Changed your mind? Log back in within
         {{ GRACE_DAYS }} days and everything comes back. After that we remove your name, email, profile and sign-in
         details for good. Events and gifts you took part in stay, shown as "Deleted user".
+      </p>
+      <p class="danger-text">
+        Your sign-ups are withdrawn from events that haven't published their matches yet. Matches that are already
+        out stay as they are, because someone is already making a gift for you, so let those organisers know.
       </p>
       <div class="actions start">
         <button type="button" class="btn btn-outline btn-danger-text" @click="openDeactivate">
@@ -418,6 +460,10 @@ async function deactivate() {
 }
 .form-alert {
   margin: 22px 0 0;
+}
+.data-sub {
+  max-width: 70ch;
+  margin-bottom: 18px;
 }
 .actions {
   display: flex;
