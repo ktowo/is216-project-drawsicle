@@ -498,6 +498,19 @@ describe('build-out additions', () => {
     expect((await fails('/users/mika')).code).toBe('USER_NOT_FOUND');
   });
 
+  it('saves profile privacy settings and keeps them off the public profile', async () => {
+    await loginAs('kit');
+    expect((await ok('/auth/me')).user.profilePrivacy).toEqual({ showExchanges: true, showGifts: false });
+
+    const { user } = await ok('/profile', { method: 'PATCH', body: { profilePrivacy: { showGifts: true } } });
+    expect(user.profilePrivacy).toEqual({ showExchanges: true, showGifts: true });
+    expect((await fails('/profile', { method: 'PATCH', body: { profilePrivacy: { showExchanges: 'no' } } })).code).toBe(
+      'VALIDATION'
+    );
+    expect((await ok('/profile/export')).user.profilePrivacy).toEqual({ showExchanges: true, showGifts: true });
+    expect((await ok('/users/kit')).profile).not.toHaveProperty('profilePrivacy');
+  });
+
   it('hides banned artists until they are unbanned', async () => {
     // Saved, because a failed request throws away unsaved changes
     const setStatus = (status) => {
