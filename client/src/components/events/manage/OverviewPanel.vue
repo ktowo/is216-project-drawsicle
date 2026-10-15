@@ -21,6 +21,8 @@ import DeadlineChip from '@/components/ui/DeadlineChip.vue';
 import StatTile from './StatTile.vue';
 import ShareLinkBox from './ShareLinkBox.vue';
 import ReminderModal from './ReminderModal.vue';
+import InvitePastCard from './InvitePastCard.vue';
+import AnnouncementsPanel from '@/components/events/AnnouncementsPanel.vue';
 import { api } from '@/api';
 import { toast } from '@/stores/toast';
 import { formatDate, formatDateTime, timeUntil, pluralize } from '@/utils/format';
@@ -446,6 +448,10 @@ const reminderOpen = ref(false);
         </dl>
       </section>
     </div>
+
+    <AnnouncementsPanel :event="event" can-post :hide-when-empty="false" />
+
+    <InvitePastCard v-if="event.status === 'open'" :event="event" @updated="emit('updated', $event)" />
 
     <ShareLinkBox :event="event" @updated="emit('updated', $event)" />
 

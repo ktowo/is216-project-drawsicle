@@ -33,7 +33,7 @@ import { api, qs, assetUrl } from '@/api';
 import { auth } from '@/stores/auth';
 import { toast } from '@/stores/toast';
 import { signupsOpen } from '@shared/constants.mjs';
-import { formatDateTime, pluralize } from '@/utils/format';
+import { formatDateTime, pluralize, timeInZone } from '@/utils/format';
 import {
   viewerActions,
   viewerNote,
@@ -47,6 +47,7 @@ import {
   shareOrCopy,
 } from '@/utils/events';
 import { eventCalendarEntries, downloadIcs } from '@/utils/calendar';
+import AnnouncementsPanel from '@/components/events/AnnouncementsPanel.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -290,6 +291,8 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
             </p>
           </section>
 
+          <AnnouncementsPanel :event="event" :invite="invite || ''" />
+
           <section class="card panel" aria-labelledby="progress-heading">
             <h2 id="progress-heading" class="panel-title">Progress</h2>
             <LifecycleStepper :status="event.status" />
@@ -356,6 +359,9 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
                 <dd>
                   <span class="date">{{ formatDateTime(event.signupDeadline) }}</span>
                   <DeadlineChip v-if="['draft', 'open'].includes(event.status)" :at="event.signupDeadline" label="Sign-ups close" />
+                  <span v-if="timeInZone(event.signupDeadline, event.timeZone)" class="zone">
+                    That's {{ timeInZone(event.signupDeadline, event.timeZone) }} for the organisers.
+                  </span>
                 </dd>
               </div>
               <div class="date-row">
@@ -363,6 +369,9 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
                 <dd>
                   <span class="date">{{ formatDateTime(event.submissionDeadline) }}</span>
                   <DeadlineChip v-if="event.status !== 'completed'" :at="event.submissionDeadline" label="Submissions close" />
+                  <span v-if="timeInZone(event.submissionDeadline, event.timeZone)" class="zone">
+                    That's {{ timeInZone(event.submissionDeadline, event.timeZone) }} for the organisers.
+                  </span>
                 </dd>
               </div>
               <div v-if="event.completedAt" class="date-row">
@@ -709,6 +718,11 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
 }
 .date {
   font-weight: 600;
+}
+.zone {
+  flex-basis: 100%;
+  font-size: 0.85rem;
+  color: var(--muted);
 }
 .calendar-btn,
 .calendar-note {

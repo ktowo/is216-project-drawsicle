@@ -254,3 +254,17 @@ export function imageDescriptionsFor(images, keep, uploaded, given, previous = {
     return String(text ?? '').trim().slice(0, LIMITS.imageDescription);
   });
 }
+
+// A Discord channel webhook (Server settings > Integrations > Webhooks > Copy webhook URL)
+export const DISCORD_WEBHOOK_RE = /^https:\/\/(?:(?:ptb|canary)\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/[\w-]+$/;
+
+// "Europe/London" and the like, as the browser and Node understand them
+export function isTimeZone(value) {
+  if (typeof value !== 'string' || !value || value.length > 64) return false;
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
