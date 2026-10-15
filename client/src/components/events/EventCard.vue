@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { RouterLink } from 'vue-router';
 import { Lock, Users } from 'lucide-vue-next';
 import EventBanner from './EventBanner.vue';
+import PersonLink from './PersonLink.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import DeadlineChip from '@/components/ui/DeadlineChip.vue';
 import { eventLink, nextDeadline, seasonLabel } from '@/utils/events';
@@ -16,12 +17,10 @@ const props = defineProps({
 
 const deadline = computed(() => nextDeadline(props.event));
 
-const organizerNames = computed(() => {
-  const names = (props.event.organizers || []).map((o) => o.displayName).filter(Boolean);
-  if (!names.length) return '';
-  if (names.length <= 2) return names.join(' & ');
-  return `${names[0]} & ${names.length - 1} others`;
-});
+// Up to two organisers by name (each a profile link), then "& N others"
+const organizers = computed(() => (props.event.organizers || []).filter((o) => o?.displayName));
+const shownOrganizers = computed(() => (organizers.value.length <= 2 ? organizers.value : organizers.value.slice(0, 1)));
+const otherOrganizers = computed(() => organizers.value.length - shownOrganizers.value.length);
 
 const meta = computed(() =>
   [props.event.season && props.event.season !== 'other' ? seasonLabel(props.event.season) : '', props.event.theme]
@@ -53,7 +52,14 @@ const capacity = computed(() => {
       </h3>
 
       <p v-if="meta" class="meta">{{ meta }}</p>
-      <p v-if="organizerNames && !compact" class="organisers">by {{ organizerNames }}</p>
+      <p v-if="organizers.length && !compact" class="organisers">
+        by
+        <template v-for="(person, i) in shownOrganizers" :key="person.id || i">
+          <template v-if="i > 0"> &amp; </template>
+          <PersonLink :user="person" :size="0" class="organiser" />
+        </template>
+        <template v-if="otherOrganizers"> &amp; {{ otherOrganizers }} others</template>
+      </p>
 
       <div class="footer-row">
         <DeadlineChip v-if="deadline" :at="deadline.at" :label="deadline.label" />
@@ -133,6 +139,11 @@ const capacity = computed(() => {
 .meta,
 .organisers {
   margin: 0;
+  /* Above the title link that covers the card, so the names can be clicked */
+  position: relative;
+  z-index: 1;
+  width: fit-content;
+  max-width: 100%;
   color: var(--muted);
   font-size: 0.92rem;
   overflow-wrap: anywhere;
