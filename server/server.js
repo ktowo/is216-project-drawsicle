@@ -69,6 +69,8 @@ server.use(async (req, res, next) => {
 
 // run server if node environment is not production
 if (process.env.NODE_ENV !== 'production') {
+  console.log("Running in a not production environment");
+  
   startServer();
 }
 
