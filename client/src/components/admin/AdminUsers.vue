@@ -1,11 +1,12 @@
 <script setup>
 import { ref, reactive, watch, onMounted } from 'vue';
-import { RouterLink } from 'vue-router';
 import { Search, ShieldCheck, ShieldOff, Ban, Undo2, Trash2, Users } from 'lucide-vue-next';
 import { api, qs } from '@/api';
 import { auth } from '@/stores/auth';
 import { toast } from '@/stores/toast';
 import UserAvatar from '@/components/UserAvatar.vue';
+import PersonLink from '@/components/events/PersonLink.vue';
+import { linkableUser } from './helpers.js';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import LoadingBlock from '@/components/ui/LoadingBlock.vue';
 import ErrorBlock from '@/components/ui/ErrorBlock.vue';
@@ -119,8 +120,7 @@ async function run(reason = '') {
             <UserAvatar :user="u" :size="40" />
             <div class="min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
-                <RouterLink v-if="u.username && u.status === 'active'" :to="`/users/${u.username}`" class="font-semibold">{{ u.displayName }}</RouterLink>
-                <span v-else class="font-semibold">{{ u.displayName }}</span>
+                <PersonLink :user="linkableUser(u)" :size="0" />
                 <span v-if="u.role === 'admin'" class="badge badge-admin">Admin</span>
                 <StatusBadge kind="user" :status="u.status" />
                 <span v-if="isMe(u)" class="hint">(you)</span>
