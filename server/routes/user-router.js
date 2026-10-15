@@ -13,6 +13,8 @@ const router = Router();
 
 const PROFILE_EVENTS_MAX = 12;
 const LISTED = { publicity: 'public', status: { $ne: 'draft' }, disabledAt: null };
+// Exchanges and gifts only ever come from finished public events
+const FINISHED = { publicity: 'public', status: 'completed', disabledAt: null };
 
 const notFound = () => httpError(404, "We couldn't find that artist.", 'USER_NOT_FOUND');
 
@@ -31,20 +33,29 @@ router.get('/:username', optionalAuth, asyncHandler(async (req, res) => {
   if (!user || (user.status || 'active') !== 'active') throw notFound();
 
   const organizedIds = await EventMember.distinct('event', { user: user._id, roles: 'organizer' });
-  const [events, eventsOrganized, participatedIn] = await Promise.all([
+  const [events, eventsOrganized] = await Promise.all([
     Event.find({ _id: { $in: organizedIds }, ...LISTED }).sort({ createdAt: -1, _id: -1 }).limit(PROFILE_EVENTS_MAX),
     Event.countDocuments({ _id: { $in: organizedIds }, ...LISTED }),
-    Application.distinct('event', { user: user._id, status: 'accepted' }),
   ]);
-  const exchangesCompleted = participatedIn.length
-    ? await Event.countDocuments({ _id: { $in: participatedIn }, status: 'completed' })
-    : 0;
-
-  res.json({
+  const body = {
     profile: { ...user.toPublicProfile(), createdAt: user.createdAt },
     organizing: await serializeEvents(events, req.user),
-    stats: { eventsOrganized, exchangesCompleted },
-  });
+    stats: { eventsOrganized },
+  };
+
+  // Exchanges they took part in, unless they chose to keep that to themselves
+  if (user.profilePrivacy?.showExchanges !== false) {
+    const joinedIds = await Application.distinct('event', { user: user._id, status: 'accepted' });
+    const joined = { _id: { $in: joinedIds }, ...FINISHED };
+    const [exchanges, exchangesCompleted] = await Promise.all([
+      Event.find(joined).sort({ completedAt: -1, _id: -1 }).limit(PROFILE_EVENTS_MAX),
+      Event.countDocuments(joined),
+    ]);
+    body.exchanges = await serializeEvents(exchanges, req.user);
+    body.stats.exchangesCompleted = exchangesCompleted;
+  }
+
+  res.json(body);
 }));
 
 router.use(apiErrorHandler);

@@ -511,6 +511,22 @@ describe('build-out additions', () => {
     expect((await ok('/users/kit')).profile).not.toHaveProperty('profilePrivacy');
   });
 
+  it('lists exchanges joined unless the artist hides them', async () => {
+    const kit = await ok('/users/kit');
+    expect(kit.exchanges.length).toBe(kit.stats.exchangesCompleted);
+    expect(kit.exchanges.length).toBeGreaterThan(0);
+    for (const event of kit.exchanges) {
+      expect(event).toMatchObject({ status: 'completed', publicity: 'public' });
+    }
+
+    await loginAs('kit');
+    await ok('/profile', { method: 'PATCH', body: { profilePrivacy: { showExchanges: false } } });
+    await logout();
+    const hidden = await ok('/users/kit');
+    expect(hidden).not.toHaveProperty('exchanges');
+    expect(hidden.stats).toEqual({ eventsOrganized: 1 });
+  });
+
   it('hides banned artists until they are unbanned', async () => {
     // Saved, because a failed request throws away unsaved changes
     const setStatus = (status) => {

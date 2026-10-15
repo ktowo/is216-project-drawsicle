@@ -28,7 +28,8 @@ const state = ref('loading'); // 'loading' | 'ready' | 'notfound' | 'error'
 const errorMessage = ref('');
 const profile = ref(null);
 const organizing = ref([]);
-const stats = ref({ eventsOrganized: 0, exchangesCompleted: 0 });
+const exchanges = ref([]); // empty when there are none or the artist hides them
+const stats = ref({ eventsOrganized: 0 });
 
 const handle = computed(() => String(route.params.username || '').replace(/^@/, ''));
 const name = computed(() => profile.value?.displayName || profile.value?.username || 'This artist');
@@ -41,6 +42,7 @@ const isMe = computed(() => {
   return Boolean(me.username) && me.username.toLowerCase() === String(profile.value.username || '').toLowerCase();
 });
 
+const hiddenExchanges = computed(() => Math.max(0, (stats.value.exchangesCompleted || 0) - exchanges.value.length));
 const hiddenEvents = computed(() => Math.max(0, (stats.value.eventsOrganized || 0) - organizing.value.length));
 
 // Latest request wins when someone clicks through profiles quickly
@@ -54,7 +56,8 @@ async function load() {
     if (id !== loadId) return;
     profile.value = data.profile;
     organizing.value = data.organizing || [];
-    stats.value = { eventsOrganized: 0, exchangesCompleted: 0, ...(data.stats || {}) };
+    exchanges.value = data.exchanges || [];
+    stats.value = { eventsOrganized: 0, ...(data.stats || {}) };
     state.value = 'ready';
 
     // An id or different capitalisation in the link: show the real username in the address bar.
@@ -69,6 +72,7 @@ async function load() {
     if (id !== loadId) return;
     profile.value = null;
     organizing.value = [];
+    exchanges.value = [];
     if (e.status === 404 || e.code === 'USER_NOT_FOUND') {
       state.value = 'notfound';
       document.title = 'Artist not found · Drawsicle';
@@ -229,6 +233,24 @@ function goToLookup() {
             <Compass :size="16" aria-hidden="true" /> Browse events
           </RouterLink>
         </EmptyState>
+      </section>
+
+      <section v-if="exchanges.length" class="events" aria-labelledby="exchanges-heading">
+        <header class="events-head">
+          <div>
+            <h2 id="exchanges-heading" class="section-title">Exchanges {{ name }} joined</h2>
+            <p class="section-sub">
+              Finished public exchanges{{
+                hiddenExchanges ? `, latest ${exchanges.length} of ${stats.exchangesCompleted}` : ''
+              }}.
+            </p>
+          </div>
+        </header>
+        <ul class="event-grid">
+          <li v-for="event in exchanges" :key="event.id">
+            <EventCard :event="event" class="h-full" />
+          </li>
+        </ul>
       </section>
     </template>
   </main>
