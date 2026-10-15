@@ -2,7 +2,7 @@
 import ModerationNotice from '@/components/events/ModerationNotice.vue';
 import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
-import { ArrowLeft, CalendarSearch, ExternalLink, Pencil, Lock, Globe, Users } from 'lucide-vue-next';
+import { ArrowLeft, CalendarSearch, ExternalLink, Pencil, Lock, Globe, Users, Copy } from 'lucide-vue-next';
 import EventBanner from '@/components/events/EventBanner.vue';
 import LifecycleStepper from '@/components/events/LifecycleStepper.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
@@ -15,6 +15,7 @@ import ParticipantsPanel from '@/components/events/manage/ParticipantsPanel.vue'
 import MatchingPanel from '@/components/events/manage/MatchingPanel.vue';
 import SubmissionsPanel from '@/components/events/manage/SubmissionsPanel.vue';
 import SettingsPanel from '@/components/events/manage/SettingsPanel.vue';
+import DuplicateEventModal from '@/components/events/manage/DuplicateEventModal.vue';
 import { MANAGE_TABS } from '@/components/events/manage/helpers';
 import { api } from '@/api';
 import { seasonLabel, eventLink } from '@/utils/events';
@@ -24,6 +25,7 @@ const router = useRouter();
 
 const event = ref(null);
 const loading = ref(true);
+const duplicateOpen = ref(false);
 const error = ref('');
 const notFound = ref(false);
 
@@ -179,6 +181,9 @@ const meta = computed(() => {
               <RouterLink v-if="event.status !== 'completed'" :to="eventLink(event, '/edit')" class="btn btn-outline btn-sm">
                 <Pencil :size="16" aria-hidden="true" /> Edit details
               </RouterLink>
+              <button type="button" class="btn btn-outline btn-sm" @click="duplicateOpen = true">
+                <Copy :size="16" aria-hidden="true" /> Duplicate
+              </button>
             </div>
           </div>
         </div>
@@ -208,6 +213,8 @@ const meta = computed(() => {
         <SubmissionsPanel v-else-if="tab === 'submissions'" :key="event.id" :event="event" />
         <SettingsPanel v-else :key="event.id" :event="event" @updated="onUpdated" @left="onLeft" />
       </div>
+
+      <DuplicateEventModal :open="duplicateOpen" :event="event" @close="duplicateOpen = false" />
     </template>
   </main>
 </template>
