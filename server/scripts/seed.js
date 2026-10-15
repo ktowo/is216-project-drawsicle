@@ -19,7 +19,7 @@ const Application = require('../models/Application.js');
 const Match = require('../models/Match.js');
 const Submission = require('../models/Submission.js');
 const Notification = require('../models/Notification.js');
-const { LOCAL_UPLOAD_DIR } = require('../services/storage.js');
+const { LOCAL_UPLOAD_DIR, saveFile, storageMode, removeStoredFolder } = require('../services/storage.js');
 const { EVENT_STATUSES } = require('../../shared/constants.mjs');
 
 const DEMO_DATA_FILE = path.join(__dirname, '..', '..', 'shared', 'demo-data.mjs');
@@ -53,6 +53,7 @@ async function clearDemoTables(artDir) {
     [User, Character, Event, EventMember, Application, Match, Submission, Notification].map((M) => M.deleteMany({}))
   );
   await fsp.rm(artDir, { recursive: true, force: true });
+  await removeStoredFolder('demo');
 }
 
 const slugify = (seed) =>
@@ -62,10 +63,14 @@ const slugify = (seed) =>
     .replace(/^-+|-+$/g, '')
     .slice(0, 60) || 'art';
 
-// Writes generated artwork into server/uploads/demo and hands back its URL.
+// Writes generated artwork into server/uploads/demo and hands back its URL. When uploads live
+// somewhere else (the database or Azure, see services/storage.js) the artwork is saved there instead,
+// so a deployed site can show it.
 // The same seed at the same size is written once; a clash with a different picture gets a suffix.
 function artWriter(demoArtSvg, artDir) {
   const written = new Map(); // file name -> what was drawn in it
+  const stored = new Map(); // file name -> URL, when not writing to disk
+  const toDisk = storageMode() === 'local' || artDir !== DEMO_UPLOAD_DIR; // tests always pass their own folder
   return async ({ seed, title = '' }, size = {}) => {
     const signature = JSON.stringify([seed, title, size.width, size.height]);
     const base = slugify(seed);
@@ -73,10 +78,15 @@ function artWriter(demoArtSvg, artDir) {
     for (let n = 2; written.has(name) && written.get(name) !== signature; n++) name = `${base}-${n}`;
     if (!written.has(name)) {
       written.set(name, signature);
-      await fsp.mkdir(artDir, { recursive: true });
-      await fsp.writeFile(path.join(artDir, `${name}.svg`), demoArtSvg({ seed, title, ...size }), 'utf8');
+      const svg = demoArtSvg({ seed, title, ...size });
+      if (toDisk) {
+        await fsp.mkdir(artDir, { recursive: true });
+        await fsp.writeFile(path.join(artDir, `${name}.svg`), svg, 'utf8');
+      } else {
+        stored.set(name, await saveFile('demo', Buffer.from(svg, 'utf8'), 'image/svg+xml', `demo/${name}.svg`));
+      }
     }
-    return `/uploads/demo/${name}.svg`;
+    return toDisk ? `/uploads/demo/${name}.svg` : stored.get(name);
   };
 }
 

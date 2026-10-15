@@ -95,10 +95,11 @@ export function qs(params = {}) {
   return str ? `?${str}` : '';
 }
 
-// Uploaded files come back as "/uploads/...". When the API lives on another
-// origin (VITE_API_URL=https://api.example.com/api), point them there.
+// Uploaded files come back as "/uploads/..." (saved on disk) or "/api/files/..." (kept in the
+// database). When the API lives on another origin (VITE_API_URL=https://api.example.com/api),
+// point them there.
 export function assetUrl(url) {
-  if (!url || !url.startsWith('/uploads/')) return url;
+  if (!url || !(url.startsWith('/uploads/') || url.startsWith('/api/files/'))) return url;
   if (/^https?:\/\//.test(API_BASE)) return new URL(url, API_BASE).toString();
   return url;
 }

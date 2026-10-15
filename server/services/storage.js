@@ -1,8 +1,11 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const mongoose = require('mongoose');
 const { BlobServiceClient } = require('@azure/storage-blob');
+const { hasConnectionString } = require('../db.js');
 
 const LOCAL_UPLOAD_DIR = path.join(__dirname, '..', 'uploads');
+const BUCKET = 'uploads';
 
 const IMAGE_TYPES = {
   'image/png': 'png',
@@ -10,6 +13,9 @@ const IMAGE_TYPES = {
   'image/webp': 'webp',
   'image/gif': 'gif',
 };
+
+// Files the server makes itself (the demo artwork) may also be SVG; uploads never are
+const FILE_TYPES = { ...IMAGE_TYPES, 'image/svg+xml': 'svg' };
 
 // The browser picks the mimetype from the file name, so check the first bytes really are that kind of image
 function looksLikeImage(file) {
@@ -29,11 +35,25 @@ function looksLikeImage(file) {
   }
 }
 
+// Where uploads go:
+//   azure    AZURE_STORAGE_CONNECTION_STRING is set
+//   mongodb  the database is a shared one (Atlas, or anything in DB_MONGODB_URI): files are kept
+//            next to the data in GridFS, so they work on Vercel, where the server can't write to disk
+//   local    the built-in local database: plain files in server/uploads
+// UPLOAD_STORAGE=azure|mongodb|local picks one by hand.
+function storageMode() {
+  const forced = (process.env.UPLOAD_STORAGE || '').trim().toLowerCase();
+  if (['azure', 'mongodb', 'local'].includes(forced)) return forced;
+  if (process.env.AZURE_STORAGE_CONNECTION_STRING) return 'azure';
+  if (hasConnectionString()) return 'mongodb';
+  return 'local';
+}
+
 let containerClient = null;
 
 function getContainer() {
   const conn = process.env.AZURE_STORAGE_CONNECTION_STRING;
-  if (!conn) return null;
+  if (!conn) throw new Error('UPLOAD_STORAGE is azure but AZURE_STORAGE_CONNECTION_STRING is not set.');
   if (!containerClient) {
     containerClient = BlobServiceClient.fromConnectionString(conn).getContainerClient(
       process.env.AZURE_STORAGE_CONTAINER || 'drawisicle'
@@ -42,25 +62,79 @@ function getContainer() {
   return containerClient;
 }
 
-// Uploads an image and returns its public URL.
-// Uses Azure Blob Storage when AZURE_STORAGE_CONNECTION_STRING is set,
-// otherwise saves to server/uploads so it works locally with no setup.
-async function uploadImage(folder, file) {
-  const ext = IMAGE_TYPES[file.mimetype];
-  if (!ext) throw new Error('Unsupported image type');
-  const name = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
-
-  const container = getContainer();
-  if (container) {
-    const blob = container.getBlockBlobClient(name);
-    await blob.uploadData(file.buffer, { blobHTTPHeaders: { blobContentType: file.mimetype } });
-    return blob.url;
-  }
-
-  const dest = path.join(LOCAL_UPLOAD_DIR, name);
-  await fs.mkdir(path.dirname(dest), { recursive: true });
-  await fs.writeFile(dest, file.buffer);
-  return `/uploads/${name}`;
+function bucket() {
+  return new mongoose.mongo.GridFSBucket(mongoose.connection.db, { bucketName: BUCKET });
 }
 
-module.exports = { uploadImage, looksLikeImage, LOCAL_UPLOAD_DIR, IMAGE_TYPES };
+function randomName(folder, ext) {
+  return `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+}
+
+// Saves bytes and returns the URL to show them at. `name` (folder/file.ext) is optional.
+async function saveFile(folder, buffer, contentType, name) {
+  const ext = FILE_TYPES[contentType];
+  if (!ext) throw new Error('Unsupported file type');
+  const fileName = name || randomName(folder, ext);
+
+  switch (storageMode()) {
+    case 'azure': {
+      const blob = getContainer().getBlockBlobClient(fileName);
+      await blob.uploadData(buffer, { blobHTTPHeaders: { blobContentType: contentType } });
+      return blob.url;
+    }
+    case 'mongodb': {
+      const upload = bucket().openUploadStream(fileName, { metadata: { contentType, folder } });
+      await new Promise((resolve, reject) => {
+        upload.once('finish', resolve);
+        upload.once('error', reject);
+        upload.end(buffer);
+      });
+      return `/api/files/${upload.id}.${ext}`;
+    }
+    default: {
+      const dest = path.join(LOCAL_UPLOAD_DIR, fileName);
+      await fs.mkdir(path.dirname(dest), { recursive: true });
+      await fs.writeFile(dest, buffer);
+      return `/uploads/${fileName}`;
+    }
+  }
+}
+
+// Uploads an image someone sent (a multer file) and returns its public URL
+async function uploadImage(folder, file) {
+  if (!IMAGE_TYPES[file.mimetype]) throw new Error('Unsupported image type');
+  return saveFile(folder, file.buffer, file.mimetype);
+}
+
+// Removes every file in a folder from the database store (the demo reset uses it)
+async function removeStoredFolder(folder) {
+  if (storageMode() !== 'mongodb' || !mongoose.connection.db) return 0;
+  const files = await bucket().find({ 'metadata.folder': folder }, { projection: { _id: 1 } }).toArray();
+  await Promise.all(files.map((f) => bucket().delete(f._id).catch(() => {})));
+  return files.length;
+}
+
+// For GET /api/files/:file. Returns { contentType, length, stream } or null.
+async function openStoredFile(id) {
+  if (!mongoose.isValidObjectId(id) || !mongoose.connection.db) return null;
+  const _id = new mongoose.Types.ObjectId(String(id));
+  const [file] = await bucket().find({ _id }).limit(1).toArray();
+  if (!file) return null;
+  return {
+    contentType: file.metadata?.contentType || 'application/octet-stream',
+    length: file.length,
+    stream: bucket().openDownloadStream(_id),
+  };
+}
+
+module.exports = {
+  uploadImage,
+  saveFile,
+  looksLikeImage,
+  storageMode,
+  removeStoredFolder,
+  openStoredFile,
+  LOCAL_UPLOAD_DIR,
+  IMAGE_TYPES,
+  FILE_TYPES,
+};
