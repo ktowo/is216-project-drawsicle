@@ -254,11 +254,16 @@ export function submissionPublic(submission) {
     message: submission.message || '',
     type: submission.type,
     images: [...(submission.images || [])],
+    imageDescriptions: (submission.images || []).map((_, i) => submission.imageDescriptions?.[i] || ''),
+    contentWarnings: [...(submission.contentWarnings || [])],
     links: (submission.links || []).map((l) => ({ label: l.label || '', url: l.url })),
     submittedAt: submission.submittedAt,
     late: Boolean(submission.late),
     verified: Boolean(submission.verified),
     verifiedAt: submission.verifiedAt || null,
+    thanks: submission.thanks?.at
+      ? { message: submission.thanks.message || '', reaction: submission.thanks.reaction || '', at: submission.thanks.at }
+      : null,
     updatedAt: submission.updatedAt,
   };
 }

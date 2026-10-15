@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { CREATION_TYPE_VALUES, LIMITS } = require('../../shared/constants.mjs');
+const { CREATION_TYPE_VALUES, CONTENT_WARNING_VALUES, REACTION_VALUES, LIMITS } = require('../../shared/constants.mjs');
 
 // The finished gift for one match. The recipient only sees it (and who made it)
 // once the event is completed.
@@ -18,6 +18,10 @@ const submissionSchema = new mongoose.Schema(
       default: [],
       validate: [(v) => v.length <= LIMITS.submissionImages, `Up to ${LIMITS.submissionImages} images.`],
     },
+    // Alt text for each image, same order as images (empty when the artist didn't write one)
+    imageDescriptions: { type: [{ type: String, maxlength: LIMITS.imageDescription }], default: [] },
+    // Shown before the pictures, which stay blurred until someone chooses to look
+    contentWarnings: { type: [{ type: String, enum: CONTENT_WARNING_VALUES }], default: [] },
     // For writing or anything hosted elsewhere (Google Docs, Toyhou.se...)
     links: {
       type: [
@@ -37,6 +41,12 @@ const submissionSchema = new mongoose.Schema(
     verified: { type: Boolean, default: false }, // organiser checked it
     verifiedAt: { type: Date, default: null },
     verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    // The recipient's thank-you after the reveal
+    thanks: {
+      message: { type: String, trim: true, default: '', maxlength: LIMITS.thanksMessage },
+      reaction: { type: String, enum: [...REACTION_VALUES, ''], default: '' },
+      at: { type: Date, default: null },
+    },
   },
   { timestamps: true }
 );
@@ -51,11 +61,16 @@ submissionSchema.methods.toPublic = function () {
     message: this.message || '',
     type: this.type,
     images: [...(this.images || [])],
+    imageDescriptions: (this.images || []).map((_, i) => this.imageDescriptions?.[i] || ''),
+    contentWarnings: [...(this.contentWarnings || [])],
     links: (this.links || []).map((l) => ({ label: l.label || '', url: l.url })),
     submittedAt: this.submittedAt,
     late: Boolean(this.late),
     verified: Boolean(this.verified),
     verifiedAt: this.verifiedAt,
+    thanks: this.thanks?.at
+      ? { message: this.thanks.message || '', reaction: this.thanks.reaction || '', at: this.thanks.at }
+      : null,
     updatedAt: this.updatedAt,
   };
 };

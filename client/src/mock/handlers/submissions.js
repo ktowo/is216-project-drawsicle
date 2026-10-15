@@ -1,10 +1,17 @@
 // /events/:eventId/submission(s), /reminders and /results (server/routes/submission-router.js)
-import { LIMITS, orderImages } from '@shared/constants.mjs';
+import {
+  LIMITS,
+  CONTENT_WARNING_VALUES,
+  REACTION_VALUES,
+  orderImages,
+  imageDescriptionsFor,
+} from '@shared/constants.mjs';
 import { newId } from '../db.js';
 import { IMAGE_TYPES, filesFrom, imageToDataUrl, looksLikeImage } from '../files.js';
 import {
   canViewEvent,
   miniOf,
+  notify,
   notifyMany,
   organizerIds,
   serializeEvent,
@@ -88,6 +95,30 @@ function readLinks(value, fallback) {
   }
   if (links.length > LIMITS.submissionLinks) throw invalid(`Up to ${LIMITS.submissionLinks} links.`);
   return links;
+}
+
+function readContentWarnings(value, fallback) {
+  const parsed = parseJsonField(value, 'Content warnings');
+  if (parsed === undefined) return [...fallback];
+  if (!Array.isArray(parsed) || parsed.some((w) => !CONTENT_WARNING_VALUES.includes(w))) {
+    throw invalid('Pick content warnings from the list.');
+  }
+  return [...new Set(parsed)];
+}
+
+function readImageDescriptions(value) {
+  const parsed = parseJsonField(value, 'Image descriptions');
+  if (parsed === undefined) return undefined;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw invalid('Image descriptions could not be read. Please try again.');
+  }
+  for (const text of Object.values(parsed)) {
+    if (typeof text !== 'string') throw invalid('Image descriptions must be text.');
+    if (text.trim().length > LIMITS.imageDescription) {
+      throw invalid(`Keep each image description under ${LIMITS.imageDescription} characters.`);
+    }
+  }
+  return parsed;
 }
 
 // Existing image URLs to keep, in the order given. Not sent: keep them all.
@@ -179,6 +210,8 @@ export function register(router) {
     const links = readLinks(field(ctx, 'links'), existing ? existing.links.map((l) => ({ ...l })) : []);
     const keep = readKeepImages(field(ctx, 'keepImages'), existing ? [...existing.images] : []);
     const order = parseJsonField(field(ctx, 'imageOrder'), 'Image order');
+    const descriptions = readImageDescriptions(field(ctx, 'imageDescriptions'));
+    const contentWarnings = readContentWarnings(field(ctx, 'contentWarnings'), existing?.contentWarnings || []);
 
     if (keep.length + files.length > LIMITS.submissionImages) throw tooManyImages();
     if (keep.length + files.length === 0 && links.length === 0) {
@@ -201,11 +234,17 @@ export function register(router) {
       verifiedBy: null,
       createdAt: at,
     };
+    const images = orderImages(order, keep, uploaded);
     Object.assign(submission, {
       title,
       message,
       type,
-      images: orderImages(order, keep, uploaded),
+      images,
+      imageDescriptions: imageDescriptionsFor(images, keep, uploaded, descriptions, {
+        images: existing?.images,
+        descriptions: existing?.imageDescriptions,
+      }),
+      contentWarnings,
       links,
       late: ctx.now > new Date(event.submissionDeadline),
       updatedAt: at,
@@ -321,6 +360,47 @@ export function register(router) {
   });
 
   // ---------- Results (the reveal) ----------
+
+  // ---------- Thank-you notes ----------
+
+  function receivedGift(ctx, user) {
+    const event = loadEvent(ctx);
+    if (event.status !== 'completed') {
+      throw httpError(409, 'You can thank your Secret Santa once the gifts are revealed.', 'NOT_COMPLETED');
+    }
+    const match = ctx.state.matches.find((m) => m.event === event.id && m.recipient === user.id && m.published);
+    const submission = match && submissionForMatch(ctx.state, match.id);
+    if (!submission) throw httpError(404, "There's no gift for you to thank in this event.", 'NOT_FOUND');
+    return { event, submission };
+  }
+
+  router.put('/events/:eventId/thanks', (ctx) => {
+    const user = ctx.requireAuth();
+    const { event, submission } = receivedGift(ctx, user);
+    const body = ctx.body || {};
+    const message = readText(body.message, 'Thank-you note', LIMITS.thanksMessage, '');
+    const reaction = body.reaction === undefined || body.reaction === null ? '' : String(body.reaction);
+    if (reaction && !REACTION_VALUES.includes(reaction)) throw invalid('Pick a reaction from the list.');
+    if (!message && !reaction) throw invalid('Write a note or pick a reaction.');
+    const first = !submission.thanks?.at;
+    submission.thanks = { message, reaction, at: ctx.now.toISOString() };
+    if (first) {
+      notify(ctx.state, submission.giver, {
+        type: 'gift_thanked',
+        title: `${miniOf(ctx.state, user.id).displayName} thanked you for your gift`,
+        message: message || 'They reacted to the gift you made them.',
+        link: `/events/${event.id}/results`,
+      });
+    }
+    return { submission: submissionPublic(submission) };
+  });
+
+  router.delete('/events/:eventId/thanks', (ctx) => {
+    const user = ctx.requireAuth();
+    const { submission } = receivedGift(ctx, user);
+    submission.thanks = { message: '', reaction: '', at: null };
+    return { submission: submissionPublic(submission) };
+  });
 
   router.get('/events/:eventId/results', (ctx) => {
     const user = ctx.requireAuth();
