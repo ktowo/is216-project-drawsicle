@@ -410,3 +410,18 @@ describe('discover filters and sorts', () => {
     expect((await ok('/discover/artists?sort=exchanges')).items[0].exchangesCompleted).toBeGreaterThan(0);
   });
 });
+
+describe('find your style quiz', () => {
+  it('signing up then saving the answers fills artist tags, and sign-up defaults when asked', async () => {
+    const { profileUpdateFrom } = await import('../src/utils/styleQuiz.js');
+    const answers = { makes: ['writing'], themes: ['mythology', 'ocean'], wants: ['art'], activity: 'casual', cardColor: 'sky' };
+    await mockRequest('/auth/logout', { method: 'POST' });
+    await ok('/auth/register', { method: 'POST', body: { email: 'quiz@demo.test', password: 'longpassword1', displayName: 'Quiz Taker' } });
+    const { user } = await ok('/profile', { method: 'PATCH', body: profileUpdateFrom(answers, { copyDefaults: true }) });
+    expect(user.artistTags).toEqual({ makes: ['writing'], themes: ['mythology', 'ocean'], activity: 'casual', cardColor: 'sky' });
+    expect(user.defaultForm).toMatchObject({ canCreate: ['writing'], wantsTypes: ['art'] });
+    await mockRequest('/auth/logout', { method: 'POST' }); // Discover leaves out the viewer
+    const card = (await ok(`/discover/artists?q=${user.username}`)).items[0];
+    expect(card.artistTags.cardColor).toBe('sky');
+  });
+});
