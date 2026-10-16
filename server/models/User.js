@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const { SITE_ROLES } = require('../../shared/constants.mjs');
 const { permissionsFor } = require('../../shared/permissions.mjs');
+const { artistTagsOf } = require('../../shared/taste.mjs');
 
 const USERNAME_RE = /^[a-z0-9_]{3,30}$/;
 const SOCIAL_KEYS = ['twitter', 'instagram', 'bluesky', 'discord', 'deviantart', 'toyhouse', 'tumblr'];
@@ -62,6 +63,15 @@ const userSchema = new mongoose.Schema(
       cannotDraw: { type: [String], default: [] },
     },
 
+    // Public: what kind of artist they are (shared/taste.mjs). Filled in by the Find your
+    // style quiz or profile settings; shown on the profile, Discover and hover cards.
+    artistTags: {
+      makes: { type: [String], default: [] },
+      themes: { type: [String], default: [] },
+      activity: { type: String, default: '' },
+      cardColor: { type: String, default: '' },
+    },
+
     // What the public artist profile may show. Gifts only appear publicly when both the
     // artist who made them and the person they were made for allow it.
     profilePrivacy: {
@@ -121,6 +131,7 @@ userSchema.methods.toPublic = function () {
       emailMatches: this.notificationPrefs?.emailMatches !== false,
       emailEventUpdates: Boolean(this.notificationPrefs?.emailEventUpdates),
     },
+    artistTags: artistTagsOf(this.artistTags),
     profilePrivacy: {
       showExchanges: this.profilePrivacy?.showExchanges !== false,
       showGifts: Boolean(this.profilePrivacy?.showGifts),
@@ -134,8 +145,8 @@ userSchema.methods.toPublic = function () {
 
 // What other users see (no email, no role)
 userSchema.methods.toPublicProfile = function () {
-  const { id, username, displayName, avatarUrl, bio, socials } = this.toPublic();
-  return { id, username, displayName, avatarUrl, bio, socials };
+  const { id, username, displayName, avatarUrl, bio, socials, artistTags } = this.toPublic();
+  return { id, username, displayName, avatarUrl, bio, socials, artistTags };
 };
 
 // Smallest shape, used inside events, matches, etc.
