@@ -19,6 +19,7 @@ import {
   LayoutTemplate,
   ArrowRight,
   CircleAlert,
+  History,
 } from 'lucide-vue-next';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import FormField from '@/components/ui/FormField.vue';
@@ -35,7 +36,7 @@ import { PLATFORMS, SEASONS, CREATION_TYPES, LIMITS, DISCORD_WEBHOOK_RE } from '
 import { api } from '@/api';
 import { toast } from '@/stores/toast';
 import { auth } from '@/stores/auth';
-import { toLocalInput, fromLocalInput, formatDateTime, pluralize } from '@/utils/format';
+import { toLocalInput, fromLocalInput, formatDateTime, formatTime, timeAgo, pluralize } from '@/utils/format';
 import { eventLink, isHttpUrl, platformLabel } from '@/utils/events';
 import { EVENT_TEMPLATES, applyTemplate, findTemplate } from '@/utils/eventTemplates';
 
@@ -83,6 +84,9 @@ function blankForm() {
     requireApproval: false,
     adultOnly: false,
     publicity: 'public',
+    autoMatch: false,
+    autoMatchMode: 'best',
+    autoMatchPublish: true,
   };
 }
 
@@ -106,6 +110,9 @@ function formFromEvent(ev) {
     requireApproval: Boolean(ev.requireApproval),
     adultOnly: Boolean(ev.adultOnly),
     publicity: ev.publicity || 'public',
+    autoMatch: Boolean(ev.autoMatch?.enabled),
+    autoMatchMode: ev.autoMatch?.mode || 'best',
+    autoMatchPublish: ev.autoMatch?.publish !== false,
   };
 }
 
@@ -132,6 +139,7 @@ function bodyFrom(f) {
     requireApproval: Boolean(f.requireApproval),
     adultOnly: Boolean(f.adultOnly),
     publicity: f.publicity,
+    autoMatch: { enabled: Boolean(f.autoMatch), mode: f.autoMatchMode, publish: Boolean(f.autoMatchPublish) },
   };
 }
 
@@ -243,6 +251,8 @@ async function load() {
       chosenTemplate.value = null;
       step.value = 'template';
     }
+    // This first load runs while the page is still being set up, before the autosave code below
+    nextTick(offerDraft);
     return;
   }
 
@@ -258,6 +268,7 @@ async function load() {
     }
     event.value = data.event;
     resetForm(formFromEvent(data.event));
+    offerDraft();
     document.title = `Edit ${data.event.name} · Drawsicle`;
   } catch (e) {
     if (id !== requestId) return;
@@ -594,11 +605,13 @@ async function submit() {
     if (isEdit.value) {
       const data = await api(`/events/${event.value.id}`, { method: 'PATCH', body: payload });
       saved.value = true;
+      clearDraft();
       toast.success('Changes saved.');
       router.push(eventLink(data.event || event.value, '/manage'));
     } else {
       const data = await api('/events', { method: 'POST', body: payload });
       saved.value = true;
+      clearDraft();
       toast.success('Draft saved. Open sign-ups when you are ready.');
       router.push(eventLink(data.event, '/manage'));
     }
@@ -654,13 +667,154 @@ function cancel() {
   router.push(isEdit.value && event.value ? eventLink(event.value, '/manage') : '/my-events');
 }
 
+// ---- Autosave on this device ----
+// What you've typed is kept in this browser (per account) as you go, and again whenever you
+// switch tabs or close the page, so nothing is lost before you save. Coming back offers to
+// carry on. Saving the event, or starting fresh, clears it.
+const DRAFT_DAYS = 30;
+const autosavedAt = ref(null);
+const storageWorks = ref(true);
+const restorable = ref(null); // { savedAt, template, base, form }
+const draftKey = computed(() => {
+  if (!auth.user) return null;
+  return isEdit.value ? `drawsicle:event-edit:${route.params.id}:${auth.user.id}` : `drawsicle:event-new:${auth.user.id}`;
+});
+
+function readDraft() {
+  if (!draftKey.value) return null;
+  try {
+    const draft = JSON.parse(localStorage.getItem(draftKey.value) || 'null');
+    if (!draft?.form || Date.now() - new Date(draft.savedAt).getTime() > DRAFT_DAYS * 24 * 60 * 60 * 1000) {
+      localStorage.removeItem(draftKey.value);
+      return null;
+    }
+    return draft;
+  } catch {
+    return null;
+  }
+}
+
+function clearDraft() {
+  autosavedAt.value = null;
+  if (!draftKey.value) return;
+  try {
+    localStorage.removeItem(draftKey.value);
+  } catch {
+    // Nothing kept, nothing to clear
+  }
+}
+
+function writeDraft() {
+  if (!draftKey.value || step.value !== 'form' || readOnly.value || saved.value || restorable.value) return;
+  if (!dirty.value) {
+    clearDraft();
+    return;
+  }
+  try {
+    localStorage.setItem(
+      draftKey.value,
+      JSON.stringify({
+        savedAt: new Date().toISOString(),
+        template: chosenTemplate.value?.id || null,
+        base: event.value?.updatedAt || null,
+        form: { ...form, tags: [...form.tags], allowedTypes: [...form.allowedTypes] },
+      })
+    );
+    autosavedAt.value = new Date();
+    storageWorks.value = true;
+  } catch {
+    storageWorks.value = false;
+  }
+}
+
+let autosaveTimer = null;
+watch(
+  () => JSON.stringify(form),
+  () => {
+    clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(writeDraft, 500);
+  }
+);
+function onHidden() {
+  if (document.visibilityState === 'hidden') writeDraft();
+}
+document.addEventListener('visibilitychange', onHidden);
+window.addEventListener('pagehide', writeDraft);
+onBeforeUnmount(() => {
+  clearTimeout(autosaveTimer);
+  document.removeEventListener('visibilitychange', onHidden);
+  window.removeEventListener('pagehide', writeDraft);
+});
+
+// Offer what was kept from last time (for an edit, only if the event hasn't changed since)
+function offerDraft() {
+  // An edit's draft is checked against the event, so wait for it
+  if (isEdit.value && !event.value) return;
+  const draft = readDraft();
+  if (!draft) {
+    restorable.value = null;
+    return;
+  }
+  if (isEdit.value && draft.base !== (event.value?.updatedAt || null)) {
+    clearDraft();
+    restorable.value = null;
+    return;
+  }
+  restorable.value = draft;
+}
+
+// The account can finish loading after the page does; offer the draft once it has
+watch(
+  () => auth.user?.id,
+  (id, old) => {
+    if (id && id !== old && !restorable.value && !saved.value) offerDraft();
+  }
+);
+
+function carryOn() {
+  const draft = restorable.value;
+  restorable.value = null;
+  if (!draft) return;
+  if (!isEdit.value) startForm(findTemplate(draft.template), { focus: false });
+  // Settings that sign-ups closing has locked keep their saved values
+  const values = { ...draft.form };
+  if (isEdit.value && openOnlyLocked.value) for (const key of OPEN_ONLY) delete values[key];
+  Object.assign(form, values);
+  autosavedAt.value = new Date(draft.savedAt);
+  toast.success(isEdit.value ? 'Your unsaved changes are back.' : 'Picked up where you left off.');
+}
+
+function startFresh() {
+  restorable.value = null;
+  clearDraft();
+}
+
+const saveNote = computed(() => {
+  if (!dirty.value) return 'Everything is saved.';
+  if (autosavedAt.value && storageWorks.value) {
+    return `Kept on this device at ${formatTime(autosavedAt.value)}. ${isEdit.value ? 'Save to update the event.' : 'Save the draft to keep it everywhere.'}`;
+  }
+  return 'You have unsaved changes.';
+});
+
+const draftName = computed(() => restorable.value?.form?.name?.trim() || 'an untitled event');
+
 // ---- Leaving with unsaved changes ----
+// New events are kept on this device, so there's nothing to lose by leaving. Edits are kept
+// too, but they aren't on the event yet, so it asks.
 onBeforeRouteLeave(() => {
-  if (dirty.value && !window.confirm('Leave this page? Your changes to the event have not been saved.')) return false;
+  writeDraft();
+  const kept = storageWorks.value && autosavedAt.value;
+  if (!dirty.value || (kept && !isEdit.value)) return;
+  const message = kept
+    ? "Leave this page? Your changes aren't on the event yet. They're kept on this device, so you can restore them when you come back."
+    : 'Leave this page? Your changes to the event have not been saved.';
+  if (!window.confirm(message)) return false;
 });
 
 function beforeUnload(e) {
-  if (dirty.value) e.preventDefault();
+  writeDraft();
+  if (dirty.value && !(storageWorks.value && autosavedAt.value)) e.preventDefault();
 }
 window.addEventListener('beforeunload', beforeUnload);
 onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
@@ -679,6 +833,7 @@ const sections = computed(() => [
     label: 'Participants',
     fields: ['minParticipants', 'maxParticipants', 'allowedTypes', 'requireApproval', 'adultOnly'],
   },
+  { id: 'part-matching', label: 'Matching', fields: ['autoMatch'] },
   { id: 'part-visibility', label: 'Visibility', fields: ['publicity'] },
   ...(isEdit.value && event.value ? [{ id: 'part-banner', label: 'Banner', fields: [] }] : []),
 ]);
@@ -783,6 +938,20 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
         back-label="My events"
       />
 
+      <div v-if="restorable" class="card restore" role="status">
+        <History :size="22" class="restore-icon" aria-hidden="true" />
+        <div class="min-w-0">
+          <p class="restore-title">
+            {{ isEdit ? 'You have unsaved changes to this event' : `Carry on with ${draftName}?` }}
+          </p>
+          <p class="hint m-0">Kept on this device {{ timeAgo(restorable.savedAt) }}.</p>
+        </div>
+        <div class="restore-actions">
+          <button type="button" class="btn btn-primary btn-sm" @click="carryOn">{{ isEdit ? 'Restore them' : 'Carry on' }}</button>
+          <button type="button" class="btn btn-ghost btn-sm" @click="startFresh">{{ isEdit ? 'Discard' : 'Start fresh' }}</button>
+        </div>
+      </div>
+
       <section class="templates" aria-labelledby="tpl-title">
         <h2 id="tpl-title" ref="templateHeading" class="section-title" tabindex="-1">Start from a template</h2>
         <p class="section-sub">
@@ -840,6 +1009,20 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
         <StatusBadge v-if="isEdit && event" :status="event.status" />
       </PageHeader>
 
+      <div v-if="restorable" class="card restore" role="status">
+        <History :size="22" class="restore-icon" aria-hidden="true" />
+        <div class="min-w-0">
+          <p class="restore-title">
+            {{ isEdit ? 'You have unsaved changes to this event' : `Carry on with ${draftName}?` }}
+          </p>
+          <p class="hint m-0">Kept on this device {{ timeAgo(restorable.savedAt) }}.</p>
+        </div>
+        <div class="restore-actions">
+          <button type="button" class="btn btn-primary btn-sm" @click="carryOn">{{ isEdit ? 'Restore them' : 'Carry on' }}</button>
+          <button type="button" class="btn btn-ghost btn-sm" @click="startFresh">{{ isEdit ? 'Discard' : 'Start fresh' }}</button>
+        </div>
+      </div>
+
       <p v-if="!isEdit" class="tpl-note">
         <LayoutTemplate :size="17" aria-hidden="true" />
         <span>
@@ -887,7 +1070,7 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
                 <Save v-else :size="16" aria-hidden="true" />
                 {{ saving ? 'Saving…' : isEdit ? 'Save changes' : 'Save draft' }}
               </button>
-              <p class="hint m-0 text-center">{{ dirty ? 'You have unsaved changes.' : 'Everything is saved.' }}</p>
+              <p class="hint m-0 text-center">{{ saveNote }}</p>
             </div>
           </nav>
 
@@ -1353,6 +1536,57 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
               </div>
             </section>
 
+            <!-- Matching -->
+            <section id="part-matching" class="card section" aria-labelledby="sec-matching">
+              <h2 id="sec-matching" class="section-title" tabindex="-1">Matching</h2>
+              <p class="hint section-hint">You can always make, check and publish matches yourself from the manage page.</p>
+              <div class="toggle-row">
+                <label class="switch" for="ev-automatch">
+                  <input id="ev-automatch" v-model="form.autoMatch" type="checkbox" role="switch" aria-describedby="ev-automatch-hint" />
+                  <span class="track" aria-hidden="true"><span class="thumb" /></span>
+                  <span class="font-semibold">Match people automatically when sign-ups close</span>
+                </label>
+                <p id="ev-automatch-hint" class="hint m-0">
+                  <template v-if="form.autoMatch">
+                    On: when sign-ups close, Drawsicle checks art styles if they count, makes the matches and
+                    {{ form.autoMatchPublish ? 'publishes them' : 'leaves them for you to check' }}. You get a notification either way.
+                  </template>
+                  <template v-else>Off: you generate and publish matches yourself once sign-ups close.</template>
+                </p>
+              </div>
+              <template v-if="form.autoMatch">
+                <fieldset class="group">
+                  <legend class="label">How to pair people</legend>
+                  <ChoiceChips
+                    v-model="form.autoMatchMode"
+                    :multiple="false"
+                    :options="[
+                      { value: 'best', label: 'Best fit' },
+                      { value: 'random', label: 'Random' },
+                    ]"
+                    label="How to pair people"
+                  />
+                  <p class="hint m-0">
+                    {{
+                      form.autoMatchMode === 'random'
+                        ? 'Names out of a hat: still never someone they blocked, and always someone they can make something for.'
+                        : 'Pairs people by what they make, what they asked for, the characters they can draw and, if it is on, art style.'
+                    }}
+                  </p>
+                </fieldset>
+                <div class="toggle-row">
+                  <label class="switch" for="ev-autopublish">
+                    <input id="ev-autopublish" v-model="form.autoMatchPublish" type="checkbox" role="switch" />
+                    <span class="track" aria-hidden="true"><span class="thumb" /></span>
+                    <span class="font-semibold">Publish them straight away</span>
+                  </label>
+                  <p class="hint m-0">
+                    {{ form.autoMatchPublish ? 'Everyone hears who they are making a gift for right away (unless someone could not be placed).' : 'They wait on the Matching tab until you publish them.' }}
+                  </p>
+                </div>
+              </template>
+            </section>
+
             <!-- Visibility -->
             <section id="part-visibility" class="card section" aria-labelledby="sec-visibility">
               <h2 id="sec-visibility" class="section-title" tabindex="-1">Who can see it</h2>
@@ -1415,7 +1649,7 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
               {{ saving ? 'Saving…' : isEdit ? 'Save changes' : 'Save draft' }}
             </button>
             <button type="button" class="btn btn-ghost" :disabled="saving" @click="cancel">Cancel</button>
-            <span v-if="isEdit && dirty" class="hint unsaved" aria-live="polite">Unsaved changes</span>
+            <span v-if="dirty" class="hint unsaved" aria-live="polite">{{ saveNote }}</span>
           </div>
           <div v-else class="form-actions">
             <RouterLink :to="backLink" class="btn btn-outline">Back to manage</RouterLink>
@@ -2000,5 +2234,27 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
   .nav-item.current {
     background: var(--pink-soft);
   }
+}
+.restore {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin-top: 16px;
+  padding: 14px 18px;
+  border-left: 5px solid var(--pink);
+}
+.restore-icon {
+  flex: none;
+  color: var(--pink-dark);
+}
+.restore-title {
+  margin: 0;
+  font-weight: 800;
+}
+.restore-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
 }
 </style>
