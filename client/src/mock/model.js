@@ -269,6 +269,8 @@ export function submissionPublic(submission) {
     message: submission.message || '',
     type: submission.type,
     images: [...(submission.images || [])],
+    // The demo keeps no smaller copies, so galleries use the images themselves
+    thumbnails: [...(submission.images || [])],
     imageDescriptions: (submission.images || []).map((_, i) => submission.imageDescriptions?.[i] || ''),
     contentWarnings: [...(submission.contentWarnings || [])],
     links: (submission.links || []).map((l) => ({ label: l.label || '', url: l.url })),

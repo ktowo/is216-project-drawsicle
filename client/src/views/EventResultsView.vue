@@ -1,7 +1,18 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
-import { ArrowLeft, CalendarSearch, Hourglass, Lock, Gift, Palette, Images, PartyPopper, LifeBuoy } from 'lucide-vue-next';
+import {
+  ArrowLeft,
+  CalendarSearch,
+  Hourglass,
+  Lock,
+  Gift,
+  Palette,
+  Images,
+  PartyPopper,
+  LifeBuoy,
+  PackageOpen,
+} from 'lucide-vue-next';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingBlock from '@/components/ui/LoadingBlock.vue';
@@ -13,6 +24,8 @@ import SubmissionDetails from '@/components/events/SubmissionDetails.vue';
 import SubmissionGallery from '@/components/events/SubmissionGallery.vue';
 import ThanksBox from '@/components/events/ThanksBox.vue';
 import ReportButton from '@/components/ReportButton.vue';
+import WrappedPresent from '@/components/events/WrappedPresent.vue';
+import { loadUnwrapped, saveUnwrapped } from '@/utils/unwrapped';
 import { api, qs } from '@/api';
 import { EVENT_STATUS_LABELS, CREATION_TYPES } from '@shared/constants.mjs';
 import { formatDate, pluralize } from '@/utils/format';
@@ -118,6 +131,42 @@ function onThanked(submission) {
   }
 }
 
+// ---- Unwrapping ----
+// Gifts start as wrapped presents. 'mine' is my own gift; 'all' means everything was opened at once.
+const opened = ref(new Set());
+watch(
+  () => event.value?.id,
+  (id) => {
+    opened.value = id ? loadUnwrapped(id) : new Set();
+  }
+);
+function markOpened(...keys) {
+  opened.value = new Set([...opened.value, ...keys]);
+  if (event.value) saveUnwrapped(event.value.id, opened.value);
+}
+const receivedWrapped = computed(
+  () => Boolean(received.value?.submission) && !opened.value.has('mine') && !opened.value.has('all')
+);
+// Gifts I made (or made as a backup) are no surprise to me, so they're never wrapped
+const madeByMe = computed(
+  () => new Set([given.value?.submission?.id, ...backupGifts.value.map((b) => b.submission?.id)].filter(Boolean))
+);
+const wrappedIds = computed(() => {
+  if (opened.value.has('all')) return new Set();
+  const mine = received.value?.submission?.id;
+  return new Set(
+    gallery.value
+      .map((g) => g.submission?.id)
+      .filter((id) => id && !madeByMe.value.has(id) && !opened.value.has(id) && !(id === mine && opened.value.has('mine')))
+  );
+});
+function unwrapMine() {
+  markOpened('mine', received.value?.submission?.id);
+}
+function unwrapAll() {
+  markOpened('all', 'mine');
+}
+
 // Filter the gallery by kind of gift, when there's more than one kind to choose from
 const typeFilter = ref('all');
 const typeOptions = computed(() => {
@@ -193,33 +242,38 @@ const confetti = Array.from({ length: 30 }, (_, i) => ({
             <span class="icon-tile" aria-hidden="true"><Gift :size="22" /></span>
             <div>
               <h2 id="received-heading" class="panel-title">Your gift</h2>
-              <p class="from">
+              <p v-if="!receivedWrapped" class="from">
                 from
                 <PersonLink :user="received.giver" :size="26" class="from-person" />
               </p>
+              <p v-else class="from">from your Secret Santa</p>
             </div>
           </div>
-          <SubmissionDetails
-            v-if="received.submission"
-            :submission="received.submission"
-            :caption="`From ${nameOf(received.giver)} to you`"
-          />
-          <ThanksBox
-            v-if="received.submission"
-            :event-id="event.id"
-            :submission="received.submission"
-            :name="nameOf(received.giver)"
-            mine
-            @saved="onThanked"
-          />
-          <ReportButton
-            v-if="received.submission"
-            target-type="submission"
-            :target-id="received.submission.id"
-            what="this gift"
-            look="link"
-            class="report-own-gift"
-          />
+          <div v-if="receivedWrapped" class="unwrap-stage">
+            <WrappedPresent
+              size="lg"
+              label="Unwrap your gift"
+              caption="Someone made this just for you. Open it!"
+              @opened="unwrapMine"
+            />
+          </div>
+          <template v-else-if="received.submission">
+            <SubmissionDetails :submission="received.submission" :caption="`From ${nameOf(received.giver)} to you`" />
+            <ThanksBox
+              :event-id="event.id"
+              :submission="received.submission"
+              :name="nameOf(received.giver)"
+              mine
+              @saved="onThanked"
+            />
+            <ReportButton
+              target-type="submission"
+              :target-id="received.submission.id"
+              what="this gift"
+              look="link"
+              class="report-own-gift"
+            />
+          </template>
           <p v-else class="muted">
             {{ nameOf(received.giver) }} didn't submit a gift for you this time. The organisers may be in touch about it.
           </p>
@@ -277,6 +331,16 @@ const confetti = Array.from({ length: 30 }, (_, i) => ({
           <h2 id="gallery-heading" class="section-heading">Every gift</h2>
           <p class="muted">Select a picture to see it full size or download it. Use the arrow keys to move between them.</p>
         </div>
+        <div v-if="wrappedIds.size" class="unwrap-bar" role="status">
+          <span>
+            <Gift :size="16" aria-hidden="true" />
+            {{ wrappedIds.size === 1 ? 'One gift is' : `${wrappedIds.size} gifts are` }} still wrapped. Open them one by
+            one, or all at once.
+          </span>
+          <button type="button" class="btn btn-outline btn-sm" @click="unwrapAll">
+            <PackageOpen :size="16" aria-hidden="true" /> Unwrap them all
+          </button>
+        </div>
         <ChoiceChips
           v-if="typeOptions.length"
           v-model="typeFilter"
@@ -285,7 +349,13 @@ const confetti = Array.from({ length: 30 }, (_, i) => ({
           label="Show gifts of type"
           class="type-filter"
         />
-        <SubmissionGallery v-if="shownGallery.length" :key="typeFilter" :items="shownGallery" />
+        <SubmissionGallery
+          v-if="shownGallery.length"
+          :key="typeFilter"
+          :items="shownGallery"
+          :wrapped="wrappedIds"
+          @unwrap="(id) => markOpened(id)"
+        />
         <EmptyState
           v-else
           :icon="Images"
@@ -298,6 +368,29 @@ const confetti = Array.from({ length: 30 }, (_, i) => ({
 </template>
 
 <style scoped>
+.unwrap-stage {
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--surface-2);
+}
+.unwrap-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--pink-tint, var(--pink-soft));
+  font-weight: 600;
+}
+.unwrap-bar span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
 .back-link {
   display: inline-flex;
   align-items: center;

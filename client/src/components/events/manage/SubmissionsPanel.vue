@@ -310,7 +310,12 @@ function exportCsv() {
               :aria-label="`View the gift from ${personName(r.match.giver)}`"
               @click="viewing = r"
             >
-              <img v-if="r.submission.images?.length" :src="assetUrl(r.submission.images[0])" alt="" loading="lazy" />
+              <img
+                v-if="r.submission.images?.length"
+                :src="assetUrl(r.submission.thumbnails?.[0] || r.submission.images[0])"
+                alt=""
+                loading="lazy"
+              />
               <Gift v-else :size="30" aria-hidden="true" />
               <span v-if="(r.submission.images?.length || 0) > 1" class="gift-count">
                 <Images :size="13" aria-hidden="true" /> {{ r.submission.images.length }}

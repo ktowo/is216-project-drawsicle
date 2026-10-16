@@ -263,7 +263,17 @@ test('gift gallery: only gifts both people agreed to show, from finished public 
   assert.equal(res.body.items.length, 1);
   const [item] = res.body.items;
   assert.equal(item.submission.title, 'Shown');
-  assert.deepEqual(Object.keys(item.submission).sort(), ['id', 'images', 'links', 'submittedAt', 'title', 'type']);
+  assert.deepEqual(Object.keys(item.submission).sort(), [
+    'contentWarnings',
+    'id',
+    'imageDescriptions',
+    'images',
+    'links',
+    'submittedAt',
+    'thumbnails',
+    'title',
+    'type',
+  ]);
   assert.equal(item.event.name, 'Swap Shown');
   assert.deepEqual(item.giver, { id: mika.id, username: 'mika_draws', displayName: 'Mika', avatarUrl: null });
   assert.equal(item.recipient.username, 'kit');

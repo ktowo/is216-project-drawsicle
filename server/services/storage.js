@@ -106,6 +106,51 @@ async function uploadImage(folder, file) {
   return saveFile(folder, file.buffer, file.mimetype);
 }
 
+// ---------- Thumbnails ----------
+
+// Galleries show small copies so they load quickly; the full image opens on click.
+const THUMB_WIDTH = 640;
+const SMALL_ENOUGH = 150 * 1024; // bytes; an image this light is its own thumbnail
+
+let sharpLib;
+function loadSharp() {
+  if (sharpLib === undefined) {
+    try {
+      sharpLib = require('sharp');
+    } catch (err) {
+      console.error('Image resizing is unavailable, so galleries will use full-size images:', err.message);
+      sharpLib = null;
+    }
+  }
+  return sharpLib;
+}
+
+// A WebP copy at most THUMB_WIDTH wide, or null when the original will do
+// (small already, an animated GIF that should keep moving, or resizing failed).
+async function makeThumbnail(file) {
+  const sharp = loadSharp();
+  if (!sharp || file.mimetype === 'image/gif') return null;
+  try {
+    const image = sharp(file.buffer, { failOn: 'none' }).rotate(); // rotate() applies the photo's EXIF orientation
+    const { width = 0 } = await image.metadata();
+    if (width <= THUMB_WIDTH && file.buffer.length <= SMALL_ENOUGH) return null;
+    return await image
+      .resize({ width: THUMB_WIDTH, height: THUMB_WIDTH * 3, fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 78 })
+      .toBuffer();
+  } catch (err) {
+    console.error('Could not make a thumbnail:', err.message);
+    return null;
+  }
+}
+
+// Uploads an image and a small copy of it. Returns { src, thumb } (thumb is '' when there's none).
+async function uploadImageWithThumbnail(folder, file) {
+  const [src, small] = await Promise.all([uploadImage(folder, file), makeThumbnail(file)]);
+  const thumb = small ? await saveFile(`${folder}/thumbs`, small, 'image/webp') : '';
+  return { src, thumb };
+}
+
 // Removes every file in a folder from the database store (the demo reset uses it)
 async function removeStoredFolder(folder) {
   if (storageMode() !== 'mongodb' || !mongoose.connection.db) return 0;
@@ -129,6 +174,8 @@ async function openStoredFile(id) {
 
 module.exports = {
   uploadImage,
+  uploadImageWithThumbnail,
+  makeThumbnail,
   saveFile,
   looksLikeImage,
   storageMode,

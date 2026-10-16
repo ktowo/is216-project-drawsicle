@@ -5,6 +5,7 @@ const h = require('./helpers.js');
 const fx = require('./exchange-fixture.js');
 const Match = require('../models/Match.js');
 const Notification = require('../models/Notification.js');
+const sharp = require('sharp');
 
 before(h.startTestDb);
 after(h.stopTestDb);
@@ -97,4 +98,36 @@ test('recipients can thank their giver once the gifts are revealed', async () =>
 
   const removed = await recipient.agent.delete(thanksUrl).expect(200);
   assert.equal(removed.body.submission.thanks, null);
+});
+
+test('big pictures get a small copy for galleries, small ones are used as they are', async () => {
+  const { giver, url } = await activeExchange();
+  // A 1600x1000 photo-like picture, well over the thumbnail size
+  const big = await sharp({ create: { width: 1600, height: 1000, channels: 3, background: '#e86a92' } })
+    .png({ compressionLevel: 0 })
+    .toBuffer();
+  const saved = await giver.agent
+    .put(url)
+    .attach('images', big, { filename: 'big.png', contentType: 'image/png' })
+    .attach('images', ...fx.png('tiny.png'))
+    .expect(201);
+  const sub = fx.remember(saved.body.submission);
+  assert.equal(sub.thumbnails.length, 2);
+  assert.notEqual(sub.thumbnails[0], sub.images[0]);
+  assert.match(sub.thumbnails[0], /\/thumbs\/.*\.webp$/);
+  assert.equal(sub.thumbnails[1], sub.images[1]);
+
+  const file = await giver.agent.get(sub.thumbnails[0]).expect(200);
+  const meta = await sharp(file.body).metadata();
+  assert.equal(meta.format, 'webp');
+  assert.equal(meta.width, 640);
+
+  // Reordering keeps each small copy with its picture; dropping a picture drops its copy
+  const swapped = await giver.agent
+    .put(url)
+    .send({ keepImages: [sub.images[1], sub.images[0]], imageOrder: [sub.images[1], sub.images[0]] })
+    .expect(200);
+  assert.deepEqual(swapped.body.submission.thumbnails, [sub.images[1], sub.thumbnails[0]]);
+  const trimmed = await giver.agent.put(url).send({ keepImages: [sub.images[1]] }).expect(200);
+  assert.deepEqual(trimmed.body.submission.thumbnails, [sub.images[1]]);
 });
