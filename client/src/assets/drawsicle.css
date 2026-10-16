@@ -1,0 +1,510 @@
+:root {
+  --bg: #faf7f0;
+  --surface: #fffdfa;
+  --border: #efe5d3;
+  --text: #2f2d2b;
+  --muted: #8a6e4e;
+  --pink: #ec6a93;
+  --pink-dark: #d9527d;
+  --pink-soft: #fde6ee;
+  --blue: #63b3f5;
+  --danger: #c2414b;
+  --danger-soft: #fdecee;
+  --success: #3f8f5b;
+  --success-soft: #e8f5ec;
+  --warning: #b7791f;
+  --warning-soft: #fdf3e1;
+
+  /* Secondary surfaces and tints (each has a dark-mode value below) */
+  --surface-2: #fbf6ec;
+  --hover: #f5eee1;
+  --chip: #f3ebdc;
+  --border-strong: #e6dccb;
+  --subtle: #a88d6e;
+  --text-soft: #5a4a3a;
+  --pink-tint: #fff7fa;
+  --pink-line: #f4c9ce;
+  --blue-soft: #e6f2fc;
+  --blue-ink: #2f6f9f;
+  --purple-soft: #efe7fb;
+  --purple-ink: #7a55b8;
+  --orange-soft: #fbeee0;
+  --orange-ink: #b0612a;
+
+  --radius-lg: 22px;
+  --radius: 14px;
+  --shadow: 0 1px 2px rgba(90, 65, 30, 0.05), 0 6px 18px rgba(90, 65, 30, 0.05);
+
+  --font-body: 'Quicksand', system-ui, -apple-system, sans-serif;
+  --font-display: 'Baloo 2', 'Quicksand', system-ui, sans-serif;
+}
+
+/* Dark mode: set by stores/preferences.js (data-theme on <html>). The Tailwind brand
+   colours from app.css are redefined too, so utility classes follow along.
+   A cool plum-charcoal rather than warm brown, so the pink reads clearly: fills use a mid pink
+   (white text on top), while pink text uses a lighter pink (--pink-dark) to stay legible. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #141219;
+  --surface: #1c1924;
+  --surface-2: #231f2c;
+  --hover: #2a2535;
+  --chip: #2a2535;
+  --border: #2f2a3b;
+  --border-strong: #3d3650;
+  --text: #f1edf7;
+  --text-soft: #d6cfe3;
+  --muted: #aea5c0;
+  --subtle: #8f86a3;
+  --pink: #e0608c;
+  --pink-dark: #f597b9;
+  --pink-soft: #3b2133;
+  --pink-tint: #211a27;
+  --pink-line: #5c2f4a;
+  --blue: #7cc0f7;
+  --blue-soft: #172638;
+  --blue-ink: #9fd0fa;
+  --info: #9fd0fa;
+  --info-soft: #172638;
+  --danger: #ff8f9a;
+  --danger-soft: #3a1c24;
+  --success: #7fd6a3;
+  --success-soft: #163026;
+  --warning: #f1c46f;
+  --warning-soft: #33290f;
+  --purple-soft: #29203d;
+  --purple-ink: #cdb8f6;
+  --orange-soft: #36241a;
+  --orange-ink: #f5ad74;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+
+  --color-info: #9fd0fa;
+  --color-info-soft: #172638;
+  --color-brand: #e0608c;
+  --color-brand-dark: #f597b9;
+  --color-brand-soft: #3b2133;
+  --color-cream: #141219;
+  --color-paper: #1c1924;
+  --color-line: #2f2a3b;
+  --color-ink: #f1edf7;
+  --color-cocoa: #aea5c0;
+  --color-danger: #ff8f9a;
+  --color-danger-soft: #3a1c24;
+  --color-success: #7fd6a3;
+  --color-success-soft: #163026;
+  --color-warning: #f1c46f;
+  --color-warning-soft: #33290f;
+}
+
+/* Filled pink buttons keep white text readable on dark backgrounds */
+:root[data-theme='dark'] .btn-primary {
+  background: #d04876;
+  box-shadow: 0 2px 10px rgba(208, 72, 118, 0.3);
+}
+:root[data-theme='dark'] .btn-primary:hover:not(:disabled) {
+  background: #b93d68;
+}
+/* Pastel event banners would glare on a dark page */
+:root[data-theme='dark'] .event-banner .banner-img,
+:root[data-theme='dark'] .event-banner .banner-placeholder {
+  filter: brightness(0.78) saturate(0.92);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  margin: 0;
+  line-height: 1.15;
+}
+
+a {
+  color: var(--pink);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--pink-dark);
+}
+
+button {
+  font: inherit;
+}
+
+/* ---------- Cards ---------- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 14px 22px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.05s;
+}
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.btn-block {
+  width: 100%;
+}
+.btn-primary {
+  background: var(--pink);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(236, 106, 147, 0.25);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--pink-dark);
+  color: #fff;
+}
+.btn-outline {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+.btn-outline:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--muted);
+  padding: 8px 12px;
+}
+.btn-ghost:hover {
+  background: var(--hover);
+}
+
+/* ---------- Form fields ---------- */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.field + .field,
+.password-strength + .field {
+  margin-top: 22px;
+}
+.field-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.label {
+  font-weight: 500;
+  font-size: 1rem;
+}
+.input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0 16px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.input-wrap:focus-within {
+  border-color: var(--pink);
+  box-shadow: 0 0 0 3px var(--pink-soft);
+}
+.input-icon {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.input,
+.textarea {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--text);
+  padding: 14px 0;
+}
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--subtle);
+}
+.textarea {
+  resize: vertical;
+  min-height: 140px;
+  padding: 14px 0;
+}
+.hint {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* ---------- Messages ---------- */
+.alert {
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+.alert-error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.alert-success {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+/* ---------- Badges ---------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 14px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.badge-admin {
+  background: var(--blue);
+  color: #12324d;
+}
+.badge-member {
+  background: var(--chip);
+  color: var(--muted);
+}
+.badge-role {
+  background: var(--pink-soft);
+  color: var(--pink-dark);
+  text-transform: capitalize;
+}
+
+/* ---------- Page container ---------- */
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 48px 24px 64px;
+}
+@media (max-width: 640px) {
+  .page {
+    padding: 28px 16px 48px;
+  }
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- Additions: focus, sizes, states ---------- */
+:root {
+  --warning: #b7791f;
+  --warning-soft: #fdf3e1;
+  --info: #2f6f9f;
+  --info-soft: #e6f2fc;
+  --focus-ring: 0 0 0 3px rgba(236, 106, 147, 0.35);
+}
+
+/* Visible keyboard focus everywhere, invisible for mouse clicks */
+a:focus-visible,
+button:focus-visible,
+[role='button']:focus-visible,
+[role='checkbox']:focus-visible,
+[role='radio']:focus-visible,
+[role='tab']:focus-visible,
+summary:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: 8px;
+}
+.btn:focus-visible {
+  border-radius: var(--radius);
+}
+
+.btn-sm {
+  padding: 9px 14px;
+  font-size: 0.92rem;
+  gap: 8px;
+}
+.btn-xs {
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  gap: 6px;
+  border-radius: 10px;
+}
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+}
+.btn-danger:hover:not(:disabled) {
+  background: #a8333d;
+  color: #fff;
+}
+.btn-outline.btn-danger-text,
+.btn-ghost.btn-danger-text {
+  color: var(--danger);
+}
+.btn-ghost.btn-danger-text:hover {
+  background: var(--danger-soft);
+}
+.btn-icon {
+  padding: 8px;
+  border-radius: 12px;
+}
+
+.alert-info {
+  background: var(--info-soft);
+  color: var(--info);
+}
+.alert-warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+/* Native <select> styled like .input, inside an .input-wrap */
+.select {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--text);
+  padding: 14px 0;
+  cursor: pointer;
+}
+
+.input-wrap.is-invalid {
+  border-color: var(--danger);
+}
+.input-wrap.is-invalid:focus-within {
+  box-shadow: 0 0 0 3px var(--danger-soft);
+}
+.input-wrap.is-disabled {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.field-error {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--danger);
+}
+
+.section-title {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 1.3rem;
+}
+.section-sub {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+
+.badge-success {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.badge-warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.badge-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.badge-info {
+  background: var(--info-soft);
+  color: var(--info);
+}
+.badge-muted {
+  background: var(--chip);
+  color: var(--muted);
+}
+
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: -60px;
+  z-index: 100;
+  background: var(--surface);
+  color: var(--text);
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  font-weight: 600;
+}
+.skip-link:focus {
+  top: 12px;
+}
+/* The skip link focuses <main> itself; no ring around the whole page */
+main:focus {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation-duration: 2s;
+  }
+  .btn {
+    transition: none;
+  }
+}
+
+/* ---------- Print: pages like Privacy and Terms print without the site chrome ---------- */
+@media print {
+  .topbar,
+  .site-footer,
+  .toast-host,
+  .demo-banner,
+  .skip-link {
+    display: none !important;
+  }
+  html,
+  body {
+    background: #fff;
+  }
+  .card {
+    box-shadow: none;
+  }
+}
+
+/* Event hidden by a site admin (only its organisers see it) */
+.badge-disabled {
+  background: var(--warning-soft);
+  color: var(--warning);
+}

@@ -1,0 +1,42 @@
+/*
+  Styling entry point.
+  - drawsicle.css: the shared design system (cards, buttons, fields, badges, colours).
+  - Tailwind utilities for layout and one-off tweaks in templates.
+  Tailwind's preflight reset is left out on purpose so it doesn't fight drawsicle.css.
+  Layer order means utilities win over the design-system classes when both are used.
+*/
+@layer theme, base, components, utilities;
+
+@import 'tailwindcss/theme.css' layer(theme);
+@import './drawsicle.css' layer(components);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+/* Scan the shared folder too (constants used in class names) */
+@source '../../../shared';
+
+/* Brand tokens as Tailwind colours: bg-brand, text-cocoa, border-line, etc. */
+@theme {
+  --color-brand: #ec6a93;
+  --color-brand-dark: #d9527d;
+  --color-brand-soft: #fde6ee;
+  --color-cream: #faf7f0;
+  --color-paper: #fffdfa;
+  --color-line: #efe5d3;
+  --color-ink: #2f2d2b;
+  --color-cocoa: #8a6e4e;
+  --color-sky: #63b3f5;
+  --color-danger: #c2414b;
+  --color-danger-soft: #fdecee;
+  --color-success: #3f8f5b;
+  --color-success-soft: #e8f5ec;
+  --color-warning: #b7791f;
+  --color-warning-soft: #fdf3e1;
+  --color-info: #2f6f9f;
+  --color-info-soft: #e6f2fc;
+
+  --font-display: 'Baloo 2', 'Quicksand', system-ui, sans-serif;
+  --font-body: 'Quicksand', system-ui, -apple-system, sans-serif;
+
+  --radius-card: 22px;
+  --shadow-card: 0 1px 2px rgba(90, 65, 30, 0.05), 0 6px 18px rgba(90, 65, 30, 0.05);
+}
