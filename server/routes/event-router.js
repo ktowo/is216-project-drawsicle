@@ -36,6 +36,7 @@ const {
   isTimeZone,
 } = require('../../shared/constants.mjs');
 const { MUSEUM_THEME_CHOICES } = require('../../shared/museum-themes.mjs');
+const { MATCH_MODES } = require('../../shared/matching.mjs');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
 
 const router = Router();
@@ -190,6 +191,14 @@ function readEventInput(body) {
       throw invalid('Paste a Discord webhook link (it starts with https://discord.com/api/webhooks/).');
     }
     input.discordWebhookUrl = url;
+  }
+  // Automatic matching (services/match-making.js): { enabled, mode, publish }, any of them
+  if (src.autoMatch !== undefined) {
+    const auto = src.autoMatch && typeof src.autoMatch === 'object' ? src.autoMatch : null;
+    if (!auto) throw invalid('autoMatch must be an object.');
+    if (auto.enabled !== undefined) input['autoMatch.enabled'] = readBoolean(auto.enabled, 'Automatic matching');
+    if (auto.publish !== undefined) input['autoMatch.publish'] = readBoolean(auto.publish, 'Publish automatically');
+    if (auto.mode !== undefined) input['autoMatch.mode'] = readChoice(auto.mode, MATCH_MODES, 'Pick best fit or random matching.');
   }
   return input;
 }

@@ -2,7 +2,9 @@
 // so it has no dependencies apart from ./constants.mjs.
 //
 //   scorePair(giver, recipient) -> { ok, score, reasons, blockers }
-//   generateMatches(participants, { seed }) -> { pairs, unmatched, warnings, stats }
+//   generateMatches(participants, { seed, mode }) -> { pairs, unmatched, warnings, stats }
+//     mode 'best' (the default) looks for the best fits; 'random' ignores the scores and draws
+//     names from a hat, still within the hard rules below
 //
 //   participant: { id, name?, canCreate[], wantsTypes[], cannotDraw[], likes, avoid,
 //                  characters: [{ id, name, species, tags[] }],
@@ -553,6 +555,10 @@ function mergeLoops(loops, w, m) {
 
 // ---------- Main entry ----------
 
+// How matches can be made: the best fits, or at random (within the hard rules)
+export const MATCH_MODES = ['best', 'random'];
+export const RANDOM_REASON = 'Drawn at random';
+
 const MAX_NOTES = 10;
 
 // The first few notes, then one line for the rest
@@ -561,7 +567,8 @@ function capped(notes, moreLine) {
   return [...notes.slice(0, MAX_NOTES - 1), moreLine(notes.length - MAX_NOTES + 1)];
 }
 
-export function generateMatches(participants, { seed = 1 } = {}) {
+export function generateMatches(participants, { seed = 1, mode = 'best' } = {}) {
+  const random = mode === 'random';
   const usedSeed = normalizeSeed(seed);
   const rand = seededRandom(usedSeed);
   const warnings = [];
@@ -596,7 +603,8 @@ export function generateMatches(participants, { seed = 1 } = {}) {
         const giver = people[loop[k]];
         const recipient = people[loop[(k + 1) % loop.length]];
         const result = assess(giver, recipient, true);
-        pairs.push({ giverId: giver.id, recipientId: recipient.id, score: result.score, reasons: result.reasons });
+        const reasons = random ? [RANDOM_REASON, ...result.reasons] : result.reasons;
+        pairs.push({ giverId: giver.id, recipientId: recipient.id, score: result.score, reasons });
         matched.add(giver.id);
       }
     }
@@ -616,6 +624,7 @@ export function generateMatches(participants, { seed = 1 } = {}) {
         averageScore: pairs.length ? Math.round((totalScore / pairs.length) * 10) / 10 : 0,
         cycles: loops.length,
         seed: usedSeed,
+        mode: random ? 'random' : 'best',
       },
     };
   };
@@ -633,6 +642,10 @@ export function generateMatches(participants, { seed = 1 } = {}) {
       const result = assess(people[i], people[j], false);
       if (result.ok) W[i * n + j] = result.score;
     }
+  }
+  // At random: every allowed pair is as good as any other, so the loop is a draw from a hat
+  if (random) {
+    for (let k = 0; k < W.length; k++) if (W[k] !== BLOCKED) W[k] = 50 + Math.floor(rand() * 50);
   }
 
   const active = new Set(people.map((_, i) => i));

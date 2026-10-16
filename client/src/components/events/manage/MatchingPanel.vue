@@ -13,6 +13,7 @@ import {
   Search,
   Repeat,
   HeartHandshake,
+  Palette,
 } from 'lucide-vue-next';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
@@ -22,7 +23,8 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog.vue';
 import PersonLink from '@/components/events/PersonLink.vue';
 import StatTile from './StatTile.vue';
 import MatchingRulesCard from './MatchingRulesCard.vue';
-import StyleMatchingCard from './StyleMatchingCard.vue';
+import AutoMatchCard from './AutoMatchCard.vue';
+import { STYLE_MODE_LABELS } from '@shared/style.mjs';
 import MatchLoopDiagram from './MatchLoopDiagram.vue';
 import { api } from '@/api';
 import { toast } from '@/stores/toast';
@@ -137,6 +139,7 @@ function toggleReasons(id) {
 }
 
 // ---- Generate ----
+const genMode = ref('best'); // best fit, or names out of a hat
 const seed = ref('');
 const generating = ref(false);
 const generateError = ref('');
@@ -169,7 +172,7 @@ async function generate() {
   try {
     const data = await api(`/events/${props.event.id}/matches/generate`, {
       method: 'POST',
-      body: { seed: seedValue() },
+      body: { seed: seedValue(), mode: genMode.value },
     });
     matches.value = data.matches || [];
     result.value = data.result || null;
@@ -312,6 +315,22 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
             </p>
           </div>
           <form class="seed-form" novalidate @submit.prevent="startGenerate">
+            <div class="field">
+              <span :id="`${uid}-mode`" class="label text-sm">Pairing</span>
+              <div class="mode-toggle" role="radiogroup" :aria-labelledby="`${uid}-mode`">
+                <button
+                  v-for="m in [{ v: 'best', l: 'Best fit' }, { v: 'random', l: 'Random' }]"
+                  :key="m.v"
+                  type="button"
+                  role="radio"
+                  :aria-checked="genMode === m.v ? 'true' : 'false'"
+                  :class="{ on: genMode === m.v }"
+                  @click="genMode = m.v"
+                >
+                  {{ m.l }}
+                </button>
+              </div>
+            </div>
             <div class="field">
               <label :for="`${uid}-seed`" class="label text-sm">Seed <span class="text-cocoa font-normal">(optional)</span></label>
               <div class="input-wrap" :class="{ 'is-invalid': seedInvalid }">
@@ -584,12 +603,55 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
       </div>
     </ConfirmDialog>
 
+    <AutoMatchCard v-if="beforeMatching || isDraftStage" :event="event" @updated="emit('updated', $event)" @ran="load" />
     <MatchingRulesCard v-if="beforeMatching || isDraftStage" :event="event" @updated="emit('updated', $event)" />
-    <StyleMatchingCard v-if="beforeMatching || isDraftStage" :event="event" @updated="emit('updated', $event)" />
+    <section v-if="beforeMatching || isDraftStage" class="card p-5 sm:p-6 styles-pointer">
+      <Palette :size="19" aria-hidden="true" />
+      <p class="m-0">
+        <strong>Art styles:</strong> {{ STYLE_MODE_LABELS[event.matchingRules?.style || 'off'] }}.
+        The vision check and what it found for each artist are on their own tab.
+      </p>
+      <button type="button" class="btn btn-outline btn-sm" @click="emit('go', 'styles')">Open Art styles</button>
+    </section>
   </section>
 </template>
 
 <style scoped>
+.mode-toggle {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.mode-toggle button {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mode-toggle button.on {
+  background: var(--pink-soft);
+  color: var(--pink-dark);
+}
+.mode-toggle button:focus-visible {
+  outline: 3px solid var(--pink);
+  outline-offset: 1px;
+}
+.styles-pointer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+.styles-pointer p {
+  flex: 1 1 260px;
+}
 .pair.is-highlighted {
   border-color: var(--pink);
   box-shadow: 0 0 0 2px var(--pink-soft);

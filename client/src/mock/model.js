@@ -224,6 +224,12 @@ export function serializeEvent(state, event, user, ctx = viewerContext(state, ev
             avoidRepeats: event.matchingRules?.avoidRepeats !== false,
             style: event.matchingRules?.style || 'off',
           },
+          autoMatch: {
+            enabled: Boolean(event.autoMatch?.enabled),
+            mode: event.autoMatch?.mode || 'best',
+            publish: event.autoMatch?.publish !== false,
+            lastRun: event.autoMatch?.lastRun ? { ...event.autoMatch.lastRun } : null,
+          },
           invitedFrom: [...(event.invitedFrom || [])],
         }
       : {}),

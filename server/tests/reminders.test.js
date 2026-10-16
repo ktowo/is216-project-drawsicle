@@ -106,6 +106,7 @@ test('the timer stays off in tests and can be stopped safely', () => {
 test('an empty database does nothing', async () => {
   assert.deepEqual(await runReminders(NOW), {
     autoClosed: 0,
+    autoMatched: 0,
     signupWarnings: 0,
     submissionReminders: 0,
     overdueNotices: 0,

@@ -30,6 +30,8 @@ import {
 import { escapeRegex, formatDate, httpError, invalid, queryParam, readBoolean, toMs, URL_RE } from '../util.js';
 import { organizerEvent, visibleEvent } from './common.js';
 import { MUSEUM_THEME_CHOICES } from '@shared/museum-themes.mjs';
+import { MATCH_MODES } from '@shared/matching.mjs';
+import { defaultAutoMatch } from './matches.js';
 import { promoteFromWaitlist } from '../waitlist.js';
 
 // ---------- Reading event fields from a request ----------
@@ -146,6 +148,15 @@ function readEventInput(body) {
     }
     input.discordWebhookUrl = url;
   }
+  // Automatic matching: any of { enabled, mode, publish }, merged into what's there when saved
+  if (src.autoMatch !== undefined) {
+    const auto = src.autoMatch && typeof src.autoMatch === 'object' ? src.autoMatch : null;
+    if (!auto) throw invalid('autoMatch must be an object.');
+    input.autoMatch = {};
+    if (auto.enabled !== undefined) input.autoMatch.enabled = readBoolean(auto.enabled, 'Automatic matching');
+    if (auto.publish !== undefined) input.autoMatch.publish = readBoolean(auto.publish, 'Publish automatically');
+    if (auto.mode !== undefined) input.autoMatch.mode = readChoice(auto.mode, MATCH_MODES, 'Pick best fit or random matching.');
+  }
   return input;
 }
 
@@ -161,8 +172,9 @@ function validateEvent(event) {
 }
 
 // Input with dates as ISO strings, ready to merge into a stored event
-function storable(input) {
+function storable(input, event = null) {
   const out = { ...input };
+  if (out.autoMatch) out.autoMatch = { ...defaultAutoMatch(), ...(event?.autoMatch || {}), ...out.autoMatch };
   for (const key of Object.keys(DATE_FIELDS)) {
     if (out[key] instanceof Date) out[key] = out[key].toISOString();
   }
@@ -473,7 +485,7 @@ export function register(router) {
       throw invalid('The submission deadline must be in the future.');
     }
 
-    const updated = { ...event, ...storable(input) };
+    const updated = { ...event, ...storable(input, event) };
     validateEvent(updated);
     Object.assign(event, updated, { updatedAt: ctx.now.toISOString() });
     // A higher limit lets people in from the waitlist

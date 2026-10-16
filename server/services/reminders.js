@@ -1,5 +1,6 @@
 // Deadline job (see "Reminders" in docs/ARCHITECTURE.md). Every REMINDER_INTERVAL_MINUTES it:
 //   - closes sign-ups on open events whose sign-up deadline has passed (-> matching)
+//   - matches events set to match themselves, once their sign-ups are closed (runAutoMatch)
 //   - warns organisers 48 h before sign-ups close
 //   - reminds givers without a submission 72 h and 24 h before the submission deadline
 //   - tells organisers how many gifts are missing once the submission deadline passes
@@ -15,6 +16,7 @@ const JobRun = require('../models/JobRun.js');
 const { organizerIds } = require('./events.js');
 const { notifyMany } = require('./notify.js');
 const { announceMilestone } = require('./discord.js');
+const { runAutoMatch } = require('./match-making.js');
 const { LIMITS } = require('../../shared/constants.mjs');
 
 const HOUR = 60 * 60 * 1000;
@@ -26,6 +28,7 @@ const JOB = 'reminders'; // its JobRun record
 const KEYS = {
   signupWarning: 'signup-48h',
   signupClosed: 'signup-closed',
+  autoMatched: 'auto-matched',
   submission72h: 'submission-72h',
   submission24h: 'submission-24h',
   overdue: 'submission-overdue',
@@ -101,6 +104,8 @@ async function autoCloseSignups(now, summary) {
       parts.push(
         `That's below your minimum of ${event.minParticipants}; you can reopen sign-ups with a later deadline.`
       );
+    } else if (event.autoMatch?.enabled) {
+      parts.push('Matches are being made automatically; you will hear when they are ready.');
     } else {
       parts.push('Generate matches when you are ready.');
     }
@@ -125,6 +130,23 @@ async function autoCloseSignups(now, summary) {
         email: 'eventUpdates',
       }
     );
+  });
+}
+
+// Events set to match themselves, once their sign-ups have closed. Each event gets one go;
+// organisers can run it again from the Matching tab.
+async function autoMatchEvents(now, summary) {
+  const events = await Event.find({
+    status: 'matching',
+    disabledAt: null,
+    'autoMatch.enabled': true,
+    remindersSent: { $ne: KEYS.autoMatched },
+  });
+  await eachEvent(events, 'automatic matching', async (event) => {
+    if (await Match.exists({ event: event._id, published: true })) return;
+    if (!(await claim(event._id, KEYS.autoMatched))) return;
+    await runAutoMatch(event);
+    summary.autoMatched += 1;
   });
 }
 
@@ -270,12 +292,13 @@ async function purgeDeactivated(now, summary) {
 }
 
 // One full pass. Returns what it did, e.g. { autoClosed: 1, signupWarnings: 0, ... }:
-//   autoClosed, signupWarnings, overdueNotices: events handled
+//   autoClosed, autoMatched, signupWarnings, overdueNotices: events handled
 //   submissionReminders: givers reminded
 //   purged: accounts anonymised
 async function runReminders(now = new Date()) {
-  const summary = { autoClosed: 0, signupWarnings: 0, submissionReminders: 0, overdueNotices: 0, purged: 0 };
+  const summary = { autoClosed: 0, autoMatched: 0, signupWarnings: 0, submissionReminders: 0, overdueNotices: 0, purged: 0 };
   await autoCloseSignups(now, summary);
+  await autoMatchEvents(now, summary);
   await warnSignupsClosing(now, summary);
   await remindGivers(now, summary);
   await reportOverdue(now, summary);

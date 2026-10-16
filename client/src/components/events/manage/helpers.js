@@ -3,7 +3,7 @@ import { CREATION_TYPES, labelFor } from '@shared/constants.mjs';
 import { toLocalInput } from '@/utils/format';
 import { saveFile } from '@/utils/download';
 
-export const MANAGE_TABS = ['overview', 'participants', 'matching', 'submissions', 'settings'];
+export const MANAGE_TABS = ['overview', 'participants', 'matching', 'styles', 'submissions', 'settings'];
 
 // Statuses in which organisers can still accept or remove people (before matches are published)
 export const REVIEW_STATUSES = ['open', 'matching'];
