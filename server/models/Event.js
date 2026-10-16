@@ -9,6 +9,7 @@ const {
   LIMITS,
   normalizeTags,
 } = require('../../shared/constants.mjs');
+const { STYLE_MODES } = require('../../shared/style.mjs');
 
 const newInviteCode = () => crypto.randomBytes(8).toString('base64url');
 
@@ -80,6 +81,22 @@ const eventSchema = new mongoose.Schema(
       },
       // Steer away from giver -> recipient pairs from the same organisers' earlier exchanges
       avoidRepeats: { type: Boolean, default: true },
+      // Pair similar or contrasting art styles (shared/style.mjs); people can ask for their own at sign-up
+      style: { type: String, enum: STYLE_MODES, default: 'off' },
+    },
+    // The organisers' last "scan art styles" run (match-router.js)
+    styleScan: {
+      _id: false,
+      type: {
+        status: { type: String, enum: ['running', 'done'] },
+        total: Number,
+        done: Number,
+        failed: Number,
+        withVision: Boolean,
+        startedAt: Date,
+        finishedAt: Date,
+      },
+      default: null,
     },
     // Past events whose participants were invited to this one (each only once)
     invitedFrom: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Event' }], default: [] },
@@ -202,6 +219,7 @@ eventSchema.methods.toPublic = function ({
           matchingRules: {
             avoidPairs: (this.matchingRules?.avoidPairs || []).map((p) => ({ a: String(p.a), b: String(p.b) })),
             avoidRepeats: this.matchingRules?.avoidRepeats !== false,
+            style: this.matchingRules?.style || 'off',
           },
           invitedFrom: (this.invitedFrom || []).map(String),
         }

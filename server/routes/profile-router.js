@@ -9,12 +9,15 @@ const Submission = require('../models/Submission.js');
 const Notification = require('../models/Notification.js');
 const { USERNAME_RE, SOCIAL_KEYS, userMini } = User;
 const { requireAuth } = require('../middleware/auth.js');
-const { uploadImage, looksLikeImage, IMAGE_TYPES } = require('../services/storage.js');
+const { uploadImage, uploadImageWithThumbnail, looksLikeImage, IMAGE_TYPES } = require('../services/storage.js');
 const { withdrawApplications } = require('../services/accounts.js');
 const { endSession } = require('../utils/session.js');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
 const { CREATION_TYPE_VALUES, LIMITS, normalizeTags } = require('../../shared/constants.mjs');
 const { cleanLook } = require('../../shared/looks.mjs');
+const StyleProfile = require('../models/StyleProfile.js');
+const { analyseUser, visionStatus } = require('../services/vision.js');
+const { MAX_STYLE_SAMPLES } = require('../../shared/style.mjs');
 
 const router = Router();
 
@@ -140,6 +143,63 @@ router.patch('/', requireAuth, asyncHandler(async (req, res) => {
     throw err;
   }
   res.json({ user: user.toPublic() });
+}));
+
+// ---------- Art style ----------
+// Up to MAX_STYLE_SAMPLES pictures of your art; together with gifts you made in finished public
+// exchanges they're used to pair you with similar or contrasting styles.
+
+const SAMPLE_MAX_BYTES = 8 * 1024 * 1024;
+const sampleUploader = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: SAMPLE_MAX_BYTES, files: 1 },
+  fileFilter: (req, file, cb) => {
+    if (IMAGE_TYPES[file.mimetype]) cb(null, true);
+    else cb(httpError(400, 'Use a PNG, JPG, WebP or GIF image.', 'UPLOAD_INVALID'));
+  },
+});
+// One picture in the form field "image"
+function sampleUpload(req, res, next) {
+  sampleUploader.single('image')(req, res, (err) => {
+    if (err?.code === 'LIMIT_FILE_SIZE') return next(httpError(400, 'That image is too big. Max 8 MB.', 'FILE_TOO_LARGE'));
+    next(err);
+  });
+}
+
+async function styleJson(user) {
+  const profile = await StyleProfile.findOne({ user: user._id });
+  return { samples: [...(user.styleSamples || [])], profile: profile ? profile.toPublic() : null, vision: await visionStatus() };
+}
+
+router.get('/style', requireAuth, asyncHandler(async (req, res) => {
+  res.json(await styleJson(req.user));
+}));
+
+router.post('/style-samples', requireAuth, sampleUpload, asyncHandler(async (req, res) => {
+  if (!req.file) throw httpError(400, 'Choose a picture to add.', 'VALIDATION');
+  if (!looksLikeImage(req.file)) throw httpError(400, 'That file is not a PNG, JPEG, WebP or GIF image.', 'VALIDATION');
+  if ((req.user.styleSamples || []).length >= MAX_STYLE_SAMPLES) {
+    throw httpError(400, `You can add up to ${MAX_STYLE_SAMPLES} pictures. Remove one first.`, 'VALIDATION');
+  }
+  const { src, thumb } = await uploadImageWithThumbnail('style', req.file);
+  req.user.styleSamples = [...(req.user.styleSamples || []), thumb || src];
+  await req.user.save();
+  res.status(201).json(await styleJson(req.user));
+}));
+
+router.delete('/style-samples', requireAuth, asyncHandler(async (req, res) => {
+  const url = String(req.body?.url || '');
+  req.user.styleSamples = (req.user.styleSamples || []).filter((u) => u !== url);
+  await req.user.save();
+  res.json(await styleJson(req.user));
+}));
+
+router.post('/style/analyse', requireAuth, asyncHandler(async (req, res) => {
+  const profile = await analyseUser(req.user._id, { force: true });
+  if (!profile) {
+    throw httpError(400, 'Add a picture of your art first (or finish an exchange with a picture gift).', 'NO_PICTURES');
+  }
+  res.json(await styleJson(req.user));
 }));
 
 // The museum avatar from the avatar creator: every part must come from shared/looks.mjs

@@ -17,6 +17,7 @@ import {
 import { httpError, invalid, readCharacterInput, readList, readText } from '../util.js';
 import { buildCharacter } from './characters.js';
 import { organizerEvent, visibleEvent } from './common.js';
+import { STYLE_PREFERENCES } from '@shared/style.mjs';
 
 const signupsClosed = () => httpError(409, 'Sign-ups for this event are closed.', 'SIGNUPS_CLOSED');
 const rejected = () => httpError(403, "The organisers didn't accept your application for this event.", 'APPLICATION_REJECTED');
@@ -65,6 +66,7 @@ function readSignupForm(body, event) {
     notes: readText(src.notes, 'Notes for the organisers', LIMITS.formText),
     saveAsDefault: src.saveAsDefault === true || src.saveAsDefault === 'true',
     canBackup: src.canBackup === true || src.canBackup === 'true',
+    stylePreference: STYLE_PREFERENCES.includes(src.stylePreference) ? src.stylePreference : 'any',
   };
 }
 
@@ -133,6 +135,7 @@ export function register(router) {
       cannotDraw: form.cannotDraw,
       notes: form.notes,
       canBackup: form.canBackup,
+      stylePreference: form.stylePreference,
       updatedAt: at,
     });
     if (isNew) {

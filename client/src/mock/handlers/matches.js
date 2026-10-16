@@ -16,6 +16,7 @@ import {
 } from '../model.js';
 import { byName, formatDay, httpError, invalid } from '../util.js';
 import { myMatch, participantEvent, roleEvent } from './common.js';
+import { STYLE_MODES } from '@shared/style.mjs';
 
 // Matches of one event for organisers, sorted by giver name like the server does
 export function adminMatches(state, eventId, { publishedOnly = false } = {}) {
@@ -103,6 +104,17 @@ export function backupMatch(ctx, event, user) {
 }
 
 export function register(router) {
+  // Scanning art styles needs the real server (it looks at the pictures there)
+  router.get('/events/:eventId/matches/style-scan', (ctx) => {
+    const { event } = organizerOnly(ctx);
+    const total = ctx.state.applications.filter((a) => a.event === event.id && a.status === 'accepted').length;
+    return { scan: null, profiles: { withStyle: 0, total }, vision: { configured: false, reachable: false }, demo: true };
+  });
+  router.post('/events/:eventId/matches/style-scan', (ctx) => {
+    organizerOnly(ctx);
+    throw httpError(501, 'Scanning art styles needs the real server, so it is not part of the demo.', 'NOT_IN_DEMO');
+  });
+
   router.post('/events/:eventId/matches/generate', (ctx) => {
     const { event } = organizerOnly(ctx);
     const { state } = ctx;
@@ -177,7 +189,12 @@ export function register(router) {
     const rules = {
       avoidPairs: [...(event.matchingRules?.avoidPairs || [])],
       avoidRepeats: event.matchingRules?.avoidRepeats !== false,
+      style: event.matchingRules?.style || 'off',
     };
+    if (body.style !== undefined) {
+      if (!STYLE_MODES.includes(body.style)) throw invalid(`style must be one of: ${STYLE_MODES.join(', ')}.`);
+      rules.style = body.style;
+    }
     if (body.avoidRepeats !== undefined) {
       if (typeof body.avoidRepeats !== 'boolean') throw invalid('avoidRepeats must be true or false.');
       rules.avoidRepeats = body.avoidRepeats;

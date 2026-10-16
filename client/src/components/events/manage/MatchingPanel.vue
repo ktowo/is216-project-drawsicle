@@ -22,6 +22,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog.vue';
 import PersonLink from '@/components/events/PersonLink.vue';
 import StatTile from './StatTile.vue';
 import MatchingRulesCard from './MatchingRulesCard.vue';
+import StyleMatchingCard from './StyleMatchingCard.vue';
 import MatchLoopDiagram from './MatchLoopDiagram.vue';
 import { api } from '@/api';
 import { toast } from '@/stores/toast';
@@ -584,6 +585,7 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
     </ConfirmDialog>
 
     <MatchingRulesCard v-if="beforeMatching || isDraftStage" :event="event" @updated="emit('updated', $event)" />
+    <StyleMatchingCard v-if="beforeMatching || isDraftStage" :event="event" @updated="emit('updated', $event)" />
   </section>
 </template>
 

@@ -43,6 +43,18 @@ function typeList(value, label) {
 }
 
 export function register(router) {
+  // Art style: analysing pictures needs the real server, so the demo only says so
+  router.get('/profile/style', (ctx) => {
+    ctx.requireAuth();
+    return { samples: [], profile: null, vision: { configured: false, reachable: false }, demo: true };
+  });
+  for (const path of ['/profile/style-samples', '/profile/style/analyse']) {
+    router.post(path, (ctx) => {
+      ctx.requireAuth();
+      throw httpError(501, 'Looking at your art style needs the real server, so it is not part of the demo.', 'NOT_IN_DEMO');
+    });
+  }
+
   // The museum avatar from the avatar creator (profile-router.js)
   router.put('/profile/look', (ctx) => {
     const user = ctx.requireAuth();
