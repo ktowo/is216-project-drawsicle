@@ -47,6 +47,7 @@ function profileFromUser(user) {
     privacy: {
       showExchanges: user?.profilePrivacy?.showExchanges !== false,
       showGifts: Boolean(user?.profilePrivacy?.showGifts),
+      listInDiscover: user?.profilePrivacy?.listInDiscover !== false,
     },
   };
 }
@@ -479,6 +480,23 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
           </label>
           <p id="privacy-exchanges-hint" class="hint">
             Finished public exchanges you took part in, and how many. Private events are never listed.
+          </p>
+        </div>
+        <div class="privacy-row">
+          <label class="switch" for="privacy-discover">
+            <input
+              id="privacy-discover"
+              v-model="profile.privacy.listInDiscover"
+              type="checkbox"
+              role="switch"
+              aria-describedby="privacy-discover-hint"
+            />
+            <span class="track" aria-hidden="true"><span class="thumb" /></span>
+            <span class="switch-label">List me in Discover</span>
+          </label>
+          <p id="privacy-discover-hint" class="hint">
+            Lets people find you by name or by the things you love. Turned off, your profile still works for anyone
+            with the link.
           </p>
         </div>
         <div class="privacy-row">

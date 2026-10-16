@@ -123,19 +123,19 @@ test('banned artists have no public profile until they are unbanned', async () =
 test('profile privacy settings default sensibly, save, validate and stay private', async () => {
   const mika = await signUpAs('Mika', { username: 'mika_draws' });
   const me = (await mika.agent.get('/api/auth/me').expect(200)).body.user;
-  assert.deepEqual(me.profilePrivacy, { showExchanges: true, showGifts: false });
+  assert.deepEqual(me.profilePrivacy, { showExchanges: true, showGifts: false, listInDiscover: true });
 
   const saved = await mika.agent
     .patch('/api/profile')
     .send({ profilePrivacy: { showGifts: true } })
     .expect(200);
-  assert.deepEqual(saved.body.user.profilePrivacy, { showExchanges: true, showGifts: true });
+  assert.deepEqual(saved.body.user.profilePrivacy, { showExchanges: true, showGifts: true, listInDiscover: true });
 
   const both = await mika.agent
     .patch('/api/profile')
     .send({ profilePrivacy: { showExchanges: false } })
     .expect(200);
-  assert.deepEqual(both.body.user.profilePrivacy, { showExchanges: false, showGifts: true });
+  assert.deepEqual(both.body.user.profilePrivacy, { showExchanges: false, showGifts: true, listInDiscover: true });
 
   for (const profilePrivacy of [{ showGifts: 'yes' }, { showExchanges: 1 }, 'on', ['showGifts']]) {
     const res = await mika.agent.patch('/api/profile').send({ profilePrivacy }).expect(400);
@@ -143,10 +143,10 @@ test('profile privacy settings default sensibly, save, validate and stay private
   }
   // A rejected change leaves what was saved alone
   const after = (await mika.agent.get('/api/auth/me').expect(200)).body.user;
-  assert.deepEqual(after.profilePrivacy, { showExchanges: false, showGifts: true });
+  assert.deepEqual(after.profilePrivacy, { showExchanges: false, showGifts: true, listInDiscover: true });
 
   const exported = (await mika.agent.get('/api/profile/export').expect(200)).body;
-  assert.deepEqual(exported.user.profilePrivacy, { showExchanges: false, showGifts: true });
+  assert.deepEqual(exported.user.profilePrivacy, { showExchanges: false, showGifts: true, listInDiscover: true });
 
   // Other people never see the settings themselves
   const publicView = (await h.request(app).get('/api/users/mika_draws').expect(200)).body;

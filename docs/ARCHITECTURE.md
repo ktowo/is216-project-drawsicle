@@ -81,6 +81,7 @@ Submission    { id, eventId, matchId, title, message, type, images: url[], links
                 submittedAt, late, verified, verifiedAt, updatedAt }
 Notification  { id, type, title, message, link, read, createdAt }
 ArtistProfile { id, username, displayName, avatarUrl, bio, socials{...}, artistTags, createdAt }   // no email
+ArtistCard { user: UserMini, artistTags, badges[], gifts: [{ id, title, image, alt, contentWarnings[] }] (≤3, two-sided consent), exchangesCompleted?, following? (logged in) }
 ArtistTags { makes[], themes[] (max 5), activity: '' | 'casual' | 'seasonal', cardColor: '' | palette value }   // shared/taste.mjs
 ```
 
@@ -127,6 +128,7 @@ All routes are under `/api`. (auth) = must be logged in, (org) = event organiser
 | GET | /profile/:id | public profile (`ArtistProfile` without `createdAt`), by id or username; 404 `NOT_FOUND` for deactivated or banned accounts |
 | GET | /users/:username | (optional auth) public artist profile → `{ profile: ArtistProfile, organizing: Event[] (their public, non-draft events, newest first, max 12), exchanges?: Event[] (finished public exchanges they were accepted into, newest completion first, max 12), stats: { eventsOrganized, exchangesCompleted? }, hasGifts }`. The username matches in any case, with or without a leading `@`; an id works too. `exchangesCompleted` counts the same events as `exchanges` (public, completed, not disabled). Both are left out when the artist turned off `profilePrivacy.showExchanges`. `hasGifts` says whether the gift gallery below has anything to show. 404 `USER_NOT_FOUND` for unknown, deactivated or banned accounts |
 | GET | /users/:username/gifts?limit=&before= | (optional auth) the artist's public gift gallery → `{ items: [{ submission: { id, title, type, images, links, submittedAt }, event: { id, name }, giver: UserMini, recipient: UserMini }], hasMore }`, newest first, 12 per page (max 48). `before` is an ISO date cursor (gifts submitted strictly earlier). Only gifts they *made*, in public, completed, non-disabled events, where both they and the recipient have `profilePrivacy.showGifts` and the recipient's account is active; never the private message or verification details. Same answer for every viewer. 400 `VALIDATION` for a bad `before`; 404 `USER_NOT_FOUND` like the profile |
+| GET | /discover/artists?q=&limit=&cursor= | (optional auth) Discover → `{ items: ArtistCard[], hasMore, nextCursor, total }`. Only active artists with `profilePrivacy.listInDiscover` (default true), never the viewer. `q` matches display name or username. Ordered by having tags/gifts/exchanges, then exchanges, then newest. `cursor` is the offset from `nextCursor`; a bad one → 400 `VALIDATION` |
 | GET | /notifications?limit=&before= | (auth) → `{ items: Notification[], unreadCount, hasMore }`, newest first. `before` is an ISO date cursor (items strictly older than it); 400 `VALIDATION` if it isn't a date. `hasMore` says whether an older page exists |
 | GET | /notifications/unread-count | (auth) |
 | PATCH | /notifications/:id/read | (auth) |
@@ -142,7 +144,7 @@ Rejected applications are left alone, and logging back in does not restore withd
 `user` (from `User.toPublic()`): `{ id, email, username, role, status, displayName, avatarUrl, bio,
 socials{twitter,instagram,bluesky,discord,deviantart,toyhouse,tumblr}, defaultForm{communityUsername, canCreate[],
 wantsTypes[], likes, avoid, cannotDraw[]}, notificationPrefs{emailReminders, emailMatches, emailEventUpdates},
-profilePrivacy{showExchanges (default true), showGifts (default false)}, artistTags (public, see ArtistTags), providers{google,discord}, profileComplete,
+profilePrivacy{showExchanges (default true), showGifts (default false), listInDiscover (default true)}, artistTags (public, see ArtistTags), providers{google,discord}, profileComplete,
 createdAt }`. `profilePrivacy` only ever appears in the owner's own `user`, never in `ArtistProfile`.
 
 ### Characters: `routes/character-router.js` (auth, owner only; other people's characters are 404)

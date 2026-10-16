@@ -37,6 +37,7 @@ export function userPublic(user) {
     profilePrivacy: {
       showExchanges: user.profilePrivacy?.showExchanges !== false,
       showGifts: Boolean(user.profilePrivacy?.showGifts),
+      listInDiscover: user.profilePrivacy?.listInDiscover !== false,
     },
     providers: { google: false, discord: false },
     profileComplete: Boolean(user.displayName && user.bio),

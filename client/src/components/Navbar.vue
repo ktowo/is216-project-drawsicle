@@ -18,6 +18,7 @@ import {
   CircleHelp,
   Eye,
   ShieldCheck,
+  UsersRound,
   Landmark,
   Users,
 } from 'lucide-vue-next';
@@ -205,6 +206,7 @@ watch(
         >
           Browse events
         </RouterLink>
+        <RouterLink to="/discover" class="nav-link">Discover</RouterLink>
         <RouterLink to="/museum" class="nav-link">Museum</RouterLink>
         <template v-if="auth.user">
           <RouterLink to="/dashboard" class="nav-link">Dashboard</RouterLink>
@@ -310,6 +312,11 @@ watch(
           <li>
             <RouterLink to="/events" class="mobile-link" :class="{ 'is-active': browseActive }" active-class="" exact-active-class="">
               <Compass :size="20" aria-hidden="true" /> Browse events
+            </RouterLink>
+          </li>
+          <li>
+            <RouterLink to="/discover" class="mobile-link">
+              <UsersRound :size="20" aria-hidden="true" /> Discover artists
             </RouterLink>
           </li>
           <li>

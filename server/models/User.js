@@ -77,6 +77,8 @@ const userSchema = new mongoose.Schema(
     profilePrivacy: {
       showExchanges: { type: Boolean, default: true },
       showGifts: { type: Boolean, default: false },
+      // Shown on Discover and in recommendations (the profile itself stays reachable by link)
+      listInDiscover: { type: Boolean, default: true },
     },
 
     // People this person never wants to be matched with, in either direction. Private.
@@ -135,6 +137,7 @@ userSchema.methods.toPublic = function () {
     profilePrivacy: {
       showExchanges: this.profilePrivacy?.showExchanges !== false,
       showGifts: Boolean(this.profilePrivacy?.showGifts),
+      listInDiscover: this.profilePrivacy?.listInDiscover !== false,
     },
     providers: { google: Boolean(this.googleId), discord: Boolean(this.discordId) },
     profileComplete: Boolean(this.displayName && this.bio),
