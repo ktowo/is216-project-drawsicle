@@ -107,6 +107,7 @@ export function buildState(now = new Date()) {
     },
     notificationPrefs: { emailReminders: true, emailMatches: true, emailEventUpdates: false },
     profilePrivacy: { showExchanges: true, showGifts: false, ...(u.profilePrivacy || {}) },
+    artistTags: { makes: [], themes: [], activity: '', cardColor: '', ...(u.artistTags || {}) },
     createdAt: iso(nowMs - (200 - i * 7) * DAY),
     updatedAt: iso(nowMs - (30 - i) * DAY),
   }));

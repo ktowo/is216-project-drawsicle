@@ -3,9 +3,12 @@ import { computed } from 'vue';
 import { CalendarDays } from 'lucide-vue-next';
 import UserAvatar from '@/components/UserAvatar.vue';
 import SocialLinks from './SocialLinks.vue';
+import ArtistTagChips from './ArtistTagChips.vue';
+import { CARD_COLORS } from '@shared/taste.mjs';
 import { formatMonthYear } from '@/utils/format';
 
-// Top of a public profile: big avatar, names, "member since", bio, social links.
+// Top of a public profile: big avatar, names, "member since", artist tags, bio, social links.
+// Their chosen card colour (artist tags) tints the top edge and the avatar ring.
 // Buttons (edit, share) go in the default slot.
 const props = defineProps({
   profile: { type: Object, required: true },
@@ -16,10 +19,11 @@ const props = defineProps({
 const name = computed(() => props.profile.displayName || props.profile.username || 'Artist');
 const since = computed(() => formatMonthYear(props.profile.createdAt));
 const bio = computed(() => (props.profile.bio || '').trim());
+const accent = computed(() => CARD_COLORS.find((c) => c.value === props.profile.artistTags?.cardColor)?.swatch || '');
 </script>
 
 <template>
-  <header class="card profile-head">
+  <header class="card profile-head" :class="{ 'has-accent': accent }" :style="accent ? { '--accent': accent } : undefined">
     <UserAvatar :user="profile" :size="112" class="head-avatar" />
 
     <div class="head-main">
@@ -28,6 +32,8 @@ const bio = computed(() => (props.profile.bio || '').trim());
       <p v-if="since" class="head-since">
         <CalendarDays :size="15" aria-hidden="true" /> Member since {{ since }}
       </p>
+
+      <ArtistTagChips :tags="profile.artistTags" class="head-tags" />
 
       <p v-if="bio" class="head-bio">{{ bio }}</p>
       <p v-else class="head-bio none">No bio yet.</p>
@@ -47,6 +53,12 @@ const bio = computed(() => (props.profile.bio || '').trim());
   gap: 28px;
   align-items: flex-start;
   padding: 32px 34px;
+}
+.profile-head.has-accent {
+  border-top: 8px solid var(--accent);
+}
+.head-tags {
+  margin-top: 14px;
 }
 .head-avatar {
   border: 4px solid var(--pink-soft);
@@ -113,5 +125,8 @@ const bio = computed(() => (props.profile.bio || '').trim());
   .head-bio {
     text-align: left;
   }
+}
+.has-accent .head-avatar {
+  border-color: var(--accent);
 }
 </style>
