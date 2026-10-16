@@ -14,6 +14,11 @@ import EmptyState from '@/components/ui/EmptyState.vue';
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue';
 import ReasonDialog from './ReasonDialog.vue';
 import { formatDate } from '@/utils/format';
+import { can, SITE_ROLE_LABELS } from '@shared/permissions.mjs';
+import { SITE_ROLES } from '@shared/constants.mjs';
+
+const mayManage = () => can(auth.user, 'users.manage');
+const mayChangeRoles = () => can(auth.user, 'users.roles');
 
 const filters = reactive({ q: '', status: '', role: '' });
 const page = ref(1);
@@ -49,25 +54,35 @@ const pending = ref(null);
 const working = ref(false);
 
 const DIALOGS = {
-  promote: (u) => ({ title: `Make ${u.displayName} a site admin?`, message: 'Admins can ban people and moderate or delete any event.', confirmLabel: 'Make admin' }),
-  demote: (u) => ({ title: `Remove admin from ${u.displayName}?`, message: 'They keep their account and events, but lose the admin tools.', confirmLabel: 'Remove admin', danger: true }),
+  role: (u, role) => ({
+    title: `Make ${u.displayName} ${role === 'user' ? 'a regular member' : `a ${SITE_ROLE_LABELS[role].toLowerCase()}`}?`,
+    message: ROLE_NOTES[role],
+    confirmLabel: role === 'user' ? 'Remove their role' : `Make ${SITE_ROLE_LABELS[role].toLowerCase()}`,
+    danger: role === 'user',
+  }),
   ban: (u) => ({ title: `Ban ${u.displayName}?`, message: "They're logged out everywhere, can't log back in, and their sign-ups in events that haven't been matched yet are withdrawn.", confirmLabel: 'Ban account', danger: true, reason: true, required: true }),
   unban: (u) => ({ title: `Unban ${u.displayName}?`, message: 'They can log in again. Withdrawn sign-ups are not restored.', confirmLabel: 'Unban', reason: true, required: false }),
   delete: (u) => ({ title: `Delete ${u.displayName}'s account?`, message: "Their personal details are wiped and they can't log in. Past events and gifts stay, credited to 'Deleted user'. This can't be undone.", confirmLabel: 'Delete account', danger: true, reason: true, required: false }),
 };
 
-function ask(kind, user) {
-  pending.value = { kind, user, ...DIALOGS[kind](user) };
+const ROLE_NOTES = {
+  user: 'They keep their account and events, but lose the moderation tools.',
+  moderator: 'Moderators review reports, read and moderate museum chat, and look up accounts. They cannot ban people or change events.',
+  admin: 'Admins can do everything: ban people, change roles, and moderate or delete any event.',
+};
+
+function ask(kind, user, role) {
+  pending.value = { kind, user, role, ...DIALOGS[kind](user, role) };
 }
 
 async function run(reason = '') {
-  const { kind, user } = pending.value;
+  const { kind, user, role } = pending.value;
   working.value = true;
   try {
     const base = `/admin/users/${user.id}`;
-    if (kind === 'promote' || kind === 'demote') {
-      await api(base, { method: 'PATCH', body: { role: kind === 'promote' ? 'admin' : 'user' } });
-      toast.success(kind === 'promote' ? `${user.displayName} is now a site admin.` : `${user.displayName} is no longer an admin.`);
+    if (kind === 'role') {
+      await api(base, { method: 'PATCH', body: { role } });
+      toast.success(role === 'user' ? `${user.displayName} is a regular member now.` : `${user.displayName} is now a ${SITE_ROLE_LABELS[role].toLowerCase()}.`);
     } else if (kind === 'ban') {
       const res = await api(`${base}/ban`, { method: 'POST', body: { reason } });
       const n = res.withdrawnApplications;
@@ -105,6 +120,7 @@ async function run(reason = '') {
       <select v-model="filters.role" class="select" aria-label="Role">
         <option value="">Any role</option>
         <option value="admin">Site admins</option>
+        <option value="moderator">Moderators</option>
         <option value="user">Members</option>
       </select>
     </div>
@@ -121,7 +137,7 @@ async function run(reason = '') {
             <div class="min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
                 <PersonLink :user="linkableUser(u)" :size="0" />
-                <span v-if="u.role === 'admin'" class="badge badge-admin">Admin</span>
+                <span v-if="u.role !== 'user'" class="badge badge-admin">{{ SITE_ROLE_LABELS[u.role] }}</span>
                 <StatusBadge kind="user" :status="u.status" />
                 <span v-if="isMe(u)" class="hint">(you)</span>
               </div>
@@ -133,11 +149,16 @@ async function run(reason = '') {
             </div>
           </div>
           <div v-if="!isMe(u) && !u.email.endsWith('@deleted.invalid')" class="actions">
-            <template v-if="u.status !== 'banned'">
-              <button v-if="u.role !== 'admin'" class="btn btn-outline btn-sm" @click="ask('promote', u)"><ShieldCheck :size="16" aria-hidden="true" /> Make admin</button>
-              <button v-else class="btn btn-outline btn-sm" @click="ask('demote', u)"><ShieldOff :size="16" aria-hidden="true" /> Remove admin</button>
+            <template v-if="u.status !== 'banned' && mayChangeRoles()">
+              <template v-for="r in SITE_ROLES" :key="r">
+                <button v-if="r !== u.role" class="btn btn-outline btn-sm" @click="ask('role', u, r)">
+                  <ShieldOff v-if="r === 'user'" :size="16" aria-hidden="true" />
+                  <ShieldCheck v-else :size="16" aria-hidden="true" />
+                  {{ r === 'user' ? 'Remove role' : `Make ${SITE_ROLE_LABELS[r].toLowerCase()}` }}
+                </button>
+              </template>
             </template>
-            <template v-if="u.role !== 'admin'">
+            <template v-if="u.role === 'user' && mayManage()">
               <button v-if="u.status === 'banned'" class="btn btn-outline btn-sm" @click="ask('unban', u)"><Undo2 :size="16" aria-hidden="true" /> Unban</button>
               <button v-else class="btn btn-outline btn-sm danger" @click="ask('ban', u)"><Ban :size="16" aria-hidden="true" /> Ban</button>
               <button class="btn btn-ghost btn-sm danger" @click="ask('delete', u)"><Trash2 :size="16" aria-hidden="true" /> Delete</button>

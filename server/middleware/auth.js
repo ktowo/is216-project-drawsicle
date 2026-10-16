@@ -4,6 +4,7 @@ const Event = require('../models/Event.js');
 const EventMember = require('../models/EventMember.js');
 const { readSession } = require('../utils/session.js');
 const { asyncHandler } = require('../utils/helpers.js');
+const { can } = require('../../shared/permissions.mjs');
 
 // The user behind the session cookie (any status), or null when there's no valid session.
 async function sessionUser(req) {
@@ -48,6 +49,17 @@ const optionalAuth = asyncHandler(async (req, res, next) => {
 function requireAdmin(req, res, next) {
   if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Admins only.', code: 'ACCESS_DENIED' });
   next();
+}
+
+// Needs a site permission (shared/permissions.mjs), e.g. requirePermission('chat.logs').
+// Use after requireAuth.
+function requirePermission(permission) {
+  return (req, res, next) => {
+    if (!can(req.user, permission)) {
+      return res.status(403).json({ error: "You don't have permission to do that.", code: 'ACCESS_DENIED' });
+    }
+    next();
+  };
 }
 
 // Loads the event from the URL (:eventId) into req.event. 404 if it doesn't exist.
@@ -112,6 +124,7 @@ function requireEventRole(...allowed) {
 
 module.exports = {
   requireAdmin,
+  requirePermission,
   requireEventRole,
   requireAuth,
   optionalAuth,

@@ -1,4 +1,6 @@
 const mongoose = require('mongoose');
+const { SITE_ROLES } = require('../../shared/constants.mjs');
+const { permissionsFor } = require('../../shared/permissions.mjs');
 
 const USERNAME_RE = /^[a-z0-9_]{3,30}$/;
 const SOCIAL_KEYS = ['twitter', 'instagram', 'bluesky', 'discord', 'deviantart', 'toyhouse', 'tumblr'];
@@ -22,7 +24,7 @@ const userSchema = new mongoose.Schema(
 
     // Site-wide role only. Event roles (organizer, participant, helper, approver)
     // live in EventMember, because they differ per event.
-    role: { type: String, enum: ['user', 'admin'], default: 'user' },
+    role: { type: String, enum: SITE_ROLES, default: 'user' },
 
     // Bumped on password reset so old login cookies stop working.
     sessionVersion: { type: Number, default: 0 },
@@ -97,6 +99,7 @@ userSchema.methods.toPublic = function () {
     email: this.email,
     username: this.username || null,
     role: this.role,
+    permissions: permissionsFor(this.role),
     status: this.status || 'active',
     displayName: this.displayName || this.email.split('@')[0],
     avatarUrl: this.avatarUrl || null,

@@ -31,7 +31,7 @@ const tiles = computed(() => {
     { label: 'Open reports', value: s.openReports ?? 0, icon: Flag, to: '/admin?tab=reports' },
     { label: 'Accounts', value: s.users.total, icon: Users, note: `${s.users.active} active` },
     { label: 'Banned', value: s.users.banned, icon: Ban, note: `${s.users.deactivated} deactivated` },
-    { label: 'Site admins', value: s.users.admins, icon: ShieldCheck },
+    { label: 'Site admins', value: s.users.admins, icon: ShieldCheck, note: `${s.users.moderators ?? 0} moderators` },
     { label: 'Events', value: s.events.total, icon: CalendarHeart, note: `${s.events.byStatus.cancelled} cancelled` },
     { label: 'Disabled events', value: s.events.disabled, icon: EyeOff },
     { label: 'Sign-ups', value: s.applications, icon: ClipboardList },
