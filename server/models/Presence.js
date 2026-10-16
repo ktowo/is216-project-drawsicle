@@ -11,6 +11,7 @@ const presenceSchema = new mongoose.Schema({
   y: { type: Number, default: 0 },
   facing: { type: String, enum: ['se', 'sw', 'ne', 'nw'], default: 'se' },
   sitting: { type: Boolean, default: false },
+  dancing: { type: Boolean, default: false }, // keeps dancing until they move, sit or /stop
   updatedAt: { type: Date, default: Date.now },
 });
 

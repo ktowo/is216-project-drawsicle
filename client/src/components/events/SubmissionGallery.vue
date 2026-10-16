@@ -116,7 +116,7 @@ function open(tile) {
               :aria-label="`View ${tile.item.submission.title || 'gift'} from ${nameOf(tile.item.giver)} full size`"
               @click="open(tile)"
             >
-              <img :src="assetUrl(tile.cover)" alt="" loading="lazy" />
+              <img :src="assetUrl(tile.cover)" alt="" loading="lazy" decoding="async" />
               <span v-if="tile.imageCount > 1" class="more">
                 <Images :size="14" aria-hidden="true" /> {{ tile.imageCount }}
               </span>
