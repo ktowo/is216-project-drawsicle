@@ -93,7 +93,7 @@ const giftCount = computed(() => items.value.filter((i) => i.submission).length)
         message="Nobody submitted a gift in this event."
         class="mt-6"
       />
-      <MuseumExperience v-else :items="items" class="mt-6" />
+      <MuseumExperience v-else :items="items" :place="{ kind: 'gallery', eventId: event.id }" class="mt-6" />
     </template>
   </main>
 </template>

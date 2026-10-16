@@ -80,7 +80,7 @@ watch(wingId, load, { immediate: true });
       >
         <RouterLink :to="`/events/${wing.event.id}`" class="btn btn-outline btn-sm">About the exchange</RouterLink>
       </PageHeader>
-      <MuseumExperience :items="wing.artworks" class="mt-6" />
+      <MuseumExperience :items="wing.artworks" :place="{ kind: 'wing', eventId: wing.event.id }" class="mt-6" />
       <p class="hint mt-4">
         Only gifts that both the artist and the person they made it for chose to show on their profiles hang here.
       </p>
