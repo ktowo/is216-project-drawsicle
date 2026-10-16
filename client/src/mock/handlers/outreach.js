@@ -15,7 +15,36 @@ const announcementJson = (state, row) => ({
   author: miniOf(state, row.author),
 });
 
+const ACTIVITY_MAX = 60;
+
 export function register(router) {
+  // The activity timeline on the manage page (same as GET /activity in outreach-router.js)
+  router.get('/events/:eventId/activity', (ctx) => {
+    const { state } = ctx;
+    const { event } = roleEvent(ctx, 'organizer');
+    const mini = (id) => (id ? miniOf(state, id) : null);
+    const applications = state.applications.filter((a) => a.event === event.id);
+    const items = [
+      ...(event.statusHistory || []).map((h) => ({ kind: 'status', status: h.status, at: h.at, by: mini(h.by) })),
+      ...applications.map((a) => ({ kind: 'signup', at: a.createdAt, user: mini(a.user) })),
+      ...applications
+        .filter((a) => a.status === 'withdrawn')
+        .map((a) => ({ kind: 'withdrawn', at: a.updatedAt || a.createdAt, user: mini(a.user) })),
+      ...state.announcements
+        .filter((a) => a.event === event.id)
+        .map((a) => ({ kind: 'announcement', at: a.createdAt, by: mini(a.author), text: a.message.slice(0, 140) })),
+      ...state.submissions
+        .filter((s) => s.event === event.id)
+        .map((s) => ({ kind: 'gift', at: s.submittedAt, user: mini(s.giver), late: Boolean(s.late) })),
+      ...state.matches
+        .filter((m) => m.event === event.id && m.backupGiver && m.backupAssignedAt)
+        .map((m) => ({ kind: 'backup', at: m.backupAssignedAt, user: mini(m.backupGiver) })),
+    ]
+      .filter((item) => item.at)
+      .sort((a, b) => new Date(b.at) - new Date(a.at));
+    return { items: items.slice(0, ACTIVITY_MAX), total: items.length };
+  });
+
   router.get('/events/:eventId/announcements', (ctx) => {
     const { state } = ctx;
     const event = loadEvent(ctx);

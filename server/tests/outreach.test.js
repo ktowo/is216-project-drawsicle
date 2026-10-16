@@ -142,3 +142,29 @@ test('time zones and Discord webhooks are checked, and milestones are posted', a
   await settle();
   assert.equal(posts.length, 2);
 });
+
+test('organisers see what happened in their event, newest first', async () => {
+  const ctx = await fx.setup({ count: 3, status: 'open' });
+  const url = `/api/events/${ctx.eventId}/activity`;
+  await ctx.people[0].agent.get(url).expect(403);
+
+  await ctx.organizer.agent.post(`/api/events/${ctx.eventId}/announcements`).send({ message: 'Welcome all!' }).expect(201);
+  await fx.forceStatus(ctx.eventId, 'matching');
+  await Event.updateOne(
+    { _id: ctx.eventId },
+    { $push: { statusHistory: { status: 'matching', at: new Date(), by: ctx.organizer.id } } }
+  );
+
+  const { body } = await ctx.organizer.agent.get(url).expect(200);
+  const kinds = body.items.map((i) => i.kind);
+  assert.equal(kinds[0], 'status');
+  assert.equal(body.items[0].status, 'matching');
+  assert.equal(body.items[0].by.displayName, 'Olive Organiser');
+  assert.equal(kinds.filter((k) => k === 'signup').length, 3);
+  const update = body.items.find((i) => i.kind === 'announcement');
+  assert.equal(update.text, 'Welcome all!');
+  // Newest first all the way down
+  const times = body.items.map((i) => new Date(i.at).getTime());
+  assert.deepEqual(times, [...times].sort((a, b) => b - a));
+  assert.equal(body.total, body.items.length);
+});

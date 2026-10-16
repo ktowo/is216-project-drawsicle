@@ -22,6 +22,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog.vue';
 import PersonLink from '@/components/events/PersonLink.vue';
 import StatTile from './StatTile.vue';
 import MatchingRulesCard from './MatchingRulesCard.vue';
+import MatchLoopDiagram from './MatchLoopDiagram.vue';
 import { api } from '@/api';
 import { toast } from '@/stores/toast';
 import { formatDateTime, pluralize } from '@/utils/format';
@@ -41,6 +42,14 @@ const loading = ref(false);
 const error = ref('');
 const search = ref('');
 const expanded = ref(new Set());
+// The pair being hovered or focused, in the list or the loop diagram
+const highlightId = ref(null);
+const highlightHandlers = (id) => ({
+  mouseenter: () => (highlightId.value = id),
+  mouseleave: () => (highlightId.value = null),
+  focusin: () => (highlightId.value = id),
+  focusout: () => (highlightId.value = null),
+});
 
 const status = computed(() => props.event.status);
 const beforeMatching = computed(() => status.value === 'draft' || status.value === 'open');
@@ -391,6 +400,8 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
           it more of a surprise.
         </p>
 
+        <MatchLoopDiagram :matches="matches" :highlight="highlightId" @highlight="highlightId = $event" />
+
         <!-- Toolbar -->
         <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div class="input-wrap md:w-72">
@@ -443,7 +454,8 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
             v-for="m in visible"
             :key="m.id"
             class="card pair"
-            :class="{ 'is-selected': swap.on && isSelected(m.id) }"
+            :class="{ 'is-selected': swap.on && isSelected(m.id), 'is-highlighted': highlightId === m.id }"
+            v-on="highlightHandlers(m.id)"
           >
             <div class="pair-main">
               <label v-if="swap.on" class="pick">
@@ -511,9 +523,16 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
       </div>
 
       <EmptyState v-if="!matches.length" :icon="Shuffle" title="No matches" message="This event has no published matches." />
-      <p v-else-if="!visible.length" class="card p-6 text-center text-cocoa m-0">Nobody matches that search.</p>
-      <ul v-else class="m-0 p-0 list-none flex flex-col gap-2.5">
-        <li v-for="m in visible" :key="m.id" class="card pair">
+      <MatchLoopDiagram v-else :matches="matches" :highlight="highlightId" @highlight="highlightId = $event" />
+      <p v-if="matches.length && !visible.length" class="card p-6 text-center text-cocoa m-0">Nobody matches that search.</p>
+      <ul v-else-if="matches.length" class="m-0 p-0 list-none flex flex-col gap-2.5">
+        <li
+          v-for="m in visible"
+          :key="m.id"
+          class="card pair"
+          :class="{ 'is-highlighted': highlightId === m.id }"
+          v-on="highlightHandlers(m.id)"
+        >
           <div class="pair-main">
             <div class="people">
               <PersonLink :user="m.giver" :size="34" class="person" />
@@ -569,6 +588,10 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
 </template>
 
 <style scoped>
+.pair.is-highlighted {
+  border-color: var(--pink);
+  box-shadow: 0 0 0 2px var(--pink-soft);
+}
 .rules {
   margin: 16px 0 0;
   padding-left: 20px;
