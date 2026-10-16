@@ -286,3 +286,30 @@ demo artist a bio and two or three social handles so the public profile pages ha
 No API behind these: `client/src/utils/calendar.js` builds `.ics` files for deadlines (`eventCalendarEntries(event)`,
 `buildIcs(entries)`, `downloadIcs(filename, entries)`); `client/src/utils/eventTemplates.js` holds event presets (Secret Santa,
 Valentine swap, seasonal trade, art trade); `client/src/utils/social.js` turns saved social handles into profile links.
+
+## Safety, social and the museum
+
+### Site roles (`shared/permissions.mjs`)
+Roles are `user`, `moderator` and `admin`. `requirePermission('chat.logs')` (middleware/auth.js) guards each admin route; the app uses `can(user, permission)` to choose which admin tabs to show. Moderators review reports, read and moderate museum chat, look up accounts and see the audit log. Only admins ban people, change roles or moderate events. `/api/auth/me` returns the user's `permissions`.
+
+### Reports: `routes/report-router.js` and `/api/admin/reports`
+`POST /api/reports {targetType, targetId, reason, details}` flags a gift, profile, character or event. Moderators and admins are notified, and they close reports at `PATCH /api/admin/reports/:id`.
+
+### Following and friends: `routes/user-router.js`, `routes/friends-router.js`
+- `POST` or `DELETE /api/users/:username/follow` follows or unfollows someone. Two people who follow each other are friends.
+- `GET /api/friends` returns `{ friends, followers, following }`. Each entry has `online: { label, link }` when that person is in the museum.
+
+### The museum: `routes/museum-router.js`, `routes/museum-rooms.js`
+- `GET /api/museum` lists the wings, one per finished public exchange. Only gifts that both the artist and the recipient chose to show are included.
+- `GET /api/museum/:eventId` returns one wing's artworks.
+- Each finished exchange also has a members-only gallery, built from the reveal at `/events/:id/museum`.
+- Rooms are shared by polling (there are no sockets on serverless):
+  - `GET` or `POST /api/museum/rooms/:kind/:eventId/:room/sync` saves where you stand (`Presence`, which expires on its own) and returns who else is there plus new chat;
+  - `POST .../chat` says something;
+  - `POST /api/museum/rooms/leave` removes your presence.
+- Chat rules (commands, emotes, cooldowns, repeats) live in `shared/chat.mjs` and are enforced on both sides.
+- Messages are kept in `ChatMessage` for the moderation logs: `GET /api/admin/chat`, `POST /api/admin/chat/:id/hide|unhide`, and `POST /api/admin/users/:id/mute|unmute`.
+- The client side lives in `client/src/museum/` (isometric maths, A* pathfinding, layout, sync) and `client/src/components/museum/`.
+
+### Browser tests
+`cd client && pnpm test:e2e` uses Playwright to run a whole exchange and a museum visit in demo mode. The first time on a machine, run `pnpm exec playwright install chromium`.
