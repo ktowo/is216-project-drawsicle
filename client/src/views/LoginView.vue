@@ -1,12 +1,14 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, nextTick } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
-import { LogIn, Mail, Lock, Loader2, FlaskConical } from 'lucide-vue-next';
+import { LogIn, Mail, Lock, Loader2, FlaskConical, X } from 'lucide-vue-next';
 import AuthLayout from '@/components/AuthLayout.vue';
 import TextField from '@/components/TextField.vue';
 import GoogleButton from '@/components/GoogleButton.vue';
 import DiscordButton from '@/components/DiscordButton.vue';
 import OrDivider from '@/components/ui/OrDivider.vue';
+import UserAvatar from '@/components/UserAvatar.vue';
+import { recentLogins, rememberLogin, forgetLogin, rememberPreference, setRememberPreference } from '@/utils/recentLogins';
 import { login } from '@/stores/auth';
 import { toast } from '@/stores/toast';
 import { api, isMockMode } from '@/api';
@@ -41,6 +43,9 @@ function providerError(code) {
 
 const email = ref('');
 const password = ref('');
+const remember = ref(rememberPreference());
+// Accounts that ticked "Remember me" here before: one click fills in the email
+const recent = ref(recentLogins());
 const loading = ref(false);
 const error = ref(providerError(route.query.error));
 const providers = ref({ google: false, discord: false });
@@ -57,6 +62,18 @@ onMounted(async () => {
   }
 });
 
+function pickAccount(account) {
+  email.value = account.email;
+  error.value = '';
+  nextTick(() => document.getElementById('login-password')?.focus());
+}
+
+function forget(account) {
+  forgetLogin(account.email);
+  recent.value = recentLogins();
+  if (email.value === account.email) email.value = '';
+}
+
 function fillDemo() {
   email.value = DEMO.email;
   password.value = DEMO.password;
@@ -71,7 +88,10 @@ async function submit() {
 
   loading.value = true;
   try {
-    const { reactivated } = await login(email.value.trim(), password.value);
+    const { user, reactivated } = await login(email.value.trim(), password.value, { remember: remember.value });
+    setRememberPreference(remember.value);
+    if (remember.value) rememberLogin(user);
+    else forgetLogin(user.email);
     if (reactivated) toast.success('Welcome back, your account is active again.');
     router.replace(redirectTo.value);
   } catch (e) {
@@ -101,6 +121,24 @@ async function submit() {
       <OrDivider />
     </template>
 
+    <section v-if="recent.length" class="quick" aria-labelledby="quick-title">
+      <h2 id="quick-title" class="quick-title">Log in as</h2>
+      <ul class="quick-list">
+        <li v-for="a in recent" :key="a.email" class="quick-item" :class="{ on: email === a.email }">
+          <button type="button" class="quick-pick" @click="pickAccount(a)">
+            <UserAvatar :user="{ displayName: a.displayName || a.email, avatarUrl: a.avatarUrl }" :size="34" />
+            <span class="min-w-0">
+              <span class="quick-name">{{ a.displayName || a.email }}</span>
+              <span class="quick-email">{{ a.email }}</span>
+            </span>
+          </button>
+          <button type="button" class="quick-forget" :aria-label="`Forget ${a.email} on this device`" title="Forget on this device" @click="forget(a)">
+            <X :size="15" aria-hidden="true" />
+          </button>
+        </li>
+      </ul>
+    </section>
+
     <form novalidate @submit.prevent="submit">
       <TextField
         v-model="email"
@@ -116,6 +154,7 @@ async function submit() {
         label="Password"
         type="password"
         :icon="Lock"
+        id="login-password"
         placeholder="••••••••"
         autocomplete="current-password"
         required
@@ -124,6 +163,14 @@ async function submit() {
           <RouterLink to="/forgot-password" class="aside-link">Forgot password?</RouterLink>
         </template>
       </TextField>
+
+      <label class="remember">
+        <input v-model="remember" type="checkbox" />
+        <span>
+          Remember me
+          <span class="remember-hint">{{ remember ? 'Stay logged in for 30 days, with quick login on this device.' : 'Log out when the browser closes.' }}</span>
+        </span>
+      </label>
 
       <p v-if="error" class="alert alert-error" role="alert">{{ error }}</p>
 
@@ -143,6 +190,105 @@ async function submit() {
 </template>
 
 <style scoped>
+.quick {
+  margin-bottom: 20px;
+}
+.quick-title {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.quick-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.quick-item {
+  display: flex;
+  align-items: center;
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.quick-item.on,
+.quick-item:hover {
+  border-color: var(--pink);
+}
+.quick-pick {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.quick-name,
+.quick-email {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quick-name {
+  font-weight: 700;
+}
+.quick-email {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.quick-forget {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin-right: 6px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.quick-forget:hover,
+.quick-forget:focus-visible {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.quick-pick:focus-visible {
+  outline: 3px solid var(--pink);
+  outline-offset: -3px;
+  border-radius: 12px;
+}
+.remember {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.remember input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--pink-dark);
+}
+.remember-hint {
+  display: block;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
 .aside-link {
   font-size: 0.95rem;
 }

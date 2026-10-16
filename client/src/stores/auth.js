@@ -35,8 +35,9 @@ export async function refreshUser() {
 }
 
 // -> { user, reactivated } (reactivated is true when this login woke up a deactivated account)
-export async function login(email, password) {
-  const { user, reactivated } = await api('/auth/login', { method: 'POST', body: { email, password } });
+// remember: stay logged in for 30 days (true) or until the browser closes (false)
+export async function login(email, password, { remember } = {}) {
+  const { user, reactivated } = await api('/auth/login', { method: 'POST', body: { email, password, remember } });
   resetNotifications();
   auth.user = user;
   auth.checked = true;

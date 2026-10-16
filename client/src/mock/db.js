@@ -363,9 +363,19 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
 
 // ---------- Session ----------
 
+// "Remember me" keeps the demo session in localStorage; otherwise it lives in sessionStorage
+// and ends with the browser (where there's no sessionStorage, as in tests, it uses kv())
+function browserSession() {
+  try {
+    return globalThis.sessionStorage || null;
+  } catch {
+    return null;
+  }
+}
+
 export function getSession() {
   try {
-    const raw = kv().getItem(SESSION_KEY);
+    const raw = kv().getItem(SESSION_KEY) || browserSession()?.getItem(SESSION_KEY);
     const session = raw ? JSON.parse(raw) : null;
     return session && typeof session.userId === 'string' ? session : null;
   } catch {
@@ -373,14 +383,19 @@ export function getSession() {
   }
 }
 
-export function setSession(user) {
-  kv().setItem(SESSION_KEY, JSON.stringify({ userId: user.id, version: user.sessionVersion || 0 }));
+export function setSession(user, { remember } = {}) {
+  const value = JSON.stringify({ userId: user.id, version: user.sessionVersion || 0 });
+  const forNow = remember === false ? browserSession() : null;
+  clearSession();
+  (forNow || kv()).setItem(SESSION_KEY, value);
 }
 
 export function clearSession() {
-  try {
-    kv().removeItem(SESSION_KEY);
-  } catch {
-    /* already gone */
+  for (const store of [kv(), browserSession()]) {
+    try {
+      store?.removeItem(SESSION_KEY);
+    } catch {
+      /* already gone */
+    }
   }
 }
