@@ -19,34 +19,44 @@ const SLOTS = [
 export const PER_ROOM = SLOTS.length;
 
 export const FRAME = { width: 1.4, height: 78, bottom: 40 };
-const DOOR_AT = 9.15;
+// The doors stand just in from the front corners, leaving the corners for plants
+const DOOR_AT = 8.8;
 
-// Furniture: each piece covers some tiles that nobody can walk on. Benches and chairs have
+// Furniture: each piece covers some tiles that nobody can walk on. Benches have
 // seats (one per tile): click one and your avatar walks over and sits down, facing that way.
-// Two benches make an L in the middle of the room, one facing each wall of pictures; a pair of
-// chairs sits by the right-hand side looking across the room; the sculpture is the centrepiece.
-//   facing: 'nw' looks at the left wall, 'ne' at the right wall, 'sw' / 'se' towards the viewer
+//   facing: 'nw' looks at the left wall, 'ne' at the right wall, 'se' / 'sw' towards the viewer
+//
+// The middle of the room is an L of benches, each arm two rows back to back: the outer row
+// looks at a wall of pictures, the inner row at the sculpture inside the L. A plant fills the
+// outer corner and a lamp table the inner one. Plants stand in the left and right corners, the
+// guestbook by the front right, and the cats have a bed by the front left.
 const FURNITURE = [
-  { kind: 'bench', tiles: [{ x: 3, y: 4 }, { x: 3, y: 5 }, { x: 3, y: 6 }], facing: 'nw' },
-  { kind: 'bench', tiles: [{ x: 4, y: 3 }, { x: 5, y: 3 }, { x: 6, y: 3 }], facing: 'ne' },
-  { kind: 'chair', tiles: [{ x: 8, y: 4 }], facing: 'sw' },
-  { kind: 'chair', tiles: [{ x: 8, y: 6 }], facing: 'sw' },
-  { kind: 'pedestal', tiles: [{ x: 5, y: 5 }] },
-  { kind: 'plant', tiles: [{ x: 0, y: 0 }] },
-  { kind: 'plant', tiles: [{ x: 8, y: 5 }] },
-  { kind: 'plant', tiles: [{ x: 9, y: 9 }] },
+  { kind: 'bench', tiles: [{ x: 3, y: 4 }, { x: 3, y: 5 }, { x: 3, y: 6 }], facing: 'nw', backToBack: true },
+  { kind: 'bench', tiles: [{ x: 4, y: 5 }, { x: 4, y: 6 }], facing: 'se', backToBack: true },
+  { kind: 'bench', tiles: [{ x: 4, y: 3 }, { x: 5, y: 3 }, { x: 6, y: 3 }], facing: 'ne', backToBack: true },
+  { kind: 'bench', tiles: [{ x: 5, y: 4 }, { x: 6, y: 4 }], facing: 'sw', backToBack: true },
+  { kind: 'plant', tiles: [{ x: 3, y: 3 }] },
+  { kind: 'lamp', tiles: [{ x: 4, y: 4 }] },
+  { kind: 'pedestal', tiles: [{ x: 6, y: 6 }] },
+  { kind: 'plant', tiles: [{ x: 0, y: 9 }] },
+  { kind: 'plant', tiles: [{ x: 9, y: 0 }] },
+  { kind: 'guestbook', tiles: [{ x: 9, y: 6 }] },
+  { kind: 'catbed', tiles: [{ x: 6, y: 9 }] },
 ];
-// A rug in the middle, with the sculpture on it
-export const RUG = { x: 4, y: 4, w: 3, h: 3 };
+// A rug inside the L, with the sculpture in the middle of it
+export const RUG = { x: 5, y: 5, w: 3, h: 3 };
+// Where the lamp stands (it glows in darker rooms)
+export const LAMP = { x: 4, y: 4 };
+export const SCULPTURE = { x: 6, y: 6 };
+export const CAT_BED = { x: 6, y: 9 };
+export const GUESTBOOK_STAND = { x: 9, y: 6 };
 
 export const SPAWN = { x: 5, y: 8 };
 
-// Every seat: one per tile of each bench or chair. depth is where its piece of furniture sorts
-// among the people (see furniture.js), so someone sitting there is drawn on top of it.
-export const SEATS = FURNITURE.filter((p) => p.facing).flatMap((p) => {
-  const depth = Math.max(...p.tiles.map((t) => t.x + t.y)) + 0.5;
-  return p.tiles.map((t) => ({ x: t.x, y: t.y, facing: p.facing, kind: p.kind, depth }));
-});
+// Every seat: one per tile of each bench
+export const SEATS = FURNITURE.filter((p) => p.facing).flatMap((p) =>
+  p.tiles.map((t) => ({ x: t.x, y: t.y, facing: p.facing, kind: p.kind }))
+);
 
 // The tile in front of a picture, and which way you face to look at it
 function viewSpot(wall, at) {
@@ -71,11 +81,12 @@ export function buildRoom(artworks, room = 0) {
 
   // The right-hand door leads on to the next room, the left-hand one back to the previous
   const doors = [];
-  if (index > 0) doors.push({ to: index - 1, label: 'Previous room', wall: 'left', at: DOOR_AT, tile: { x: 0, y: 9 }, facing: 'nw' });
-  if (index < count - 1) doors.push({ to: index + 1, label: 'Next room', wall: 'right', at: DOOR_AT, tile: { x: 9, y: 0 }, facing: 'ne' });
+  if (index > 0) doors.push({ to: index - 1, label: 'Previous room', wall: 'left', at: DOOR_AT, tile: { x: 0, y: 8 }, facing: 'nw' });
+  if (index < count - 1) doors.push({ to: index + 1, label: 'Next room', wall: 'right', at: DOOR_AT, tile: { x: 8, y: 0 }, facing: 'ne' });
 
   const blocked = new Set();
   for (const piece of FURNITURE) for (const t of piece.tiles) blocked.add(`${t.x},${t.y}`);
+  const inside = (x, y) => x >= 0 && y >= 0 && x < ROOM_W && y < ROOM_D;
 
   return {
     index,
@@ -87,7 +98,9 @@ export function buildRoom(artworks, room = 0) {
     furniture: FURNITURE,
     seats: SEATS,
     blocked,
-    isOpen: (x, y) => x >= 0 && y >= 0 && x < ROOM_W && y < ROOM_D && !blocked.has(`${x},${y}`),
+    isOpen: (x, y) => inside(x, y) && !blocked.has(`${x},${y}`),
+    // Cats go where people go, and into their bed
+    isOpenForCats: (x, y) => inside(x, y) && (!blocked.has(`${x},${y}`) || (x === CAT_BED.x && y === CAT_BED.y)),
   };
 }
 

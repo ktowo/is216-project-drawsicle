@@ -7,6 +7,7 @@ import LoadingBlock from '@/components/ui/LoadingBlock.vue';
 import ErrorBlock from '@/components/ui/ErrorBlock.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import MuseumExperience from '@/components/museum/MuseumExperience.vue';
+import DoodleBackdrop from '@/components/museum/DoodleBackdrop.vue';
 import { api, assetUrl } from '@/api';
 import { formatDate, pluralize } from '@/utils/format';
 
@@ -53,7 +54,8 @@ watch(wingId, load, { immediate: true });
 </script>
 
 <template>
-  <main id="main" class="page" tabindex="-1">
+  <main id="main" class="page museum-page" tabindex="-1">
+    <DoodleBackdrop />
     <LoadingBlock v-if="loading" :label="wingId ? 'Opening the doors…' : 'Opening the museum…'" />
     <template v-else-if="notFound">
       <PageHeader title="The museum" back="/museum" back-label="Museum lobby" />
@@ -80,7 +82,12 @@ watch(wingId, load, { immediate: true });
       >
         <RouterLink :to="`/events/${wing.event.id}`" class="btn btn-outline btn-sm">About the exchange</RouterLink>
       </PageHeader>
-      <MuseumExperience :items="wing.artworks" :place="{ kind: 'wing', eventId: wing.event.id }" class="mt-6" />
+      <MuseumExperience
+        :items="wing.artworks"
+        :place="{ kind: 'wing', eventId: wing.event.id }"
+        :theme="wing.event.museumTheme"
+        class="mt-6"
+      />
       <p class="hint mt-4">
         Only gifts that both the artist and the person they made it for chose to show on their profiles hang here.
       </p>
@@ -126,6 +133,11 @@ watch(wingId, load, { immediate: true });
 </template>
 
 <style scoped>
+/* The page sits over the doodles that fill the screen */
+.museum-page > :not(.doodles) {
+  position: relative;
+  z-index: 1;
+}
 .lobby-head {
   display: flex;
   align-items: center;
