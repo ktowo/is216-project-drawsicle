@@ -1,36 +1,47 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, useId } from 'vue';
-import { ArrowLeft, ArrowRight, MousePointerClick } from 'lucide-vue-next';
+import { ArrowLeft, ArrowRight, MousePointerClick, Lightbulb, LightbulbOff } from 'lucide-vue-next';
 import MuseumBackdrop from './MuseumBackdrop.vue';
+import MuseumFurniture from './MuseumFurniture.vue';
+import MuseumLights from './MuseumLights.vue';
 import PixelAvatar from './PixelAvatar.vue';
+import PixelCat from './PixelCat.vue';
 import ChatBubbles from './ChatBubbles.vue';
 import MuseumToolbar from './MuseumToolbar.vue';
 import PersonCard from './PersonCard.vue';
 import PixelHead from './PixelHead.vue';
+import GuestbookPanel from './GuestbookPanel.vue';
 import FriendsPanel from '@/components/social/FriendsPanel.vue';
-import { isMockMode } from '@/api';
+import { api, isMockMode } from '@/api';
 import { iso, screenToTile, facingFor, WALL_H } from '@/museum/iso';
 import { findPath, nearestOpen } from '@/museum/pathfinding';
-import { buildRoom, arrivalTile } from '@/museum/layout';
-import { boxFaces, depthOf } from '@/museum/furniture';
+import { buildRoom, arrivalTile, CAT_BED } from '@/museum/layout';
+import { sliceFurniture, tileDepth } from '@/museum/furniture';
+import { roomLights, brightnessAt } from '@/museum/lights';
+import { roomCats, catPlan, petReaction, MOODS, CAT_SLOT_MS } from '@/museum/cats';
 import { lookFor, CHATTER } from '@/museum/looks';
 import { useRoomSync } from '@/museum/sync';
 import { formatTime } from '@/utils/format';
-import { EMOTES } from '@shared/chat.mjs';
+import { EMOTES, PET_EMOTE } from '@shared/chat.mjs';
+import { themeFor } from '@shared/museum-themes.mjs';
 
 // One room of the museum, drawn isometrically. Click (or tap) the floor to walk there; click a
-// picture to walk up to it and look (emits `view`); click a bench or chair to sit down. The arrow
-// keys walk too, and the pictures and doors are buttons you can Tab to.
+// picture to walk up to it and look (emits `view`); click a bench to sit down, a cat to pet it,
+// or the stand by the entrance to read the guestbook. The arrow keys walk too, and the pictures
+// and doors are buttons you can Tab to.
 //
 // With `place` ({ kind, eventId }) the room is shared: you see everyone else who's in it, where
 // they stand and what they say, and you can chat (museum/sync.js). Without it (or in the demo)
 // the event's artists wander about instead. With reduced motion, people move without walking.
+//
+// `theme` is the event's room design (shared/museum-themes.mjs); 'auto' changes it room by room.
 const props = defineProps({
   artworks: { type: Array, required: true }, // gallery items: { submission, giver, recipient, event? }
   room: { type: Number, default: 0 }, // v-model:room
   me: { type: Object, default: null }, // the signed-in user, or null for a guest
   visitors: { type: Array, default: () => [] }, // artists who wander about when the room isn't shared
   place: { type: Object, default: null }, // { kind: 'wing' | 'gallery', eventId }
+  theme: { type: String, default: 'auto' },
 });
 const emit = defineEmits(['view', 'update:room']);
 
@@ -42,6 +53,30 @@ const layout = computed(() => buildRoom(props.artworks, props.room));
 const calm = ref(false);
 let motionQuery = null;
 const onMotionChange = () => (calm.value = Boolean(motionQuery?.matches));
+
+// ---------- The room's design and light ----------
+const roomTheme = computed(() => themeFor(props.theme, layout.value.index));
+// Darker designs can be lit up for anyone who finds them hard to see (remembered here only)
+const LIGHTS_KEY = 'drawsicle:museum:lights';
+function savedLights() {
+  try {
+    return localStorage.getItem(LIGHTS_KEY) === 'on';
+  } catch {
+    return false;
+  }
+}
+const lightsOn = ref(savedLights());
+watch(lightsOn, (on) => {
+  try {
+    localStorage.setItem(LIGHTS_KEY, on ? 'on' : 'off');
+  } catch {
+    // Not remembered; nothing else changes
+  }
+});
+const designLights = computed(() => roomLights(layout.value, roomTheme.value));
+const lights = computed(() => (lightsOn.value ? roomLights(layout.value, roomTheme.value, { lightsOn: true }) : designLights.value));
+const canDim = computed(() => designLights.value.mode.dark > 0);
+const litAt = (x, y) => brightnessAt(lights.value, x, y);
 
 // ---------- The scene's size ----------
 const view = computed(() => {
@@ -57,7 +92,9 @@ const view = computed(() => {
 const SPEED = 3.6; // tiles a second
 const OTHERS_SPEED = 3.2;
 const NPC_SPEED = 1.7;
+const CAT_SPEED = 1.5;
 const EMOTE_MS = 2800;
+const DANCE_MS = 10 * 1000; // a dance stops on its own after this (or when you walk, sit or /stop)
 
 function walker(extra) {
   return reactive({
@@ -68,6 +105,7 @@ function walker(extra) {
     walking: false,
     sitting: false,
     dancing: false,
+    danceUntil: 0,
     emote: '',
     emoteUntil: 0,
     step: 0,
@@ -113,6 +151,7 @@ function placeEveryone() {
   cameFrom = null;
   others.splice(0);
   bubbles.value = [];
+  placeCats();
 
   // Up to four of the artists wander about, starting on free tiles spread round the room
   visitors.splice(0);
@@ -170,32 +209,39 @@ function walkTo(target, action = null) {
   sync?.now();
 }
 
+// Walk to a free tile next to `target` (the nearest one you can reach, or the one in front of
+// it when `front` says which way that is), then do `action`
+function approach(target, action, front = null) {
+  const here = tileOf(player);
+  const around = [];
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      const t = { x: target.x + dx, y: target.y + dy };
+      if ((dx || dy) && layout.value.isOpen(t.x, t.y)) {
+        const ahead = front && dx === front[0] && dy === front[1] ? -10 : 0;
+        around.push({ ...t, score: ahead + Math.hypot(t.x - here.x, t.y - here.y) });
+      }
+    }
+  }
+  around.sort((a, b) => a.score - b.score);
+  const spot = around.find((t) => findPath(here, t, layout.value.isOpen) !== null);
+  if (spot) walkTo(spot, action);
+  return Boolean(spot);
+}
+
 // Which way is "in front" of a seat (the way you face when sitting in it)
 const FRONT = { sw: [0, 1], se: [1, 0], ne: [0, -1], nw: [-1, 0] };
 function seatTaken(seat) {
   return [...others, ...visitors].some((w) => w.sitting && Math.round(w.x) === seat.x && Math.round(w.y) === seat.y);
 }
 function goSit(seat) {
+  if (!seat) return;
   if (seatTaken(seat)) {
     say(player, "Someone's sitting there");
     return;
   }
   if (player.sitting && Math.round(player.x) === seat.x && Math.round(player.y) === seat.y) return;
-  const [fx, fy] = FRONT[seat.facing];
-  const here = tileOf(player);
-  const around = [];
-  for (let dx = -1; dx <= 1; dx++) {
-    for (let dy = -1; dy <= 1; dy++) {
-      const t = { x: seat.x + dx, y: seat.y + dy };
-      if ((dx || dy) && layout.value.isOpen(t.x, t.y)) {
-        const front = dx === fx && dy === fy ? -10 : 0;
-        around.push({ ...t, score: front + Math.hypot(t.x - here.x, t.y - here.y) });
-      }
-    }
-  }
-  around.sort((a, b) => a.score - b.score);
-  const spot = around.find((t) => findPath(here, t, layout.value.isOpen) !== null);
-  if (spot) walkTo(spot, { type: 'seat', seat });
+  approach(seat, { type: 'seat', seat }, FRONT[seat.facing]);
 }
 
 function sitDown(seat) {
@@ -223,6 +269,12 @@ function arrive() {
   } else if (action.type === 'seat') {
     if (seatTaken(action.seat)) say(player, "Someone's sitting there");
     else sitDown(action.seat);
+  } else if (action.type === 'cat') {
+    petCat(action.cat);
+  } else if (action.type === 'guestbook') {
+    player.facing = facingFor(action.stand.x - player.x, action.stand.y - player.y, player.facing);
+    openPanel('guestbook');
+    sync?.now();
   }
 }
 
@@ -231,8 +283,7 @@ function onCommand(command) {
     const seat = seatAt(Math.round(player.x), Math.round(player.y));
     Object.assign(player, { path: [], walking: false, sitting: true, dancing: false, facing: seat ? seat.facing : player.facing });
   } else if (command === 'stop') {
-    player.dancing = false;
-    player.emote = '';
+    Object.assign(player, { dancing: false, danceUntil: 0, emote: '', emoteUntil: 0 });
   } else {
     player.sitting = false;
   }
@@ -293,16 +344,127 @@ function wander(v, now) {
   if (Math.random() < 0.3) say(v, CHATTER[Math.floor(Math.random() * CHATTER.length)]);
 }
 
+// ---------- The cats ----------
+const cats = reactive([]);
+let catTiles = [];
+const catPlace = () => (props.place ? `${props.place.kind}:${props.place.eventId}` : 'museum');
+const catSlot = () => Math.floor(Date.now() / CAT_SLOT_MS);
+const catStats = ref({}); // key -> { pets, lastPetBy }
+const hoveredCat = ref(null);
+
+function placeCats() {
+  cats.splice(0);
+  const found = roomCats(layout.value);
+  catTiles = found.tiles;
+  const slot = catSlot();
+  found.cats.forEach((cat, i) => {
+    const plan = catPlan(catPlace(), cat, slot, catTiles);
+    cats.push(
+      walker({
+        cat,
+        x: plan.target.x,
+        y: plan.target.y,
+        facing: ['sw', 'se'][i % 2],
+        slot,
+        plan,
+        state: plan.activity,
+        mood: plan.mood,
+        moodUntil: 0,
+        holdUntil: 0,
+        pets: [],
+        petted: false,
+        petUntil: 0,
+        // Mood bubbles now and then, each cat at its own pace
+        nextChat: performance.now() + 2500 + i * 3500,
+      })
+    );
+  });
+}
+
+function moveCat(c, now) {
+  const slot = catSlot();
+  if (slot === c.slot || now < c.holdUntil) return;
+  c.slot = slot;
+  c.plan = catPlan(catPlace(), c.cat, slot, catTiles);
+  if (now > c.moodUntil) c.mood = c.plan.mood;
+  const here = tileOf(c);
+  const route = findPath(here, c.plan.target, layout.value.isOpenForCats);
+  if (!route || !route.length) return;
+  if (calm.value) Object.assign(c, { x: c.plan.target.x, y: c.plan.target.y, path: [] });
+  else c.path = route;
+}
+
+function updateCat(c, now, dt) {
+  advance(c, CAT_SPEED, dt);
+  moveCat(c, now);
+  if (c.petted && now > c.petUntil) c.petted = false;
+  c.state = c.walking ? 'walk' : c.petted ? 'sit' : c.plan.activity;
+  if (now > c.nextChat && !c.walking) {
+    c.nextChat = now + 9000 + Math.random() * 8000;
+    say(c, MOODS[c.mood]?.emoji || '😺', 2600);
+  }
+}
+
+// Someone (`by`, a walker) pets a cat: it shows how it feels about that, and runs off if it's
+// had too much fuss for now
+function catReacts(c, by) {
+  const now = performance.now();
+  c.pets = [...c.pets.filter((t) => now - t < 60 * 1000), now];
+  const reaction = petReaction(c.pets.slice(0, -1), now);
+  c.mood = reaction.mood;
+  c.moodUntil = now + 20 * 1000;
+  c.nextChat = now + 6000;
+  if (by) {
+    by.facing = facingFor(c.x - by.x, c.y - by.y, by.facing);
+    by.emote = PET_EMOTE;
+    by.emoteUntil = now + EMOTE_MS;
+    by.dancing = false;
+  }
+  if (reaction.mood === 'grumpy') {
+    say(c, `${reaction.bubble} ${reaction.say}`, 2400);
+    c.holdUntil = 0;
+    c.slot = -1; // off somewhere else straight away
+    return;
+  }
+  say(c, `${reaction.bubble} ${reaction.say}`, 2600);
+  Object.assign(c, { path: [], petted: true, petUntil: now + EMOTE_MS, holdUntil: now + 5000 });
+  if (by) c.facing = facingFor(by.x - c.x, by.y - c.y, c.facing);
+}
+
+const nextTo = (a, b) => Math.abs(Math.round(a.x) - Math.round(b.x)) <= 1 && Math.abs(Math.round(a.y) - Math.round(b.y)) <= 1;
+
+function goPet(c) {
+  if (nextTo(player, c) && !player.path.length) petCat(c);
+  else approach(tileOf(c), { type: 'cat', cat: c });
+}
+
+// In a shared room the pet goes through chat, so everyone sees it (and it's counted); the
+// reaction plays when the message comes back. Elsewhere, or if chat says no, it just happens here.
+function petCat(c) {
+  player.sitting = false;
+  if (shared.value && props.me) {
+    send(`/${PET_EMOTE} ${c.cat.key}`).catch(() => catReacts(c, player));
+  } else {
+    catReacts(c, player);
+  }
+}
+
+async function loadCatStats() {
+  try {
+    const { cats: list } = await api('/museum/rooms/cats');
+    catStats.value = Object.fromEntries(list.map((c) => [c.key, c]));
+  } catch {
+    // The counts are a nicety; the cats carry on without them
+  }
+}
+const petCount = (c) => catStats.value[c.cat.key]?.pets || 0;
+
+// ---------- The loop ----------
 let raf = 0;
 let last = 0;
 let onScreen = true;
 let observer = null;
-function tick(now) {
-  if (!onScreen) {
-    raf = 0;
-    last = 0;
-    return;
-  }
+function step(now) {
   const dt = last ? Math.min(0.05, (now - last) / 1000) : 0;
   last = now;
   if (advance(player, SPEED, dt) === 'stopped') arrive();
@@ -316,7 +478,8 @@ function tick(now) {
     advance(v, NPC_SPEED, dt);
     wander(v, now);
   }
-  for (const w of [player, ...others, ...visitors]) {
+  for (const c of cats) updateCat(c, now, dt);
+  for (const w of [player, ...others, ...visitors, ...cats]) {
     if (w.bubble && now > w.bubbleUntil) w.bubble = '';
     if (w.emote && now > w.emoteUntil) w.emote = '';
     if (w.dancing && !w.walking) {
@@ -329,10 +492,24 @@ function tick(now) {
     if (w.danceUntil && now > w.danceUntil) {
       w.dancing = false;
       w.danceUntil = 0;
+      if (w === player) sync?.now();
     }
   }
   // Chat bubbles drift up a row now and then, like a lift going up
   if (bubbles.value.length && now - lastShift > BUBBLE_DRIFT_MS) shiftBubbles(now);
+}
+function tick(now) {
+  if (!onScreen) {
+    raf = 0;
+    last = 0;
+    return;
+  }
+  try {
+    step(now);
+  } catch (e) {
+    // One bad frame mustn't freeze the room (people mid-walk, emotes that never end)
+    console.error(e);
+  }
   raf = requestAnimationFrame(tick);
 }
 
@@ -387,10 +564,12 @@ function screenLeft(w) {
   if (!w) return 50;
   const p = iso(w.x + 0.5, w.y + 0.5);
   const pct = ((p.x - view.value.minX) / (view.value.maxX - view.value.minX)) * 100;
-  return Math.min(88, Math.max(12, pct));
+  return Math.min(98, Math.max(2, pct));
 }
 
-function onMessages(list) {
+// history: the room's recent chat, fetched on walking in. It goes in the log (and very recent
+// lines pop up), but its emotes don't play again: they happened before you got here.
+function onMessages(list, { history = false } = {}) {
   for (const m of list) {
     if (seen.has(m.id)) continue;
     seen.add(m.id);
@@ -400,16 +579,18 @@ function onMessages(list) {
     if (Date.now() - new Date(m.createdAt).getTime() > NEW_ENOUGH_MS) continue;
     const speaker = mine ? player : others.find((o) => o.user.id === m.user.id);
     addBubble({ user: m.user, name: m.user.displayName, kind: m.kind, text: m.text, left: screenLeft(speaker) });
-    if (m.kind === 'emote' && m.emote && speaker) {
-      if (m.emote === 'dance') {
-        // Dancing goes on until you walk, sit down or type /stop
-        speaker.dancing = true;
-        speaker.sitting = false;
-        if (mine) sync?.now();
-      } else {
-        speaker.emote = m.emote;
-        speaker.emoteUntil = performance.now() + EMOTE_MS;
-      }
+    if (history || m.kind !== 'emote' || !m.emote) continue;
+    if (m.emote === PET_EMOTE) {
+      const cat = cats.find((c) => c.cat.key === m.target);
+      if (cat) catReacts(cat, speaker || null);
+      if (catStats.value[m.target]) catStats.value[m.target].pets++;
+    } else if (speaker && m.emote === 'dance') {
+      // A dance lasts a little while, or until you walk, sit down or type /stop
+      Object.assign(speaker, { dancing: true, sitting: false, danceUntil: performance.now() + DANCE_MS });
+      if (mine) sync?.now();
+    } else if (speaker) {
+      speaker.emote = m.emote;
+      speaker.emoteUntil = performance.now() + EMOTE_MS;
     }
   }
 }
@@ -455,13 +636,16 @@ async function send(text) {
   return message;
 }
 
-// ---------- Panels: your card, someone else's card, friends, the chat log ----------
-const panel = ref(''); // me | friends | log
+// ---------- Panels: your card, someone else's card, friends, the chat log, the guestbook ----------
+const panel = ref(''); // me | friends | log | guestbook
 const picked = ref(null); // someone clicked in the room: { user }
-function toggle(name) {
-  panel.value = panel.value === name ? '' : name;
+function openPanel(name) {
+  panel.value = name;
   picked.value = null;
-  if (panel.value === 'log') unread.value = 0;
+  if (name === 'log') unread.value = 0;
+}
+function toggle(name) {
+  openPanel(panel.value === name ? '' : name);
 }
 function pickPerson(w) {
   panel.value = '';
@@ -493,19 +677,11 @@ function onFloorClick(event) {
   if (tile) walkTo(tile);
 }
 
-function onFurnitureClick(piece, event) {
-  if (!piece.facing) {
-    onFloorClick(event);
-    return;
-  }
-  // A bench has a seat on each tile: take the one nearest the click
-  const p = toWorld(event);
-  const seats = layout.value.seats.filter((s) => piece.tiles.some((t) => t.x === s.x && t.y === s.y));
-  const nearest = (s) => {
-    const c = iso(s.x + 0.5, s.y + 0.5);
-    return p ? Math.hypot(c.x - p.x, c.y - 12 - p.y) : 0;
-  };
-  goSit([...seats].sort((a, b) => nearest(a) - nearest(b))[0]);
+// Each slice of a bench is one seat; the guestbook stand opens the guestbook
+function onFurnitureClick(slice, event) {
+  if (slice.piece.facing) goSit(seatAt(slice.tile.x, slice.tile.y));
+  else if (slice.kind === 'guestbook' && props.place) approach(slice.tile, { type: 'guestbook', stand: slice.tile });
+  else onFloorClick(event);
 }
 
 // The arrow keys walk across the screen: up goes back into the room, down comes forward
@@ -546,57 +722,8 @@ function onVisitorClick(v) {
 }
 
 // ---------- What gets drawn, nearest last ----------
-// Seat colours: [left side, right side, top]
-const COLOURS = {
-  bench: { seat: ['#8a5a3b', '#724830', '#b77d55'], back: ['#7d4f33', '#6a412a', '#a46d48'] },
-  chair: { seat: ['#c75b7f', '#a94a6b', '#ec8fb0'], back: ['#b84f72', '#9c3f5f', '#e07b9e'] },
-};
-
-// The backrest goes behind whoever sits, so it's on the side opposite the way the seat faces.
-// Seats facing away from the viewer ('nw', 'ne') have their backrest nearest us: that part is
-// drawn after the person sitting, so it covers their back like a real bench would.
-const BACK_THICKNESS = 0.3;
-function backrest(x0, y0, w, d, facing, height) {
-  const t = BACK_THICKNESS;
-  if (facing === 'sw') return boxFaces(x0, y0, w, t, height, 0.08);
-  if (facing === 'se') return boxFaces(x0, y0, t, d, height, 0.08);
-  if (facing === 'nw') return boxFaces(x0 + w - t, y0, t, d, height, 0.08);
-  return boxFaces(x0, y0 + d - t, w, t, height, 0.08);
-}
-
-const furniture = computed(() =>
-  layout.value.furniture.flatMap((piece, i) => {
-    const [t] = piece.tiles;
-    const depth = depthOf(piece);
-    if (piece.facing) {
-      const xs = piece.tiles.map((p) => p.x);
-      const ys = piece.tiles.map((p) => p.y);
-      const x0 = Math.min(...xs);
-      const y0 = Math.min(...ys);
-      const w = Math.max(...xs) - x0 + 1;
-      const d = Math.max(...ys) - y0 + 1;
-      const bench = piece.kind === 'bench';
-      const backInFront = piece.facing === 'nw' || piece.facing === 'ne';
-      return [
-        { key: `f${i}`, kind: piece.kind, part: 'seat', piece, depth, parts: boxFaces(x0, y0, w, d, bench ? 15 : 14, bench ? 0.16 : 0.2) },
-        {
-          key: `f${i}-back`,
-          kind: piece.kind,
-          part: 'back',
-          piece,
-          depth: backInFront ? depth + 0.6 : depth - 0.01,
-          parts: backrest(x0, y0, w, d, piece.facing, bench ? 30 : 34),
-        },
-      ];
-    }
-    const c = iso(t.x + 0.5, t.y + 0.5);
-    const parts =
-      piece.kind === 'plant'
-        ? { pot: boxFaces(t.x, t.y, 1, 1, 18, 0.3), cx: c.x, cy: c.y }
-        : { stand: boxFaces(t.x, t.y, 1, 1, 36, 0.2), cx: c.x, cy: c.y };
-    return [{ key: `f${i}`, kind: piece.kind, part: 'whole', piece, depth, parts }];
-  })
-);
+// Furniture comes in one-tile slices so it sorts properly among the people (museum/furniture.js)
+const furniture = computed(() => sliceFurniture(layout.value.furniture));
 
 const people = computed(() => [
   { key: 'me', self: true, w: player, look: myLook.value, name: myName.value },
@@ -607,18 +734,32 @@ const people = computed(() => [
 const hoveredName = ref(null);
 const sprites = computed(() =>
   [
-    ...furniture.value.map((f) => ({ ...f, type: 'furniture' })),
+    ...furniture.value.map((f) => ({ ...f, type: 'furniture', dim: litAt(f.tile.x + 0.5, f.tile.y + 0.5) })),
     ...people.value.map((p) => {
       const at = iso(p.w.x + 0.5, p.w.y + 0.5);
-      // On a bench or chair they sit at seat height, in front of it
+      // On a bench they sit at seat height
       const onSeat = p.w.sitting && !p.w.walking && seatAt(Math.round(p.w.x), Math.round(p.w.y));
       return {
         ...p,
         type: 'person',
-        // Sitting: just after the seat, before a backrest that's nearer the viewer
-        depth: onSeat ? onSeat.depth + 0.3 : p.w.x + p.w.y + 1,
+        // Sitting: just after the seat, so before a backrest that's nearer the viewer
+        depth: onSeat ? tileDepth(onSeat.x, onSeat.y) + 0.01 : p.w.x + p.w.y + 1,
         sx: at.x,
         sy: at.y - (onSeat ? 12 : 0),
+        dim: litAt(p.w.x + 0.5, p.w.y + 0.5),
+      };
+    }),
+    ...cats.map((c) => {
+      const at = iso(c.x + 0.5, c.y + 0.5);
+      const inBed = !c.walking && Math.round(c.x) === CAT_BED.x && Math.round(c.y) === CAT_BED.y;
+      return {
+        key: `cat-${c.cat.key}`,
+        type: 'cat',
+        c,
+        depth: c.x + c.y + 1 + (inBed ? 0.01 : 0),
+        sx: at.x,
+        sy: at.y - (inBed ? 6 : 0),
+        dim: litAt(c.x + 0.5, c.y + 0.5),
       };
     }),
   ].sort((a, b) => a.depth - b.depth)
@@ -628,7 +769,13 @@ const status = computed(() => {
   if (hoverInfo.value?.kind === 'frame') return `#${hoverInfo.value.number}: ${hoverInfo.value.text}`;
   if (hoverInfo.value?.kind === 'door') return `${hoverInfo.value.text}. Click to walk through.`;
   if (hoveredName.value) return `${hoveredName.value}. Click to see their card.`;
-  return 'Click the floor to walk, a picture to look closer, or a bench to sit down.';
+  const c = hoveredCat.value;
+  if (c) {
+    const mood = MOODS[c.mood] || MOODS.content;
+    const pets = petCount(c);
+    return `${c.cat.name} is feeling ${mood.label} ${mood.emoji}${pets ? `, petted ${pets.toLocaleString()} ${pets === 1 ? 'time' : 'times'}` : ''}. Loves ${c.cat.likes}. Click to pet.`;
+  }
+  return 'Click the floor to walk, a picture to look closer, a bench to sit down, or a cat to pet it.';
 });
 const peopleHere = computed(() => others.length);
 
@@ -647,6 +794,7 @@ onMounted(() => {
   onMotionChange();
   motionQuery?.addEventListener?.('change', onMotionChange);
   placeEveryone();
+  loadCatStats();
   raf = requestAnimationFrame(tick);
   // Nothing to animate while the room is scrolled away: stop the loop, start it again on return
   if (typeof IntersectionObserver !== 'undefined' && svgRef.value) {
@@ -667,7 +815,7 @@ defineExpose({ walkTo });
 </script>
 
 <template>
-  <div class="museum-room">
+  <div class="museum-room" :style="{ background: roomTheme.void }">
     <div class="stage">
       <svg
         ref="svgRef"
@@ -681,9 +829,11 @@ defineExpose({ walkTo });
         @pointerleave="hoverTile = null"
         @keydown="onKeydown"
       >
-        <rect :x="view.minX" :y="view.minY" :width="view.maxX - view.minX" :height="view.maxY - view.minY" class="void" />
         <MuseumBackdrop
           :room="layout"
+          :theme="roomTheme"
+          :lights="lights"
+          :view="view"
           :hover-tile="hoverTile"
           :destination="destination"
           @frame="(f) => walkTo(f.view, { type: 'frame', frame: f })"
@@ -696,32 +846,32 @@ defineExpose({ walkTo });
           <g
             v-if="s.type === 'furniture'"
             class="furniture"
-            :class="{ seat: s.piece.facing }"
+            :class="{ seat: s.piece.facing, stand: s.kind === 'guestbook' }"
             aria-hidden="true"
-            @click.stop="onFurnitureClick(s.piece, $event)"
+            @click.stop="onFurnitureClick(s, $event)"
           >
-            <!-- Seats: wooden benches and pink chairs, each drawn as a seat and a backrest -->
-            <template v-if="s.part === 'seat' || s.part === 'back'">
-              <polygon :points="s.parts.left" :fill="COLOURS[s.kind][s.part][0]" />
-              <polygon :points="s.parts.right" :fill="COLOURS[s.kind][s.part][1]" />
-              <polygon :points="s.parts.top" :fill="COLOURS[s.kind][s.part][2]" />
-            </template>
-            <template v-else-if="s.kind === 'plant'">
-              <polygon :points="s.parts.pot.left" fill="#c4643f" />
-              <polygon :points="s.parts.pot.right" fill="#a9512f" />
-              <polygon :points="s.parts.pot.top" fill="#5a3a26" />
-              <ellipse :cx="s.parts.cx - 9" :cy="s.parts.cy - 34" rx="9" ry="14" fill="#3f9b5f" />
-              <ellipse :cx="s.parts.cx + 9" :cy="s.parts.cy - 32" rx="9" ry="13" fill="#4fb36f" />
-              <ellipse :cx="s.parts.cx" :cy="s.parts.cy - 46" rx="9" ry="15" fill="#5cc27c" />
-            </template>
-            <template v-else>
-              <polygon :points="s.parts.stand.left" fill="#e9e3ea" />
-              <polygon :points="s.parts.stand.right" fill="#d4ccd6" />
-              <polygon :points="s.parts.stand.top" fill="#fbf8fc" />
-              <circle :cx="s.parts.cx" :cy="s.parts.cy - 52" r="11" fill="#ec6a93" />
-              <circle :cx="s.parts.cx + 7" :cy="s.parts.cy - 62" r="6" fill="#f6a5c0" />
-              <rect :x="s.parts.cx - 3" :y="s.parts.cy - 44" width="6" height="8" fill="#c94f78" />
-            </template>
+            <MuseumFurniture :slice="s" :theme="roomTheme" :dim="s.dim" />
+          </g>
+          <g
+            v-else-if="s.type === 'cat'"
+            class="cat-sprite"
+            @click.stop="goPet(s.c)"
+            @pointerenter="hoveredCat = s.c"
+            @pointerleave="hoveredCat = null"
+          >
+            <PixelCat
+              :x="s.sx"
+              :y="s.sy"
+              :facing="s.c.facing"
+              :state="s.c.state"
+              :step="s.c.step"
+              :coat="s.c.cat.coat"
+              :petted="s.c.petted"
+              :bubble="s.c.bubble"
+              :name="s.c.cat.name"
+              :show-name="hoveredCat === s.c"
+              :dim="s.dim"
+            />
           </g>
           <g
             v-else
@@ -743,9 +893,13 @@ defineExpose({ walkTo });
               :show-name="s.self || hoveredName === s.name"
               :bubble="s.w.bubble"
               :self="s.self"
+              :dim="s.dim"
+              :edges="[view.minX, view.maxX]"
             />
           </g>
         </template>
+
+        <MuseumLights :lights="lights" />
       </svg>
 
       <ChatBubbles :bubbles="bubbles" :max-rows="MAX_ROWS" />
@@ -768,6 +922,9 @@ defineExpose({ walkTo });
         </ol>
         <p v-else class="hint m-0">Nothing said in the last couple of minutes. Say hello!</p>
       </div>
+      <div v-if="panel === 'guestbook' && place" class="panel left bare">
+        <GuestbookPanel :place="place" :me="me" @close="panel = ''" />
+      </div>
       <div v-if="panel === 'me' && me" class="panel right">
         <PersonCard :user="me" self :sitting="player.sitting" @close="panel = ''" @sit="onCommand(player.sitting ? 'stand' : 'sit')" />
       </div>
@@ -781,10 +938,22 @@ defineExpose({ walkTo });
         <MousePointerClick :size="16" aria-hidden="true" /> {{ status }}
         <span class="sr-only">
           Use the arrow keys to walk, or Tab to the pictures and press Enter to look.
-          <template v-if="me && shared">Press Enter in the room to chat, or 1 to 6 for quick emotes.</template>
+          <template v-if="me && shared">Press Enter in the room to chat, or 1 to 6 for quick emotes. Type /pet and a cat's name to pet it.</template>
         </span>
       </p>
       <div class="hud-right">
+        <span class="design" :title="roomTheme.blurb">{{ roomTheme.label }}</span>
+        <button
+          v-if="canDim"
+          type="button"
+          class="btn btn-ghost btn-xs lights-switch"
+          :aria-pressed="lightsOn ? 'true' : 'false'"
+          @click="lightsOn = !lightsOn"
+        >
+          <Lightbulb v-if="!lightsOn" :size="14" aria-hidden="true" />
+          <LightbulbOff v-else :size="14" aria-hidden="true" />
+          {{ lightsOn ? 'Dim the lights' : 'Lights on' }}
+        </button>
         <span v-if="shared" class="here">{{ peopleHere ? `${peopleHere + (me ? 1 : 0)} here` : 'Just you here' }}</span>
         <div v-if="layout.count > 1" class="rooms">
           <button type="button" class="btn btn-ghost btn-xs" :disabled="layout.index === 0" @click="goToRoom(layout.index - 1)">
@@ -812,6 +981,7 @@ defineExpose({ walkTo });
       :open="panel"
       :log-count="unread"
       :dancing="player.dancing"
+      :guestbook="Boolean(place)"
       @toggle="toggle"
       @command="onCommand"
     />
@@ -845,11 +1015,10 @@ defineExpose({ walkTo });
 .scene:focus-visible {
   box-shadow: inset 0 0 0 3px #ec6a93;
 }
-.void {
-  fill: #232838;
-}
 .person,
-.furniture.seat {
+.cat-sprite,
+.furniture.seat,
+.furniture.stand {
   cursor: pointer;
 }
 .panel {
@@ -866,6 +1035,10 @@ defineExpose({ walkTo });
 }
 .panel.right {
   right: 10px;
+}
+.panel.left.bare {
+  width: auto;
+  padding: 0;
 }
 .log-title {
   margin: 0 0 8px;
@@ -930,6 +1103,16 @@ defineExpose({ walkTo });
   color: #9ff0b8;
   font-size: 0.8rem;
   font-weight: 700;
+}
+.design {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.lights-switch {
+  color: #f3eaf0;
 }
 .rooms {
   display: flex;

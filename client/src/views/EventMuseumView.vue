@@ -1,12 +1,15 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
-import { Hourglass, Lock, CalendarSearch } from 'lucide-vue-next';
+import { Hourglass, Lock, CalendarSearch, Palette } from 'lucide-vue-next';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import LoadingBlock from '@/components/ui/LoadingBlock.vue';
 import ErrorBlock from '@/components/ui/ErrorBlock.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import MuseumExperience from '@/components/museum/MuseumExperience.vue';
+import DoodleBackdrop from '@/components/museum/DoodleBackdrop.vue';
+import MuseumThemePicker from '@/components/museum/MuseumThemePicker.vue';
+import { toast } from '@/stores/toast';
 import { api } from '@/api';
 import { pluralize } from '@/utils/format';
 import { eventLink } from '@/utils/events';
@@ -23,6 +26,23 @@ const event = ref(null);
 const items = ref([]);
 
 const resultsLink = computed(() => eventLink(route.params.id, '/results'));
+
+// Organisers choose how the rooms look; it shows in the public museum too
+const savingDesign = ref(false);
+async function chooseDesign(choice) {
+  const before = event.value.museumTheme;
+  event.value.museumTheme = choice;
+  savingDesign.value = true;
+  try {
+    await api(`/events/${event.value.id}/museum-theme`, { method: 'PUT', body: { museumTheme: choice } });
+    toast.success('Room design saved.');
+  } catch (e) {
+    event.value.museumTheme = before;
+    toast.error(e.message);
+  } finally {
+    savingDesign.value = false;
+  }
+}
 
 let requestId = 0;
 async function load() {
@@ -67,7 +87,8 @@ const giftCount = computed(() => items.value.filter((i) => i.submission).length)
 </script>
 
 <template>
-  <main id="main" class="page" tabindex="-1">
+  <main id="main" class="page museum-page" tabindex="-1">
+    <DoodleBackdrop />
     <LoadingBlock v-if="loading" label="Hanging the pictures…" />
     <template v-else-if="blocked">
       <PageHeader title="The gallery" :back="eventLink(route.params.id)" back-label="Back to event" />
@@ -93,7 +114,40 @@ const giftCount = computed(() => items.value.filter((i) => i.submission).length)
         message="Nobody submitted a gift in this event."
         class="mt-6"
       />
-      <MuseumExperience v-else :items="items" :place="{ kind: 'gallery', eventId: event.id }" class="mt-6" />
+      <details v-if="giftCount && event.viewer?.isOrganizer" class="design card mt-6">
+        <summary><Palette :size="16" aria-hidden="true" /> Room design</summary>
+        <p class="hint mt-2 mb-3">How the rooms look here and in the public museum. Darker designs light up each picture as it goes up.</p>
+        <MuseumThemePicker :model-value="event.museumTheme || 'auto'" :disabled="savingDesign" @update:model-value="chooseDesign" />
+      </details>
+      <MuseumExperience
+        v-if="giftCount"
+        :items="items"
+        :place="{ kind: 'gallery', eventId: event.id }"
+        :theme="event.museumTheme || 'auto'"
+        class="mt-6"
+      />
     </template>
   </main>
 </template>
+
+<style scoped>
+/* The page sits over the doodles that fill the screen */
+.museum-page > :not(.doodles) {
+  position: relative;
+  z-index: 1;
+}
+.design {
+  padding: 12px 16px;
+}
+.design summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+</style>

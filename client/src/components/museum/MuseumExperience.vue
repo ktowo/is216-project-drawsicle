@@ -14,6 +14,7 @@ const props = defineProps({
   items: { type: Array, required: true },
   // { kind: 'wing' | 'gallery', eventId }: makes the rooms shared, with chat
   place: { type: Object, default: null },
+  theme: { type: String, default: 'auto' }, // the room design (shared/museum-themes.mjs)
 });
 
 const route = useRoute();
@@ -94,6 +95,7 @@ watch(viewing, (i) => {
       :me="auth.user"
       :visitors="visitors"
       :place="place"
+      :theme="theme"
       @view="view"
     />
     <SubmissionGallery v-else :items="artworks" />

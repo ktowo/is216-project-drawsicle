@@ -1,21 +1,37 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, useId } from 'vue';
 import { assetUrl } from '@/api';
 import { iso, tilePoints, wallTransform, wallQuad, WALL_H } from '@/museum/iso';
 import { FRAME, RUG } from '@/museum/layout';
+import DoodlePattern from './DoodlePattern.vue';
 
-// Everything in a museum room that stays put: walls, floor, the pictures and the doors.
+// Everything in a museum room that stays put: the doodles behind it, walls, floor, the
+// pictures and the doors, in the room design's colours (shared/museum-themes.mjs). Darker designs
+// lay a shade over the walls and floor with holes where the light falls (museum/lights.js).
 // The pictures and doors are buttons (Tab, then Enter or Space) as well as click targets.
 const props = defineProps({
   room: { type: Object, required: true },
+  theme: { type: Object, required: true },
+  lights: { type: Object, required: true }, // roomLights()
+  view: { type: Object, required: true }, // { minX, minY, maxX, maxY }
   hoverTile: { type: Object, default: null },
   destination: { type: Object, default: null },
 });
 const emit = defineEmits(['frame', 'door', 'hover']);
 
+const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
+const ids = {
+  blur: `${uid}-blur`,
+  wallLeft: `${uid}-wall-left`,
+  wallRight: `${uid}-wall-right`,
+  pattern: `${uid}-pattern`,
+  mask: `${uid}-mask`,
+  hole: `${uid}-hole`,
+};
+const url = (id) => `url(#${id})`;
+
 const W = computed(() => props.room.width);
 const D = computed(() => props.room.depth);
-
 const pt = (p, lift = 0) => `${p.x},${p.y - lift}`;
 
 // Back walls: the left one along x = 0, the right one along y = 0, each with a skirting board
@@ -35,6 +51,7 @@ const walls = computed(() => {
     leftEnd: [pt(l), pt(l, WALL_H), `${l.x - T},${l.y - WALL_H - T / 2}`, `${l.x - T},${l.y - T / 2}`].join(' '),
     rightEnd: [pt(r), pt(r, WALL_H), `${r.x + T},${r.y - WALL_H - T / 2}`, `${r.x + T},${r.y - T / 2}`].join(' '),
     corner: `M ${o.x} ${o.y} L ${o.x} ${o.y - WALL_H}`,
+    floor: [iso(0, 0), iso(W.value, 0), iso(W.value, D.value), iso(0, D.value)].map((p) => pt(p)).join(' '),
   };
 });
 
@@ -43,11 +60,13 @@ const tiles = computed(() => {
   for (let x = 0; x < W.value; x++) {
     for (let y = 0; y < D.value; y++) {
       const onRug = x >= RUG.x && x < RUG.x + RUG.w && y >= RUG.y && y < RUG.y + RUG.h;
-      list.push({ key: `${x},${y}`, points: tilePoints(x, y), cls: onRug ? 'rug' : (x + y) % 2 ? 'wood-a' : 'wood-b' });
+      list.push({ key: `${x},${y}`, points: tilePoints(x, y), fill: onRug ? 0 : (x + y) % 2 ? 1 : 2 });
     }
   }
   return list;
 });
+const floorFill = (n) => (n === 0 ? props.theme.rug[0] : props.theme.floor[n - 1]);
+const floorLine = (n) => (n === 0 ? props.theme.rug[1] : props.theme.floor[2]);
 const rugBorder = computed(() =>
   [iso(RUG.x, RUG.y), iso(RUG.x + RUG.w, RUG.y), iso(RUG.x + RUG.w, RUG.y + RUG.h), iso(RUG.x, RUG.y + RUG.h)]
     .map((p) => `${p.x},${p.y}`)
@@ -92,11 +111,31 @@ const frames = computed(() =>
 const doors = computed(() =>
   props.room.doors.map((d) => ({
     ...d,
-    outer: wallQuad(d.wall, d.at, 1.15, 112, 0),
-    inner: wallQuad(d.wall, d.at, 0.95, 104, 0),
-    sign: wallTransform(d.wall, d.at, 1.15, 22, 120, 100),
+    outer: wallQuad(d.wall, d.at, 1, 112, 0),
+    inner: wallQuad(d.wall, d.at, 0.82, 104, 0),
+    sign: wallTransform(d.wall, d.at, 1, 22, 120, 100),
   }))
 );
+
+// ---------- Light ----------
+const mode = computed(() => props.lights.mode);
+// The floor's grid laid flat on screen: draw in tiles inside this and it lands on the floor
+const FLOOR = 'matrix(32 16 -32 16 0 0)';
+const pools = computed(() =>
+  props.lights.pools.map((p, i) => ({
+    ...p,
+    key: `${p.kind}-${i}`,
+    // A picture's light also washes the wall round it
+    wall: p.frame ? wallTransform(p.frame.wall, p.frame.at, mode.value.spots ? 2.5 : 1.9, 140, 6, 100) : null,
+    delay: `${0.15 + i * 0.12}s`,
+  }))
+);
+// Golden hour: the sun comes in low from the left and lies across the floor in long stripes
+const sunbeams = [
+  [1, 1.4, 9.6, 4.2, 1.0],
+  [1, 3.9, 9.6, 6.7, 0.75],
+  [1, 6.4, 9.6, 9.2, 0.9],
+].map(([x0, y0, x1, y1, w]) => `${x0},${y0} ${x1},${y1} ${x1},${y1 + w} ${x0},${y0 + w}`);
 
 const markerPoints = (t) => (t ? tilePoints(t.x, t.y) : '');
 
@@ -109,29 +148,52 @@ function activate(kind, item, event) {
 <template>
   <g class="backdrop">
     <defs>
-      <filter id="museum-blur" x="-10%" y="-10%" width="120%" height="120%">
+      <filter :id="ids.blur" x="-10%" y="-10%" width="120%" height="120%">
         <feGaussianBlur stdDeviation="7" />
       </filter>
-      <linearGradient id="museum-wall-left" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#f1ddd5" />
-        <stop offset="1" stop-color="#e6c9bf" />
+      <linearGradient :id="ids.wallLeft" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" :stop-color="theme.wallLeft[0]" />
+        <stop offset="1" :stop-color="theme.wallLeft[1]" />
       </linearGradient>
-      <linearGradient id="museum-wall-right" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#f8e9e2" />
-        <stop offset="1" stop-color="#efd8cf" />
+      <linearGradient :id="ids.wallRight" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" :stop-color="theme.wallRight[0]" />
+        <stop offset="1" :stop-color="theme.wallRight[1]" />
       </linearGradient>
+      <!-- Faint doodles behind the room -->
+      <DoodlePattern :id="ids.pattern" colour="#ffffff" />
+      <!-- Light: black lets it through the shade, so each pool is a soft-edged hole -->
+      <radialGradient :id="ids.hole">
+        <stop offset="0" stop-color="#000" stop-opacity="1" />
+        <stop offset="0.55" stop-color="#000" stop-opacity="0.8" />
+        <stop offset="1" stop-color="#000" stop-opacity="0" />
+      </radialGradient>
+      <mask v-if="mode.dark" :id="ids.mask" maskUnits="userSpaceOnUse" :x="view.minX" :y="view.minY" :width="view.maxX - view.minX" :height="view.maxY - view.minY">
+        <rect :x="view.minX" :y="view.minY" :width="view.maxX - view.minX" :height="view.maxY - view.minY" fill="#fff" />
+        <g v-for="p in pools" :key="p.key" class="light-on" :style="{ animationDelay: p.delay }">
+          <g v-if="p.wall" :transform="p.wall">
+            <ellipse cx="50" cy="48" rx="48" ry="54" :fill="url(ids.hole)" />
+          </g>
+          <g :transform="FLOOR">
+            <circle :cx="p.x" :cy="p.y" :r="p.r" :fill="url(ids.hole)" />
+          </g>
+        </g>
+      </mask>
     </defs>
 
+    <!-- Behind the room -->
+    <rect :x="view.minX" :y="view.minY" :width="view.maxX - view.minX" :height="view.maxY - view.minY" :fill="theme.void" />
+    <rect :x="view.minX" :y="view.minY" :width="view.maxX - view.minX" :height="view.maxY - view.minY" :fill="url(ids.pattern)" opacity="0.06" />
+
     <!-- Walls -->
-    <polygon :points="walls.left" fill="url(#museum-wall-left)" />
-    <polygon :points="walls.right" fill="url(#museum-wall-right)" />
-    <polygon :points="walls.leftSkirt" class="skirt dark" />
-    <polygon :points="walls.rightSkirt" class="skirt" />
-    <polygon :points="walls.leftCap" class="cap" />
-    <polygon :points="walls.rightCap" class="cap" />
-    <polygon :points="walls.leftEnd" class="end" />
-    <polygon :points="walls.rightEnd" class="end" />
-    <path :d="walls.corner" class="corner" />
+    <polygon :points="walls.left" :fill="url(ids.wallLeft)" />
+    <polygon :points="walls.right" :fill="url(ids.wallRight)" />
+    <polygon :points="walls.leftSkirt" :fill="theme.skirt[0]" />
+    <polygon :points="walls.rightSkirt" :fill="theme.skirt[1]" />
+    <polygon :points="walls.leftCap" :fill="theme.cap[0]" :stroke="theme.cap[1]" stroke-width="0.6" />
+    <polygon :points="walls.rightCap" :fill="theme.cap[0]" :stroke="theme.cap[1]" stroke-width="0.6" />
+    <polygon :points="walls.leftEnd" :fill="theme.cap[1]" />
+    <polygon :points="walls.rightEnd" :fill="theme.cap[1]" />
+    <path :d="walls.corner" :stroke="theme.cap[1]" stroke-width="1.2" />
 
     <!-- Doors to the next and previous rooms -->
     <g
@@ -149,7 +211,7 @@ function activate(kind, item, event) {
       @focus="emit('hover', { kind: 'door', text: d.label })"
       @blur="emit('hover', null)"
     >
-      <polygon :points="d.outer" class="door-frame" />
+      <polygon :points="d.outer" :fill="theme.frame[0]" />
       <polygon :points="d.inner" class="door-dark" />
       <g :transform="d.sign">
         <rect x="6" y="0" width="88" height="100" rx="14" class="sign" />
@@ -174,8 +236,8 @@ function activate(kind, item, event) {
       @focus="emit('hover', { kind: 'frame', text: f.label, number: f.number })"
       @blur="emit('hover', null)"
     >
-      <polygon :points="f.outer" class="frame-wood" />
-      <polygon :points="f.mat" class="frame-mat" />
+      <polygon :points="f.outer" :fill="theme.frame[0]" :stroke="theme.frame[1]" stroke-width="1" />
+      <polygon :points="f.mat" :fill="theme.frame[2]" />
       <g :transform="f.picture">
         <template v-if="f.cover">
           <image
@@ -185,7 +247,7 @@ function activate(kind, item, event) {
             width="100"
             height="100"
             preserveAspectRatio="xMidYMid slice"
-            :filter="f.warned ? 'url(#museum-blur)' : undefined"
+            :filter="f.warned ? url(ids.blur) : undefined"
           />
           <template v-if="f.warned">
             <rect width="100" height="100" class="veil" />
@@ -205,51 +267,37 @@ function activate(kind, item, event) {
 
     <!-- Floor -->
     <g class="floor">
-      <polygon v-for="t in tiles" :key="t.key" :points="t.points" :class="t.cls" />
-      <polygon :points="rugBorder" class="rug-border" />
-      <polygon v-if="destination" :points="markerPoints(destination)" class="destination" />
-      <polygon v-if="hoverTile" :points="markerPoints(hoverTile)" class="hover-tile" />
+      <polygon v-for="t in tiles" :key="t.key" :points="t.points" :fill="floorFill(t.fill)" :stroke="floorLine(t.fill)" stroke-width="0.6" />
+      <polygon :points="rugBorder" class="rug-border" :stroke="theme.rug[2]" />
+      <g v-if="mode.sun" :transform="FLOOR" class="sun">
+        <polygon v-for="(b, i) in sunbeams" :key="i" :points="b" />
+      </g>
     </g>
+
+    <!-- The shade over a darker room, with the light let through -->
+    <g v-if="mode.dark" :mask="url(ids.mask)" class="shade" :style="{ opacity: mode.dark }">
+      <polygon :points="walls.left" :fill="mode.shade" />
+      <polygon :points="walls.right" :fill="mode.shade" />
+      <polygon :points="walls.floor" :fill="mode.shade" />
+    </g>
+
+    <polygon v-if="destination" :points="markerPoints(destination)" class="destination" />
+    <polygon v-if="hoverTile" :points="markerPoints(hoverTile)" class="hover-tile" />
   </g>
 </template>
 
 <style scoped>
-.skirt {
-  fill: #c39788;
+.shade {
+  pointer-events: none;
+  transition: opacity 0.6s ease;
 }
-.skirt.dark {
-  fill: #b08476;
-}
-.cap {
-  fill: #fff6f1;
-  stroke: #d9b9ad;
-  stroke-width: 0.6;
-}
-.end {
-  fill: #d9b9ad;
-}
-.corner {
-  stroke: #d7b6aa;
-  stroke-width: 1.2;
-}
-.wood-a {
-  fill: #d8b18a;
-  stroke: #c9a07a;
-  stroke-width: 0.6;
-}
-.wood-b {
-  fill: #cfa67e;
-  stroke: #c39a72;
-  stroke-width: 0.6;
-}
-.rug {
-  fill: #c75b7f;
-  stroke: #b84f72;
-  stroke-width: 0.5;
+.sun polygon {
+  fill: #ffd98c;
+  opacity: 0.28;
+  pointer-events: none;
 }
 .rug-border {
   fill: none;
-  stroke: #f4cf6a;
   stroke-width: 3;
   stroke-dasharray: 8 5;
 }
@@ -269,14 +317,6 @@ function activate(kind, item, event) {
 .door {
   cursor: pointer;
   outline: none;
-}
-.frame-wood {
-  fill: #a46d43;
-  stroke: #7b4f2e;
-  stroke-width: 1;
-}
-.frame-mat {
-  fill: #fbf6ee;
 }
 .plaque {
   fill: #e6c35c;
@@ -312,9 +352,6 @@ function activate(kind, item, event) {
   fill: #6b4a3a;
   font-family: var(--font-body);
 }
-.door-frame {
-  fill: #8a5a3b;
-}
 .door-dark {
   fill: #2a2233;
 }
@@ -342,5 +379,25 @@ function activate(kind, item, event) {
 .door:focus-visible .focus-ring {
   stroke: #ec6a93;
   stroke-width: 4;
+}
+/* The lights come up one picture after another as you walk in */
+@media (prefers-reduced-motion: no-preference) {
+  .light-on {
+    animation: lights-on 0.9s ease-out both;
+  }
+}
+@keyframes lights-on {
+  0% {
+    opacity: 0;
+  }
+  40% {
+    opacity: 0.9;
+  }
+  55% {
+    opacity: 0.3;
+  }
+  100% {
+    opacity: 1;
+  }
 }
 </style>

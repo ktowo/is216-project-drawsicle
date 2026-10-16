@@ -1,25 +1,52 @@
 <script setup>
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import PixelHead from './PixelHead.vue';
 
 // Chat bubbles floating over the room: each appears above whoever spoke, then drifts up a row
-// whenever something new is said (or after a while), and fades out at the top.
+// whenever something new is said (or after a while), and fades out near the top.
 // bubbles: [{ id, left (% across the room), row, user, name, kind, emote, text }]
-defineProps({
+//
+// A bubble is shifted left by the same share of its own width as it sits across the room (none
+// at the left edge, all of it at the right), so however long it is it stays inside the room.
+// Rows that wouldn't fit above fade out early on short screens.
+const props = defineProps({
   bubbles: { type: Array, default: () => [] },
   maxRows: { type: Number, default: 7 },
 });
 
 const ROW_PX = 34;
+const TOP = 0.42; // the newest row's top, as a share of the room's height
+
+const root = ref(null);
+const height = ref(0);
+let watcher = null;
+onMounted(() => {
+  height.value = root.value?.clientHeight || 0;
+  if (typeof ResizeObserver !== 'undefined' && root.value) {
+    watcher = new ResizeObserver(([entry]) => (height.value = entry.contentRect.height));
+    watcher.observe(root.value);
+  }
+});
+onBeforeUnmount(() => watcher?.disconnect());
+
+// How many rows fit between the newest one and the top of the room
+const rowsThatFit = computed(() => {
+  if (!height.value) return props.maxRows;
+  return Math.max(1, Math.min(props.maxRows, Math.floor((height.value * TOP - 4) / ROW_PX) + 1));
+});
+const place = (b) => {
+  const left = Math.min(100, Math.max(0, b.left));
+  return {
+    left: `${left}%`,
+    transform: `translate(-${left}%, ${-b.row * ROW_PX}px)`,
+    opacity: b.row >= rowsThatFit.value ? 0 : 1,
+  };
+};
 </script>
 
 <template>
-  <div class="bubbles" aria-hidden="true">
-    <div
-      v-for="b in bubbles"
-      :key="b.id"
-      class="bubble-wrap"
-      :style="{ left: `${b.left}%`, transform: `translate(-50%, ${-b.row * ROW_PX}px)`, opacity: b.row >= maxRows ? 0 : 1 }"
-    >
+  <div ref="root" class="bubbles" aria-hidden="true">
+    <div v-for="b in bubbles" :key="b.id" class="bubble-wrap" :style="place(b)">
       <div class="bubble" :class="b.kind">
         <PixelHead :user="b.user" :size="22" />
         <span class="text">
@@ -44,9 +71,13 @@ const ROW_PX = 34;
 }
 .bubble-wrap {
   position: absolute;
-  top: 34%;
-  max-width: min(78%, 360px);
-  transition: transform 0.45s ease, opacity 0.45s ease;
+  top: 42%;
+  max-width: min(calc(100% - 16px), 360px);
+  padding: 0 8px;
+  box-sizing: content-box;
+  transition:
+    transform 0.45s ease,
+    opacity 0.45s ease;
 }
 .bubble {
   display: flex;

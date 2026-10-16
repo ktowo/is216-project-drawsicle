@@ -3,8 +3,9 @@ import { computed } from 'vue';
 
 // A little pixel-art visitor, drawn with its feet at (x, y). The sprite is drawn facing right;
 // facing left mirrors it. From behind ('n' facings) you see the back of their head.
-// sitting lowers them into a chair; emote plays a short animation (wave, dance, laugh, heart,
-// clap, cheer). Animations are skipped for people who prefer less motion (see the CSS).
+// sitting lowers them onto a seat; emote plays a short animation (wave, dance, laugh, heart,
+// clap, cheer, or pet: stroking a cat). Animations are skipped for people who prefer less motion
+// (see the CSS). dim darkens the sprite (not its name or bubble) in a dim corner of a dark room.
 const props = defineProps({
   x: { type: Number, required: true },
   y: { type: Number, required: true },
@@ -18,6 +19,8 @@ const props = defineProps({
   showName: { type: Boolean, default: false },
   bubble: { type: String, default: '' },
   self: { type: Boolean, default: false },
+  dim: { type: Number, default: 1 },
+  edges: { type: Array, default: null }, // [left, right] of the scene: bubbles and name tags stay inside
 });
 
 const mirrored = computed(() => props.facing.endsWith('w'));
@@ -31,12 +34,26 @@ const tagWidth = computed(() => Math.max(36, Math.min(130, props.name.length * 6
 const bubbleText = computed(() => (props.bubble.length > 34 ? `${props.bubble.slice(0, 33)}…` : props.bubble));
 const bubbleWidth = computed(() => Math.max(40, Math.min(220, bubbleText.value.length * 6.4 + 20)));
 const top = computed(() => -70 + drop.value);
+// Where a label of width w starts: centred over the head, unless that would poke out of the scene
+function fit(w) {
+  let left = -w / 2;
+  if (props.edges) {
+    left = Math.max(left, props.edges[0] + 4 - props.x);
+    left = Math.min(left, props.edges[1] - 4 - props.x - w);
+  }
+  return left;
+}
+const tagLeft = computed(() => fit(tagWidth.value));
+const bubbleLeft = computed(() => fit(bubbleWidth.value));
 </script>
 
 <template>
   <g :transform="`translate(${x.toFixed(1)} ${y.toFixed(1)})`" class="avatar" :class="[{ self }, emote && `emote-${emote}`]">
     <ellipse cx="0" cy="0" rx="12" ry="5" class="shadow" />
-    <g :transform="`translate(0 ${bob + drop}) ${mirrored ? 'scale(-1 1)' : ''}`">
+    <g
+      :transform="`translate(0 ${bob + drop}) ${mirrored ? 'scale(-1 1)' : ''}`"
+      :style="dim < 1 ? { filter: `brightness(${dim})` } : undefined"
+    >
       <g class="body">
         <!-- Legs and shoes: standing, or folded forward on a seat -->
         <template v-if="sitting">
@@ -135,14 +152,14 @@ const top = computed(() => -70 + drop.value);
     <text v-if="emote === 'cheer'" x="0" :y="-56 + drop" class="float confetti">✦ ✧ ✦</text>
 
     <g v-if="showName" class="tag">
-      <rect :x="-tagWidth / 2" :y="top" :width="tagWidth" height="15" rx="7.5" />
-      <text x="0" :y="top + 11">{{ name }}</text>
+      <rect :x="tagLeft" :y="top" :width="tagWidth" height="15" rx="7.5" />
+      <text :x="tagLeft + tagWidth / 2" :y="top + 11">{{ name }}</text>
     </g>
 
     <g v-if="bubble" class="bubble">
-      <rect :x="-bubbleWidth / 2" :y="top - (showName ? 28 : 14)" :width="bubbleWidth" height="22" rx="8" />
+      <rect :x="bubbleLeft" :y="top - (showName ? 28 : 14)" :width="bubbleWidth" height="22" rx="8" />
       <path :d="`M -5 ${top - (showName ? 6.5 : -7.5)} l 5 7 l 5 -7 z`" />
-      <text x="0" :y="top - (showName ? 13 : 1)">{{ bubbleText }}</text>
+      <text :x="bubbleLeft + bubbleWidth / 2" :y="top - (showName ? 13 : 1)">{{ bubbleText }}</text>
     </g>
   </g>
 </template>
@@ -201,8 +218,11 @@ const top = computed(() => -70 + drop.value);
 .back-arm {
   transform-origin: 50% 0%;
 }
+/* The body turns about the feet (0, 0), not the middle of whatever it holds, so a dance spin
+   stays on the spot */
 .body {
-  transform-origin: 50% 100%;
+  transform-box: view-box;
+  transform-origin: 0 0;
 }
 .float {
   text-anchor: middle;
@@ -256,12 +276,22 @@ const top = computed(() => -70 + drop.value);
   .emote-cheer .body {
     animation: hop 0.4s ease-out infinite alternate;
   }
+  /* Petting: crouch a little and stroke */
+  .emote-pet .body {
+    transform: translateY(2px);
+  }
+  .emote-pet .front-arm {
+    animation: stroke 0.45s ease-in-out infinite alternate;
+  }
   .float {
-    animation: rise 1.4s ease-out infinite;
+    animation: rise 1.4s ease-out 2;
   }
 }
 /* Without motion, emotes still show their pose */
 @media (prefers-reduced-motion: reduce) {
+  .emote-pet .front-arm {
+    transform: rotate(-70deg);
+  }
   .emote-dance .front-arm,
   .emote-wave .front-arm,
   .emote-cheer .front-arm,
@@ -337,6 +367,14 @@ const top = computed(() => -70 + drop.value);
   }
   to {
     transform: rotate(-30deg);
+  }
+}
+@keyframes stroke {
+  from {
+    transform: rotate(-55deg);
+  }
+  to {
+    transform: rotate(-85deg);
   }
 }
 @keyframes hop {
