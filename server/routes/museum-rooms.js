@@ -8,6 +8,7 @@ const { userMini } = require('../models/User.js');
 const { requireAuth, optionalAuth } = require('../middleware/auth.js');
 const { asyncHandler, httpError } = require('../utils/helpers.js');
 const { CHAT, ROOM_KINDS, roomKey, parseChat, cooldownLeft, isRepeat } = require('../../shared/chat.mjs');
+const { cleanLook } = require('../../shared/looks.mjs');
 
 // The museum's rooms are shared: everyone in a room sees where the others stand and what they
 // say. There are no sockets (the site runs on serverless functions), so each visitor's page
@@ -24,7 +25,7 @@ const { CHAT, ROOM_KINDS, roomKey, parseChat, cooldownLeft, isRepeat } = require
 const router = Router();
 
 const FINISHED = { publicity: 'public', status: 'completed', disabledAt: null };
-const USER_FIELDS = 'displayName username avatarUrl status';
+const USER_FIELDS = 'displayName username avatarUrl status museumLook';
 const FACINGS = ['se', 'sw', 'ne', 'nw'];
 const ROOM_SIZE = 10;
 
@@ -52,9 +53,12 @@ async function enterRoom(req) {
   };
 }
 
+// Someone in the room: the usual mini, plus their avatar's look
+const person = (user) => ({ ...userMini(user), look: cleanLook(user?.museumLook) });
+
 const chatJson = (m) => ({
   id: m._id.toString(),
-  user: userMini(m.user),
+  user: person(m.user),
   kind: m.kind,
   emote: m.emote || '',
   text: m.text,
@@ -85,7 +89,7 @@ async function roomState(key, viewerId, sinceValue) {
   return {
     people: people
       .filter((p) => p.user && (p.user.status || 'active') === 'active')
-      .map((p) => ({ user: userMini(p.user), x: p.x, y: p.y, facing: p.facing, sitting: p.sitting })),
+      .map((p) => ({ user: person(p.user), x: p.x, y: p.y, facing: p.facing, sitting: p.sitting, dancing: p.dancing })),
     messages: shown.map(chatJson),
     // Ask for messages after this next time
     cursor: shown.length ? shown[shown.length - 1].createdAt : since,
@@ -98,7 +102,14 @@ function readSpot(body) {
   if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= ROOM_SIZE || y >= ROOM_SIZE) {
     throw httpError(400, 'Where you stand must be a tile in the room.', 'VALIDATION');
   }
-  return { x, y, facing: FACINGS.includes(body?.facing) ? body.facing : 'se', sitting: body?.sitting === true };
+  const sitting = body?.sitting === true;
+  return {
+    x,
+    y,
+    facing: FACINGS.includes(body?.facing) ? body.facing : 'se',
+    sitting,
+    dancing: !sitting && body?.dancing === true,
+  };
 }
 
 const mutedUntil = (user) => (user?.chatMutedUntil && user.chatMutedUntil > new Date() ? user.chatMutedUntil : null);

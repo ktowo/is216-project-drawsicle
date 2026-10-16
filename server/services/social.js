@@ -1,6 +1,7 @@
 const Follow = require('../models/Follow.js');
 const Presence = require('../models/Presence.js');
 const User = require('../models/User.js');
+const { cleanLook } = require('../../shared/looks.mjs');
 
 const { userMini } = User;
 
@@ -33,14 +34,18 @@ async function whereabouts(userIds) {
 // follow who haven't followed back. Only active accounts.
 async function friendList(userId) {
   const [outgoing, incoming] = await Promise.all([
-    Follow.find({ follower: userId }).populate('following', 'displayName username avatarUrl status'),
-    Follow.find({ following: userId }).populate('follower', 'displayName username avatarUrl status'),
+    Follow.find({ follower: userId }).populate('following', 'displayName username avatarUrl status museumLook'),
+    Follow.find({ following: userId }).populate('follower', 'displayName username avatarUrl status museumLook'),
   ]);
   const active = (u) => u && (u.status || 'active') === 'active';
   const out = new Map(outgoing.filter((f) => active(f.following)).map((f) => [f.following._id.toString(), f]));
   const inc = new Map(incoming.filter((f) => active(f.follower)).map((f) => [f.follower._id.toString(), f]));
   const where = await whereabouts([...new Set([...out.keys(), ...inc.keys()])]);
-  const entry = (user, since) => ({ user: userMini(user), since, online: where.get(user._id.toString()) || null });
+  const entry = (user, since) => ({
+    user: { ...userMini(user), look: cleanLook(user.museumLook) },
+    since,
+    online: where.get(user._id.toString()) || null,
+  });
   const byName = (a, b) =>
     Number(Boolean(b.online)) - Number(Boolean(a.online)) || a.user.displayName.localeCompare(b.user.displayName);
 

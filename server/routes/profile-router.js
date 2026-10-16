@@ -14,6 +14,7 @@ const { withdrawApplications } = require('../services/accounts.js');
 const { endSession } = require('../utils/session.js');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
 const { CREATION_TYPE_VALUES, LIMITS, normalizeTags } = require('../../shared/constants.mjs');
+const { cleanLook } = require('../../shared/looks.mjs');
 
 const router = Router();
 
@@ -139,6 +140,15 @@ router.patch('/', requireAuth, asyncHandler(async (req, res) => {
     throw err;
   }
   res.json({ user: user.toPublic() });
+}));
+
+// The museum avatar from the avatar creator: every part must come from shared/looks.mjs
+router.put('/look', requireAuth, asyncHandler(async (req, res) => {
+  const look = cleanLook(req.body);
+  if (!look) throw httpError(400, 'Pick each part of your avatar from the options.', 'VALIDATION');
+  req.user.museumLook = look;
+  await req.user.save();
+  res.json({ user: req.user.toPublic() });
 }));
 
 // Upload a new avatar (form field name: "avatar")

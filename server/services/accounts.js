@@ -89,6 +89,7 @@ async function anonymiseUser(userId, filter = {}) {
     await Promise.all([
       Follow.deleteMany({ $or: [{ follower: userId }, { following: userId }] }),
       Presence.deleteMany({ user: userId }),
+      User.updateOne({ _id: userId }, { $set: { museumLook: null } }),
     ]);
     // Chat logs keep their messages (moderators may need them) but no longer show in rooms
     await ChatMessage.updateMany({ user: userId, hiddenAt: null }, { $set: { hiddenAt: new Date() } });

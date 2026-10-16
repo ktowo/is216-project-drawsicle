@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   Landmark,
   Users,
+  Shirt,
 } from 'lucide-vue-next';
 import { can } from '@shared/permissions.mjs';
 import NotificationBell from './NotificationBell.vue';
@@ -58,6 +59,7 @@ const accountLinks = computed(() => [
   ...(can(auth.user, 'admin.access') ? [{ to: '/admin', label: adminLabel.value, icon: ShieldCheck }] : []),
   { to: '/profile', label: 'Your profile', icon: UserRound },
   { to: '/friends', label: 'Friends', icon: Users },
+  { to: '/avatar', label: 'Museum avatar', icon: Shirt },
   ...(auth.user?.username
     ? [{ to: `/users/${encodeURIComponent(auth.user.username)}`, label: 'View public profile', icon: Eye }]
     : []),
