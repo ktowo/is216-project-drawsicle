@@ -1,15 +1,26 @@
 <script setup>
 import { ref, computed, watch, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Search, UsersRound, LoaderCircle } from 'lucide-vue-next';
+import { Search, UsersRound, LoaderCircle, SlidersHorizontal, X } from 'lucide-vue-next';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingBlock from '@/components/ui/LoadingBlock.vue';
 import ErrorBlock from '@/components/ui/ErrorBlock.vue';
 import ArtistCard from '@/components/discover/ArtistCard.vue';
+import ChoiceChips from '@/components/ui/ChoiceChips.vue';
 import { api, qs } from '@/api';
+import { auth } from '@/stores/auth';
+import { CREATION_TYPES } from '@shared/constants.mjs';
+import { THEMES } from '@shared/taste.mjs';
 
-// Discover artists. The URL holds the search so a link brings back the same list.
+// Discover artists. The URL holds the search, filters and sort, so a link (or the back button)
+// brings back the same list.
+const SORTS = [
+  { value: '', label: 'Most to see' },
+  { value: 'newest', label: 'Newest' },
+  { value: 'exchanges', label: 'Most exchanges' },
+];
+const THEME_OPTIONS = THEMES.map(({ value, label }) => ({ value, label }));
 const route = useRoute();
 const router = useRouter();
 
@@ -37,7 +48,46 @@ watch(search, (value) => {
 });
 onBeforeUnmount(() => clearTimeout(typing));
 
-const params = computed(() => ({ q: q.value }));
+const listFrom = (value, allowed) =>
+  typeof value === 'string' ? value.split(',').filter((v) => allowed.includes(v)) : [];
+const makes = computed(() => listFrom(route.query.makes, CREATION_TYPES.map((t) => t.value)));
+const themes = computed(() => listFrom(route.query.themes, THEME_OPTIONS.map((t) => t.value)));
+const extras = computed(() => [
+  ...(route.query.hasGifts === 'true' ? ['hasGifts'] : []),
+  ...(route.query.following === 'true' && auth.user ? ['following'] : []),
+]);
+const sort = computed(() => (SORTS.some((s) => s.value === route.query.sort) ? route.query.sort : ''));
+const extraOptions = computed(() => [
+  { value: 'hasGifts', label: 'Has gifts to see' },
+  ...(auth.user ? [{ value: 'following', label: 'People I follow' }] : []),
+]);
+const activeFilters = computed(() => makes.value.length + themes.value.length + extras.value.length);
+
+// Filter and sort changes are history entries, so Back undoes them
+function setQuery(changes) {
+  const query = { ...route.query, ...changes };
+  for (const [key, value] of Object.entries(query)) {
+    if (value === '' || value === undefined || value === null || (Array.isArray(value) && !value.length)) delete query[key];
+    else if (Array.isArray(value)) query[key] = value.join(',');
+  }
+  router.push({ query });
+}
+const setExtras = (values) =>
+  setQuery({ hasGifts: values.includes('hasGifts') ? 'true' : '', following: values.includes('following') ? 'true' : '' });
+function clearFilters() {
+  search.value = '';
+  router.push({ query: {} });
+}
+
+const params = computed(() => ({
+  q: q.value,
+  makes: makes.value.join(','),
+  themes: themes.value.join(','),
+  hasGifts: extras.value.includes('hasGifts') ? 'true' : '',
+  following: extras.value.includes('following') ? 'true' : '',
+  sort: sort.value,
+}));
+const filtersOpen = ref(false);
 
 // Latest request wins when the search changes quickly
 let loadId = 0;
@@ -76,7 +126,7 @@ async function loadMore() {
 }
 
 watch(
-  () => route.query.q,
+  () => JSON.stringify(params.value),
   () => {
     if (search.value.trim() !== q.value) search.value = q.value;
     load();
@@ -107,10 +157,49 @@ function onFollowChanged({ username, following }) {
           placeholder="Search artists by name or @username"
         />
       </div>
+
+      <div class="toolbar-row">
+        <button
+          type="button"
+          class="btn btn-outline btn-sm filters-toggle"
+          :aria-expanded="filtersOpen ? 'true' : 'false'"
+          aria-controls="discover-filters"
+          @click="filtersOpen = !filtersOpen"
+        >
+          <SlidersHorizontal :size="16" aria-hidden="true" /> Filters
+          <span v-if="activeFilters" class="filter-count">{{ activeFilters }}</span>
+        </button>
+        <label class="sort">
+          <span class="label-inline">Sort by</span>
+          <select class="select" :value="sort" @change="setQuery({ sort: $event.target.value })">
+            <option v-for="s in SORTS" :key="s.value" :value="s.value">{{ s.label }}</option>
+          </select>
+        </label>
+        <button v-if="activeFilters || q" type="button" class="btn btn-ghost btn-sm" @click="clearFilters">
+          <X :size="16" aria-hidden="true" /> Clear
+        </button>
+      </div>
+
+      <div id="discover-filters" class="filters" :class="{ open: filtersOpen }">
+        <div class="filter-group">
+          <p id="filter-makes" class="label">Makes</p>
+          <ChoiceChips :model-value="makes" :options="CREATION_TYPES" aria-labelledby="filter-makes" @update:model-value="setQuery({ makes: $event })" />
+        </div>
+        <div class="filter-group">
+          <p id="filter-themes" class="label">Loves</p>
+          <ChoiceChips :model-value="themes" :options="THEME_OPTIONS" aria-labelledby="filter-themes" @update:model-value="setQuery({ themes: $event })" />
+        </div>
+        <div class="filter-group">
+          <p id="filter-more" class="label">Only show</p>
+          <ChoiceChips :model-value="extras" :options="extraOptions" aria-labelledby="filter-more" @update:model-value="setExtras" />
+        </div>
+      </div>
     </div>
 
     <p v-if="loadedOnce && !error" class="hint count" aria-live="polite">
-      {{ total }} {{ total === 1 ? 'artist' : 'artists' }}{{ q ? ` matching "${q}"` : '' }}
+      {{ total }} {{ total === 1 ? 'artist' : 'artists' }}{{ q ? ` matching "${q}"` : '' }}{{
+        activeFilters ? ` with ${activeFilters} ${activeFilters === 1 ? 'filter' : 'filters'}` : ''
+      }}
     </p>
 
     <LoadingBlock v-if="loading && !loadedOnce" label="Loading artists…" />
@@ -119,8 +208,16 @@ function onFollowChanged({ username, following }) {
       v-else-if="!items.length"
       :icon="UsersRound"
       title="No artists found"
-      :message="q ? `Nobody matches &quot;${q}&quot; yet. Try another name.` : 'Nobody is listed on Discover yet.'"
-    />
+      :message="
+        q || activeFilters
+          ? 'Nobody matches all of that yet. Try fewer filters or another name.'
+          : 'Nobody is listed on Discover yet.'
+      "
+    >
+      <button v-if="q || activeFilters" type="button" class="btn btn-primary btn-sm" @click="clearFilters">
+        Clear filters
+      </button>
+    </EmptyState>
     <template v-else>
       <ul class="artist-grid" :class="{ dim: loading }" :aria-busy="loading ? 'true' : 'false'">
         <li v-for="card in items" :key="card.user.id">
@@ -147,6 +244,59 @@ function onFollowChanged({ username, following }) {
 }
 .search {
   width: 100%;
+}
+.toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.filter-count {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--pink);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.label-inline {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 14px;
+}
+.filter-group .label {
+  margin: 0 0 6px;
+}
+/* Desktop always shows the filters; phones fold them behind the Filters button */
+.filters-toggle {
+  display: none;
+}
+@media (max-width: 720px) {
+  .filters-toggle {
+    display: inline-flex;
+  }
+  .filters {
+    display: none;
+  }
+  .filters.open {
+    display: flex;
+  }
+  .sort {
+    margin-left: 0;
+  }
 }
 .count {
   margin: 16px 0 12px;

@@ -388,3 +388,25 @@ describe('discover artists', () => {
     expect((await ok('/users/kit')).profile.username).toBe('kit');
   });
 });
+
+describe('discover filters and sorts', () => {
+  const names = (body) => body.items.map((i) => i.user.username).sort();
+
+  it('filters by makes, themes, gifts and follows, and sorts', async () => {
+    expect(names(await ok('/discover/artists?makes=writing&limit=48'))).toEqual(['juniper', 'mika', 'noor']);
+    expect(names(await ok('/discover/artists?themes=spooky&limit=48'))).toEqual(['juniper', 'kit']);
+    expect(names(await ok('/discover/artists?makes=writing&themes=spooky'))).toEqual(['juniper']);
+    expect(names(await ok('/discover/artists?hasGifts=true&limit=48'))).toEqual(expect.arrayContaining(['mika', 'kit']));
+    expect((await fails('/discover/artists?themes=nope')).code).toBe('VALIDATION');
+    expect((await fails('/discover/artists?sort=random')).code).toBe('VALIDATION');
+    expect((await fails('/discover/artists?following=true')).status).toBe(401);
+
+    await loginAs('mika');
+    await ok('/users/noor/follow', { method: 'POST' });
+    expect(names(await ok('/discover/artists?following=true'))).toEqual(['noor']);
+    const newest = await ok('/discover/artists?sort=newest&limit=48');
+    const times = newest.items.map((i) => i.user.username);
+    expect(times.length).toBe(newest.total);
+    expect((await ok('/discover/artists?sort=exchanges')).items[0].exchangesCompleted).toBeGreaterThan(0);
+  });
+});
