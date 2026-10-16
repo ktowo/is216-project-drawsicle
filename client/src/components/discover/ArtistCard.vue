@@ -18,6 +18,8 @@ const props = defineProps({
   // Hide the Follow button (e.g. a preview of your own card)
   noFollow: { type: Boolean, default: false },
   headingTag: { type: String, default: 'h3' },
+  // Every tag (the quiz preview); cards on Discover show a shorter list
+  allTags: { type: Boolean, default: false },
 });
 const emit = defineEmits(['follow-changed']);
 
@@ -53,7 +55,7 @@ function onFollow(res) {
         <li v-for="r in reasons" :key="r">{{ r }}</li>
       </ul>
 
-      <ArtistTagChips :tags="card.artistTags" compact />
+      <ArtistTagChips :tags="card.artistTags" :compact="!allTags" />
 
       <ul v-if="gifts.length" class="gifts" :aria-label="`Gifts ${user.displayName} made`">
         <li v-for="g in gifts" :key="g.id" :class="{ warned: g.contentWarnings?.length }">
