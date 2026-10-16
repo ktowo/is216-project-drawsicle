@@ -549,3 +549,34 @@ describe('saved art', () => {
     expect((await fails('/favourites')).status).toBe(401);
   });
 });
+
+describe('automatic and random matching', () => {
+  it('draws at random, and matches an event by itself once sign-ups close', async () => {
+    await loginAs('mika');
+    const summer = await eventByName('Summer Splash Swap'); // in matching, run by Mika
+    const random = await ok(`/events/${summer.id}/matches/generate`, { method: 'POST', body: { mode: 'random', seed: 4 } });
+    expect(random.result.stats.mode).toBe('random');
+    expect(random.matches.every((m) => m.reasons[0] === 'Drawn at random')).toBe(true);
+    expect((await fails(`/events/${summer.id}/matches/generate`, { method: 'POST', body: { mode: 'hat' } })).code).toBe('VALIDATION');
+
+    const { event } = await ok(`/events/${summer.id}/auto-match`, { method: 'PUT', body: { enabled: true, mode: 'best', publish: true } });
+    expect(event.autoMatch).toMatchObject({ enabled: true, mode: 'best', publish: true, lastRun: null });
+    // Sign-ups are already closed, so the next job run (every request, in the demo) matches it
+    const { event: after } = await ok(`/events/${summer.id}`);
+    expect(after.status).toBe('active');
+    expect(after.autoMatch.lastRun.outcome).toBe('published');
+    expect((await fails(`/events/${summer.id}/auto-match/run`, { method: 'POST' })).code).toBe('WRONG_STATUS');
+
+    // Turned on while creating an event
+    const { event: created } = await ok('/events', {
+      method: 'POST',
+      body: {
+        name: 'Hands-off Swap',
+        signupDeadline: new Date(Date.now() + 5 * 86400000).toISOString(),
+        submissionDeadline: new Date(Date.now() + 30 * 86400000).toISOString(),
+        autoMatch: { enabled: true, mode: 'random' },
+      },
+    });
+    expect(created.autoMatch).toMatchObject({ enabled: true, mode: 'random', publish: true });
+  });
+});
