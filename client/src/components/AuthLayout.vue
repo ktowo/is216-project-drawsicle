@@ -1,6 +1,7 @@
 <script setup>
 import { RouterLink } from 'vue-router';
-import { Palette } from 'lucide-vue-next';
+// The popsicle logo (client/public), wherever the site is hosted
+const logoUrl = `${import.meta.env.BASE_URL}drawsicle.svg`;
 
 // Shared shell for login / register / reset screens: pink icon tile, title, card, footer link.
 defineProps({
@@ -13,7 +14,7 @@ defineProps({
 <template>
   <main id="main" class="auth-page">
     <RouterLink to="/" class="home-link">
-      <span class="home-tile"><Palette :size="18" aria-hidden="true" /></span>
+      <img :src="logoUrl" alt="" class="home-logo" width="34" height="34" />
       <span>Drawsicle</span>
     </RouterLink>
 
@@ -58,14 +59,9 @@ defineProps({
 .home-link:hover {
   color: var(--pink-dark);
 }
-.home-tile {
+.home-logo {
   width: 34px;
   height: 34px;
-  border-radius: 50%;
-  background: var(--pink);
-  color: #fff;
-  display: grid;
-  place-items: center;
 }
 .auth-inner {
   width: 100%;

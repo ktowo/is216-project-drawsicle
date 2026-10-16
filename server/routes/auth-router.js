@@ -143,7 +143,9 @@ router.post('/login', loginLimiter, asyncHandler(async (req, res) => {
   if (!user.username) user.username = await User.generateUsername(user.displayName || localPart(user.email));
   if (user.isModified()) await user.save();
 
-  startSession(res, user);
+  // "Remember me": true keeps them in for 30 days, false until the browser closes
+  const remember = typeof req.body.remember === 'boolean' ? req.body.remember : undefined;
+  startSession(res, user, { remember });
   res.json(reactivated ? { user: user.toPublic(), reactivated: true } : { user: user.toPublic() });
 }));
 
