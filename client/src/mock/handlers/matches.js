@@ -1,10 +1,12 @@
 // /events/:eventId/matches and /my-match (server/routes/match-router.js)
-import { generateMatches, scorePair, skippedAccountsWarning } from '@shared/matching.mjs';
+import { generateMatches, scorePair, skippedAccountsWarning, MATCH_MODES } from '@shared/matching.mjs';
 import { LIMITS, PROGRESS_VALUES } from '@shared/constants.mjs';
 import { newId } from '../db.js';
 import {
   characterPublic,
   findUser,
+  notifyMany,
+  organizerIds,
   matchAdmin,
   miniOf,
   notify,
@@ -86,6 +88,161 @@ function toParticipant(state, application, allowedTypes, rules = null) {
   };
 }
 
+// ---------- Making and publishing matches (server/services/match-making.js) ----------
+
+export const defaultAutoMatch = () => ({ enabled: false, mode: 'best', publish: true, lastRun: null });
+
+export function generateFor(state, event, { seed, mode = 'best' } = {}, now = new Date()) {
+  if (event.status !== 'matching') throw httpError(409, 'Close sign-ups before generating matches.', 'WRONG_STATUS');
+  if (!MATCH_MODES.includes(mode)) throw invalid(`mode must be one of: ${MATCH_MODES.join(', ')}.`);
+
+  const accepted = state.applications
+    .filter((a) => a.event === event.id && a.status === 'accepted' && findUser(state, a.user))
+    .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+  // Deactivating withdraws sign-ups, but older ones can still be here; they can't make a gift
+  const skipped = accepted.filter((a) => findUser(state, a.user).status === 'deactivated');
+  const applications = accepted.filter((a) => findUser(state, a.user).status !== 'deactivated');
+  const needed = Math.max(2, event.minParticipants || 2);
+  if (applications.length < needed) {
+    throw httpError(
+      409,
+      `You need at least ${needed} accepted participants to generate matches (there are ${applications.length}).`,
+      'NOT_ENOUGH_PARTICIPANTS'
+    );
+  }
+
+  const given = seed === undefined || seed === null || seed === '' ? NaN : Number(seed);
+  const usedSeed = Number.isFinite(given) ? Math.floor(given) : randomSeed();
+
+  const rules = pairRules(state, event, applications.map((a) => a.user));
+  const result = generateMatches(
+    applications.map((a) => toParticipant(state, a, event.allowedTypes, rules)),
+    { seed: usedSeed, mode }
+  );
+
+  const appByUser = new Map(applications.map((a) => [a.user, a]));
+  const at = now.toISOString();
+  state.matches = state.matches.filter((m) => !(m.event === event.id && !m.published));
+  for (const p of result.pairs) {
+    state.matches.push({
+      id: newId(),
+      event: event.id,
+      giver: p.giverId,
+      recipient: p.recipientId,
+      giverApplication: appByUser.get(p.giverId).id,
+      recipientApplication: appByUser.get(p.recipientId).id,
+      score: p.score,
+      reasons: [...p.reasons],
+      published: false,
+      status: 'assigned',
+      createdAt: at,
+      updatedAt: at,
+    });
+  }
+
+  const warnings = [...result.warnings];
+  if (skipped.length) warnings.push(skippedAccountsWarning(skipped.map((a) => miniOf(state, a.user).displayName)));
+  const { participants, matched, totalScore, averageScore, cycles, seed: seedUsed } = result.stats;
+  return {
+    result: {
+      unmatched: result.unmatched.map((id) => miniOf(state, id)),
+      warnings,
+      stats: { participants, matched, totalScore, averageScore, cycles, seed: seedUsed, mode },
+    },
+  };
+}
+
+export function publishFor(state, event, actorId = null, now = new Date()) {
+  if (event.status !== 'matching') {
+    throw httpError(409, 'Matches can only be published while the event is in matching.', 'WRONG_STATUS');
+  }
+  const matches = state.matches.filter((m) => m.event === event.id && !m.published);
+  if (!matches.length) throw httpError(409, 'Generate matches before publishing them.', 'NO_MATCHES');
+  // Same people generate used: deactivated accounts were left out there
+  const accepted = state.applications.filter(
+    (a) => a.event === event.id && a.status === 'accepted' && findUser(state, a.user)?.status !== 'deactivated'
+  );
+
+  // Everyone accepted right now must give exactly once and receive exactly once
+  const gives = new Map();
+  const receives = new Map();
+  for (const m of matches) {
+    gives.set(m.giver, (gives.get(m.giver) || 0) + 1);
+    receives.set(m.recipient, (receives.get(m.recipient) || 0) + 1);
+  }
+  const acceptedIds = new Set(accepted.map((a) => a.user));
+  const notPlaced = accepted.filter((a) => gives.get(a.user) !== 1 || receives.get(a.user) !== 1);
+  const stale = [...gives.keys(), ...receives.keys()].some((id) => !acceptedIds.has(id));
+  if (notPlaced.length) {
+    const names = notPlaced.slice(0, 3).map((a) => miniOf(state, a.user).displayName);
+    const more = notPlaced.length > 3 ? ` and ${notPlaced.length - 3} more` : '';
+    throw httpError(
+      409,
+      `Not every accepted participant has a match (${names.join(', ')}${more}). This happens when someone is accepted ` +
+        "after matches were generated, or can't be matched. Generate matches again, or remove anyone who can't be placed.",
+      'MATCHES_INCOMPLETE'
+    );
+  }
+  if (stale) {
+    throw httpError(409, 'Some matches include people who are no longer accepted participants. Generate matches again.', 'MATCHES_INCOMPLETE');
+  }
+
+  const at = now.toISOString();
+  for (const m of matches) {
+    m.published = true;
+    m.updatedAt = at;
+  }
+  setStatus(event, 'active', actorId);
+  event.publishedAt = at;
+
+  const due = formatDay(event.submissionDeadline);
+  for (const m of matches) {
+    notify(state, m.giver, {
+      type: 'match_assigned',
+      title: `Your match for ${event.name} is ready`,
+      message: `You're making a gift for ${miniOf(state, m.recipient).displayName}. It's due by ${due}.`,
+      link: `/events/${event.id}/matches`,
+    });
+  }
+}
+
+// An event set to match itself. The demo has no vision model, so art styles aren't checked here.
+export function runAutoMatch(state, event, now = new Date()) {
+  const settings = { ...defaultAutoMatch(), ...(event.autoMatch || {}) };
+  let outcome;
+  let message;
+  try {
+    const { result } = generateFor(state, event, { mode: settings.mode }, now);
+    const how = settings.mode === 'random' ? 'at random' : 'by best fit';
+    if (result.unmatched.length || !settings.publish) {
+      outcome = 'drafted';
+      message = result.unmatched.length
+        ? `Matches were made ${how}, but ${result.unmatched.length} ${result.unmatched.length === 1 ? 'person' : 'people'} couldn't be placed, so they weren't published. Check the Matching tab.`
+        : `Matches were made ${how} and are waiting for you to check and publish.`;
+    } else {
+      publishFor(state, event, null, now);
+      outcome = 'published';
+      message = `Matches were made ${how} and published, and everyone has been told who they're making a gift for.`;
+    }
+  } catch (err) {
+    outcome = 'failed';
+    message = `Automatic matching couldn't finish: ${err.message}`;
+  }
+  event.autoMatch = { ...settings, lastRun: { outcome, message, at: now.toISOString() } };
+  notifyMany(state, organizerIds(state, event.id), {
+    type: 'event_status',
+    title:
+      outcome === 'published'
+        ? `${event.name} matched itself`
+        : outcome === 'drafted'
+          ? `Matches for ${event.name} are ready to check`
+          : `Automatic matching for ${event.name} needs you`,
+    message,
+    link: `/events/${event.id}/manage?tab=matching`,
+  });
+  return { outcome, message };
+}
+
 function randomSeed() {
   if (globalThis.crypto?.getRandomValues) {
     return (globalThis.crypto.getRandomValues(new Uint32Array(1))[0] % (2 ** 31 - 2)) + 1;
@@ -111,6 +268,15 @@ export function register(router) {
     const total = ctx.state.applications.filter((a) => a.event === event.id && a.status === 'accepted').length;
     return { scan: null, profiles: { withStyle: 0, total }, vision: { configured: false, reachable: false }, demo: true };
   });
+  // The demo can't look at pictures, so nobody has a style yet; preferences still show
+  router.get('/events/:eventId/matches/style-profiles', (ctx) => {
+    const { event } = organizerOnly(ctx);
+    const people = ctx.state.applications
+      .filter((a) => a.event === event.id && a.status === 'accepted' && findUser(ctx.state, a.user))
+      .map((a) => ({ user: miniOf(ctx.state, a.user), preference: a.stylePreference || 'any', style: null }))
+      .sort((x, y) => x.user.displayName.localeCompare(y.user.displayName));
+    return { people, demo: true };
+  });
   router.post('/events/:eventId/matches/style-scan', (ctx) => {
     organizerOnly(ctx);
     throw httpError(501, 'Scanning art styles needs the real server, so it is not part of the demo.', 'NOT_IN_DEMO');
@@ -118,66 +284,39 @@ export function register(router) {
 
   router.post('/events/:eventId/matches/generate', (ctx) => {
     const { event } = organizerOnly(ctx);
-    const { state } = ctx;
-    if (event.status !== 'matching') throw httpError(409, 'Close sign-ups before generating matches.', 'WRONG_STATUS');
+    const mode = ctx.body.mode === undefined ? 'best' : ctx.body.mode;
+    const { result } = generateFor(ctx.state, event, { seed: ctx.body.seed, mode }, ctx.now);
+    return { matches: adminList(ctx.state, event.id), result };
+  });
 
-    const accepted = state.applications
-      .filter((a) => a.event === event.id && a.status === 'accepted' && findUser(state, a.user))
-      .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
-    // Deactivating withdraws sign-ups, but older ones can still be here; they can't make a gift
-    const skipped = accepted.filter((a) => findUser(state, a.user).status === 'deactivated');
-    const applications = accepted.filter((a) => findUser(state, a.user).status !== 'deactivated');
-    const needed = Math.max(2, event.minParticipants || 2);
-    if (applications.length < needed) {
-      throw httpError(
-        409,
-        `You need at least ${needed} accepted participants to generate matches (there are ${applications.length}).`,
-        'NOT_ENOUGH_PARTICIPANTS'
-      );
+  // Automatic matching (server/services/match-making.js)
+  router.put('/events/:eventId/auto-match', (ctx) => {
+    const { user, event } = organizerOnly(ctx);
+    if (!['draft', 'open', 'matching'].includes(event.status)) {
+      throw httpError(409, 'Matches are already published, so there is nothing left to match.', 'WRONG_STATUS');
     }
-
-    const rawSeed = ctx.body.seed;
-    const given = rawSeed === undefined || rawSeed === null || rawSeed === '' ? NaN : Number(rawSeed);
-    const seed = Number.isFinite(given) ? Math.floor(given) : randomSeed();
-
-    const rules = pairRules(state, event, applications.map((a) => a.user));
-    const result = generateMatches(
-      applications.map((a) => toParticipant(state, a, event.allowedTypes, rules)),
-      { seed }
-    );
-
-    const appByUser = new Map(applications.map((a) => [a.user, a]));
-    const at = ctx.now.toISOString();
-    state.matches = state.matches.filter((m) => !(m.event === event.id && !m.published));
-    for (const p of result.pairs) {
-      state.matches.push({
-        id: newId(),
-        event: event.id,
-        giver: p.giverId,
-        recipient: p.recipientId,
-        giverApplication: appByUser.get(p.giverId).id,
-        recipientApplication: appByUser.get(p.recipientId).id,
-        score: p.score,
-        reasons: [...p.reasons],
-        published: false,
-        status: 'assigned',
-        createdAt: at,
-        updatedAt: at,
-      });
+    const body = ctx.body || {};
+    const next = { ...defaultAutoMatch(), ...(event.autoMatch || {}) };
+    for (const key of ['enabled', 'publish']) {
+      if (body[key] === undefined) continue;
+      if (typeof body[key] !== 'boolean') throw invalid(`${key} must be true or false.`);
+      next[key] = body[key];
     }
+    if (body.mode !== undefined) {
+      if (!MATCH_MODES.includes(body.mode)) throw invalid(`mode must be one of: ${MATCH_MODES.join(', ')}.`);
+      next.mode = body.mode;
+    }
+    event.autoMatch = next;
+    return { event: serializeEvent(ctx.state, event, user) };
+  });
 
-    const warnings = [...result.warnings];
-    if (skipped.length) warnings.push(skippedAccountsWarning(skipped.map((a) => miniOf(state, a.user).displayName)));
-
-    const { participants, matched, totalScore, averageScore, cycles, seed: usedSeed } = result.stats;
-    return {
-      matches: adminList(state, event.id),
-      result: {
-        unmatched: result.unmatched.map((id) => miniOf(state, id)),
-        warnings,
-        stats: { participants, matched, totalScore, averageScore, cycles, seed: usedSeed },
-      },
-    };
+  router.post('/events/:eventId/auto-match/run', (ctx) => {
+    const { user, event } = organizerOnly(ctx);
+    if (event.status !== 'matching') {
+      throw httpError(409, 'Close sign-ups first; automatic matching runs once they are closed.', 'WRONG_STATUS');
+    }
+    const run = runAutoMatch(ctx.state, event, ctx.now);
+    return { run, event: serializeEvent(ctx.state, event, user), matches: adminList(ctx.state, event.id) };
   });
 
   router.put('/events/:eventId/matching-rules', (ctx) => {
@@ -286,66 +425,8 @@ export function register(router) {
 
   router.post('/events/:eventId/matches/publish', (ctx) => {
     const { user, event } = organizerOnly(ctx);
-    const { state } = ctx;
-    if (event.status !== 'matching') {
-      throw httpError(409, 'Matches can only be published while the event is in matching.', 'WRONG_STATUS');
-    }
-
-    const matches = state.matches.filter((m) => m.event === event.id && !m.published);
-    if (!matches.length) throw httpError(409, 'Generate matches before publishing them.', 'NO_MATCHES');
-    // Same people generate used: deactivated accounts were left out there
-    const accepted = state.applications.filter(
-      (a) => a.event === event.id && a.status === 'accepted' && findUser(state, a.user)?.status !== 'deactivated'
-    );
-
-    // Everyone accepted right now must give exactly once and receive exactly once
-    const gives = new Map();
-    const receives = new Map();
-    for (const m of matches) {
-      gives.set(m.giver, (gives.get(m.giver) || 0) + 1);
-      receives.set(m.recipient, (receives.get(m.recipient) || 0) + 1);
-    }
-    const acceptedIds = new Set(accepted.map((a) => a.user));
-    const notPlaced = accepted.filter((a) => gives.get(a.user) !== 1 || receives.get(a.user) !== 1);
-    const stale = [...gives.keys(), ...receives.keys()].some((id) => !acceptedIds.has(id));
-
-    if (notPlaced.length) {
-      const names = notPlaced.slice(0, 3).map((a) => miniOf(state, a.user).displayName);
-      const more = notPlaced.length > 3 ? ` and ${notPlaced.length - 3} more` : '';
-      throw httpError(
-        409,
-        `Not every accepted participant has a match (${names.join(', ')}${more}). This happens when someone is accepted ` +
-          "after matches were generated, or can't be matched. Generate matches again, or remove anyone who can't be placed.",
-        'MATCHES_INCOMPLETE'
-      );
-    }
-    if (stale) {
-      throw httpError(
-        409,
-        'Some matches include people who are no longer accepted participants. Generate matches again.',
-        'MATCHES_INCOMPLETE'
-      );
-    }
-
-    const at = ctx.now.toISOString();
-    for (const m of matches) {
-      m.published = true;
-      m.updatedAt = at;
-    }
-    setStatus(event, 'active', user.id);
-    event.publishedAt = at;
-
-    const due = formatDay(event.submissionDeadline);
-    for (const m of matches) {
-      notify(state, m.giver, {
-        type: 'match_assigned',
-        title: `Your match for ${event.name} is ready`,
-        message: `You're making a gift for ${miniOf(state, m.recipient).displayName}. It's due by ${due}.`,
-        link: `/events/${event.id}/matches`,
-      });
-    }
-
-    return { event: serializeEvent(state, event, user), matches: adminList(state, event.id) };
+    publishFor(ctx.state, event, user.id, ctx.now);
+    return { event: serializeEvent(ctx.state, event, user), matches: adminList(ctx.state, event.id) };
   });
 
   // The giver's view of their match: who they're making a gift for and what that person

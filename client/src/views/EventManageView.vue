@@ -15,6 +15,7 @@ import OverviewPanel from '@/components/events/manage/OverviewPanel.vue';
 const tabPanel = (loader) => defineAsyncComponent({ loader, loadingComponent: LoadingBlock, delay: 150 });
 const ParticipantsPanel = tabPanel(() => import('@/components/events/manage/ParticipantsPanel.vue'));
 const MatchingPanel = tabPanel(() => import('@/components/events/manage/MatchingPanel.vue'));
+const ArtStylesPanel = tabPanel(() => import('@/components/events/manage/ArtStylesPanel.vue'));
 const SubmissionsPanel = tabPanel(() => import('@/components/events/manage/SubmissionsPanel.vue'));
 const SettingsPanel = tabPanel(() => import('@/components/events/manage/SettingsPanel.vue'));
 import DuplicateEventModal from '@/components/events/manage/DuplicateEventModal.vue';
@@ -89,6 +90,7 @@ const TAB_LABELS = {
   overview: 'Overview',
   participants: 'Participants',
   matching: 'Matching',
+  styles: 'Art styles',
   submissions: 'Submissions',
   settings: 'Settings',
 };
@@ -212,6 +214,7 @@ const meta = computed(() => {
           @updated="onUpdated"
           @go="setTab"
         />
+        <ArtStylesPanel v-else-if="tab === 'styles'" :key="event.id" :event="event" @updated="onUpdated" />
         <SubmissionsPanel v-else-if="tab === 'submissions'" :key="event.id" :event="event" />
         <SettingsPanel v-else :key="event.id" :event="event" @updated="onUpdated" @left="onLeft" />
       </div>

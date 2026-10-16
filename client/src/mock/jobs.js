@@ -5,6 +5,7 @@ import { LIMITS } from '@shared/constants.mjs';
 import { emptySocials } from './db.js';
 import { acceptedUserIds, notifyMany, organizerIds, setStatus } from './model.js';
 import { plural, timeLeft, toMs } from './util.js';
+import { runAutoMatch } from './handlers/matches.js';
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
@@ -12,6 +13,7 @@ const DAY = 24 * HOUR;
 const KEYS = {
   signupWarning: 'signup-48h',
   signupClosed: 'signup-closed',
+  autoMatched: 'auto-matched',
   submission72h: 'submission-72h',
   submission24h: 'submission-24h',
   overdue: 'submission-overdue',
@@ -45,6 +47,8 @@ function autoCloseSignups(state, now) {
     if (pending) parts.push(`${plural(pending, 'application is', 'applications are')} still waiting for review.`);
     if (accepted < Math.max(event.minParticipants, 2)) {
       parts.push(`That's below your minimum of ${event.minParticipants}; you can reopen sign-ups with a later deadline.`);
+    } else if (event.autoMatch?.enabled) {
+      parts.push('Matches are being made automatically; you will hear when they are ready.');
     } else {
       parts.push('Generate matches when you are ready.');
     }
@@ -171,11 +175,25 @@ function purgeDeactivated(state, now) {
   return changed;
 }
 
+// Events set to match themselves, once their sign-ups have closed (one go each)
+function autoMatchEvents(state, now) {
+  let changed = false;
+  for (const event of state.events) {
+    if (event.status !== 'matching' || event.disabledAt || !event.autoMatch?.enabled) continue;
+    if (state.matches.some((m) => m.event === event.id && m.published)) continue;
+    if (!claim(event, KEYS.autoMatched)) continue;
+    runAutoMatch(state, event, now);
+    changed = true;
+  }
+  return changed;
+}
+
 // Returns true when something changed (so the caller saves)
 export function runJobs(state, now = new Date()) {
   let changed = false;
   for (const event of state.events) event.remindersSent ||= [];
   changed = autoCloseSignups(state, now) || changed;
+  changed = autoMatchEvents(state, now) || changed;
   changed = warnSignupsClosing(state, now) || changed;
   changed = remindGivers(state, now) || changed;
   changed = reportOverdue(state, now) || changed;
