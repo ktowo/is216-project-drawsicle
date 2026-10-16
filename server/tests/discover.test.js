@@ -171,3 +171,48 @@ test('the following flag tracks who you follow', async () => {
   await ada.agent.post('/api/users/ben/follow').expect(200);
   assert.equal((await ada.agent.get('/api/discover/artists').expect(200)).body.items[0].following, true);
 });
+
+test('filters: makes and themes match any value inside a group, every filter must match', async () => {
+  await artist('Ada', 'ada', TAGS(['fantasy', 'cosy'], ['art']));
+  await artist('Ben', 'ben', TAGS(['spooky'], ['writing']));
+  await artist('Cleo', 'cleo', TAGS(['fantasy'], ['writing', 'art']));
+  await artist('Dev', 'dev');
+  const list = async (query) => names((await h.request(app).get(`/api/discover/artists?${query}`).expect(200)).body).sort();
+
+  assert.deepEqual(await list('makes=writing'), ['ben', 'cleo']);
+  assert.deepEqual(await list('themes=fantasy,spooky'), ['ada', 'ben', 'cleo']);
+  assert.deepEqual(await list('makes=writing&themes=fantasy'), ['cleo']);
+  assert.deepEqual(await list('makes=writing&themes=fantasy&q=ben'), []);
+  for (const bad of ['makes=sculpture', 'themes=nope', 'sort=random']) {
+    assert.equal((await h.request(app).get(`/api/discover/artists?${bad}`).expect(400)).body.code, 'VALIDATION');
+  }
+});
+
+test('filters: has gifts and people I follow (which needs a login)', async () => {
+  const org = await artist('Org', 'org', { 'profilePrivacy.listInDiscover': false });
+  const ada = await artist('Ada', 'ada', SHOW_GIFTS);
+  const ben = await artist('Ben', 'ben', SHOW_GIFTS);
+  await artist('Cleo', 'cleo');
+  await gift(await finishedEvent(org.id), ada.id, ben.id);
+
+  assert.deepEqual(names((await h.request(app).get('/api/discover/artists?hasGifts=true')).body), ['ada']);
+
+  await h.request(app).get('/api/discover/artists?following=true').expect(401);
+  await ben.agent.post('/api/users/cleo/follow').expect(200);
+  assert.deepEqual(names((await ben.agent.get('/api/discover/artists?following=true').expect(200)).body), ['cleo']);
+});
+
+test('sorts: newest and most exchanges', async () => {
+  const org = await artist('Org', 'org', { 'profilePrivacy.listInDiscover': false });
+  const old = await artist('Old', 'old_one');
+  const fresh = await artist('Fresh', 'fresh');
+  const busy = await artist('Busy', 'busy');
+  await User.collection.updateOne({ _id: new User.base.Types.ObjectId(old.id) }, { $set: { createdAt: h.daysFromNow(-100) } });
+  await User.collection.updateOne({ _id: new User.base.Types.ObjectId(busy.id) }, { $set: { createdAt: h.daysFromNow(-50) } });
+  await User.collection.updateOne({ _id: new User.base.Types.ObjectId(fresh.id) }, { $set: { createdAt: h.daysFromNow(1) } });
+  for (let i = 0; i < 2; i++) await joined(await finishedEvent(org.id, { name: `S${i}` }), busy.id);
+  await joined(await finishedEvent(org.id), old.id);
+
+  assert.deepEqual(names((await h.request(app).get('/api/discover/artists?sort=newest')).body), ['fresh', 'busy', 'old_one']);
+  assert.deepEqual(names((await h.request(app).get('/api/discover/artists?sort=exchanges')).body), ['busy', 'old_one', 'fresh']);
+});

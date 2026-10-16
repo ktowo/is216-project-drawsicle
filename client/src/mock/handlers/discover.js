@@ -1,5 +1,6 @@
 // /discover: Discover artists (server/routes/discover-router.js)
-import { artistTagsOf } from '@shared/taste.mjs';
+import { artistTagsOf, THEME_VALUES } from '@shared/taste.mjs';
+import { CREATION_TYPE_VALUES } from '@shared/constants.mjs';
 import { httpError } from '../util.js';
 import { artistCard, isFinished } from './users.js';
 
@@ -55,7 +56,36 @@ function candidates(state, { q, viewer }) {
 const interesting = (c) => Number(c.tagged) + Number(c.hasGifts) + Number(c.exchanges > 0);
 const ORDERS = {
   default: [interesting, (c) => c.exchanges, (c) => c.createdAt],
+  newest: [(c) => c.createdAt],
+  exchanges: [(c) => c.exchanges, interesting, (c) => c.createdAt],
 };
+
+// ?makes=art,writing&themes=fantasy&hasGifts=true&following=true. Within makes or themes any value
+// matches; different filters must all match.
+function readFilters(query) {
+  const listOf = (key, allowed) => {
+    if (query[key] === undefined || query[key] === '') return [];
+    const values = String(query[key]).split(',').map((v) => v.trim()).filter(Boolean);
+    if (values.some((v) => !allowed.includes(v))) throw invalid(`${key} must use: ${allowed.join(', ')}.`);
+    return [...new Set(values)];
+  };
+  const sort = query.sort === undefined || query.sort === '' ? 'default' : String(query.sort);
+  if (!Object.keys(ORDERS).includes(sort)) throw invalid(`sort must be one of: ${Object.keys(ORDERS).join(', ')}.`);
+  return {
+    makes: listOf('makes', CREATION_TYPE_VALUES),
+    themes: listOf('themes', THEME_VALUES),
+    hasGifts: query.hasGifts === 'true',
+    following: query.following === 'true',
+    sort,
+  };
+}
+
+const matches = (filters, followed) => (c) =>
+  (!filters.makes.length || filters.makes.some((m) => c.tags.makes.includes(m))) &&
+  (!filters.themes.length || filters.themes.some((t) => c.tags.themes.includes(t))) &&
+  (!filters.hasGifts || c.hasGifts) &&
+  (!filters.following || followed.has(c.id));
+
 
 function sortBy(list, keys) {
   return [...list].sort((a, b) => {
@@ -80,7 +110,13 @@ export function register(router) {
     const { state } = ctx;
     const viewer = ctx.currentUser();
     const { limit, offset } = readPaging(ctx.query);
-    const ordered = sortBy(candidates(state, { q: ctx.query.q, viewer }), ORDERS.default);
+    const filters = readFilters(ctx.query);
+    if (filters.following && !viewer) throw httpError(401, 'Log in to see who you follow.', 'AUTH_REQUIRED');
+    const followed = new Set(
+      filters.following ? state.follows.filter((f) => f.follower === viewer.id).map((f) => f.following) : []
+    );
+    const list = candidates(state, { q: ctx.query.q, viewer }).filter(matches(filters, followed));
+    const ordered = sortBy(list, ORDERS[filters.sort]);
     const items = ordered.slice(offset, offset + limit).map((c) => artistCard(state, c.user, viewer));
     const hasMore = ordered.length > offset + limit;
     return { items, hasMore, nextCursor: hasMore ? String(offset + limit) : null, total: ordered.length };

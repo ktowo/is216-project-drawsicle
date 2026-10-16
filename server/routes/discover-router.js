@@ -5,7 +5,10 @@ const Application = require('../models/Application.js');
 const Submission = require('../models/Submission.js');
 const { optionalAuth } = require('../middleware/auth.js');
 const { FINISHED, artistCard } = require('../services/artists.js');
+const Follow = require('../models/Follow.js');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
+const { CREATION_TYPE_VALUES } = require('../../shared/constants.mjs');
+const { THEME_VALUES } = require('../../shared/taste.mjs');
 
 // Discover artists: /api/discover/artists. Only active artists who haven't turned off
 // profilePrivacy.listInDiscover, never yourself.
@@ -67,7 +70,36 @@ async function candidates({ q, viewer }) {
 const interesting = (c) => Number(c.tagged) + Number(c.hasGifts) + Number(c.exchanges > 0);
 const ORDERS = {
   default: [interesting, (c) => c.exchanges, (c) => c.createdAt],
+  newest: [(c) => c.createdAt],
+  exchanges: [(c) => c.exchanges, interesting, (c) => c.createdAt],
 };
+
+// ?makes=art,writing&themes=fantasy&hasGifts=true&following=true. Within makes or themes any value
+// matches; different filters must all match.
+function readFilters(query) {
+  const listOf = (key, allowed) => {
+    if (query[key] === undefined || query[key] === '') return [];
+    const values = String(query[key]).split(',').map((v) => v.trim()).filter(Boolean);
+    if (values.some((v) => !allowed.includes(v))) throw invalid(`${key} must use: ${allowed.join(', ')}.`);
+    return [...new Set(values)];
+  };
+  const sort = query.sort === undefined || query.sort === '' ? 'default' : String(query.sort);
+  if (!Object.keys(ORDERS).includes(sort)) throw invalid(`sort must be one of: ${Object.keys(ORDERS).join(', ')}.`);
+  return {
+    makes: listOf('makes', CREATION_TYPE_VALUES),
+    themes: listOf('themes', THEME_VALUES),
+    hasGifts: query.hasGifts === 'true',
+    following: query.following === 'true',
+    sort,
+  };
+}
+
+const matches = (filters, followed) => (c) =>
+  (!filters.makes.length || filters.makes.some((m) => c.tags.makes.includes(m))) &&
+  (!filters.themes.length || filters.themes.some((t) => c.tags.themes.includes(t))) &&
+  (!filters.hasGifts || c.hasGifts) &&
+  (!filters.following || followed.has(c.id));
+
 
 function sortBy(list, keys) {
   return [...list].sort((a, b) => {
@@ -89,8 +121,13 @@ function readPaging(query) {
 
 router.get('/artists', optionalAuth, asyncHandler(async (req, res) => {
   const { limit, offset } = readPaging(req.query);
-  const list = await candidates({ q: req.query.q, viewer: req.user });
-  const ordered = sortBy(list, ORDERS.default);
+  const filters = readFilters(req.query);
+  if (filters.following && !req.user) throw httpError(401, 'Log in to see who you follow.', 'AUTH_REQUIRED');
+  const followed = new Set(
+    filters.following ? (await Follow.distinct('following', { follower: req.user._id })).map(String) : []
+  );
+  const list = (await candidates({ q: req.query.q, viewer: req.user })).filter(matches(filters, followed));
+  const ordered = sortBy(list, ORDERS[filters.sort]);
   const page = ordered.slice(offset, offset + limit);
   const items = await Promise.all(page.map((c) => artistCard(c.user, req.user)));
   const hasMore = ordered.length > offset + limit;
