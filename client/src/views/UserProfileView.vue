@@ -22,6 +22,7 @@ import EmptyState from '@/components/ui/EmptyState.vue';
 import ErrorBlock from '@/components/ui/ErrorBlock.vue';
 import { auth } from '@/stores/auth';
 import ReportButton from '@/components/ReportButton.vue';
+import FollowButton from '@/components/profile/FollowButton.vue';
 import { toast } from '@/stores/toast';
 import { api } from '@/api';
 
@@ -149,6 +150,12 @@ watch(handle, (next) => {
   load();
 });
 
+// Following changed: new relationship and counts from the server
+function onFollowChanged({ viewer, stats: counts }) {
+  viewerFlags.value = { ...(viewerFlags.value || {}), ...viewer };
+  stats.value = { ...stats.value, ...counts };
+}
+
 async function copyLink() {
   const url = new URL(router.resolve({ name: 'user', params: { username: profile.value.username || handle.value } }).href, window.location.origin).toString();
   try {
@@ -240,6 +247,13 @@ function goToLookup() {
             <Pencil :size="16" aria-hidden="true" /> Edit your profile
           </RouterLink>
         </template>
+        <FollowButton
+          v-if="!isMe && profile.username"
+          :username="profile.username"
+          :name="profile.displayName"
+          :viewer="viewerFlags"
+          @changed="onFollowChanged"
+        />
         <button type="button" class="btn btn-outline btn-sm" @click="copyLink">
           <Link2 :size="16" aria-hidden="true" /> Copy profile link
         </button>
@@ -268,6 +282,12 @@ function goToLookup() {
         <RouterLink to="/privacy#visibility">What's public?</RouterLink>
       </p>
 
+      <p class="follow-counts">
+        <strong>{{ (stats.followers || 0).toLocaleString('en-GB') }}</strong>
+        {{ stats.followers === 1 ? 'follower' : 'followers' }} ·
+        <strong>{{ (stats.following || 0).toLocaleString('en-GB') }}</strong> following
+        <RouterLink v-if="isMe" to="/friends" class="friends-link">Your friends</RouterLink>
+      </p>
       <ProfileStats :stats="stats" class="stats-gap" />
       <ProfileBadges :badges="badges" class="stats-gap" />
 
@@ -370,6 +390,17 @@ function goToLookup() {
 }
 .stats-gap {
   margin-top: 20px;
+}
+.follow-counts {
+  margin: 16px 0 0;
+  color: var(--muted);
+}
+.follow-counts strong {
+  color: var(--text);
+}
+.friends-link {
+  margin-left: 10px;
+  font-weight: 700;
 }
 .own-note {
   margin: 16px 0 0;

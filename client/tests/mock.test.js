@@ -476,7 +476,7 @@ describe('build-out additions', () => {
     expect(profile.createdAt).toBeTruthy();
     expect(organizing.map((e) => e.name)).toEqual(['Moth & Lantern Exchange']);
     expect(organizing[0].viewer).toBeNull();
-    expect(stats).toEqual({ eventsOrganized: 1, exchangesCompleted: 1 });
+    expect(stats).toEqual({ eventsOrganized: 1, followers: 0, following: 0, exchangesCompleted: 1 });
 
     expect((await ok('/users/@KIT')).profile.id).toBe(profile.id);
     expect((await ok(`/users/${profile.id}`)).profile.username).toBe('kit');
@@ -524,7 +524,7 @@ describe('build-out additions', () => {
     await logout();
     const hidden = await ok('/users/kit');
     expect(hidden).not.toHaveProperty('exchanges');
-    expect(hidden.stats).toEqual({ eventsOrganized: 1 });
+    expect(hidden.stats).toEqual({ eventsOrganized: 1, followers: 0, following: 0 });
   });
 
   it('shows only gifts both people agreed to, newest first, in pages', async () => {

@@ -42,7 +42,7 @@ test('people manage a private list of who they will not be matched with', async 
 
   // Ben's public profile tells Ada (and only Ada) that he's on her list
   const seen = await ada.agent.get(`/api/users/${benName}`).expect(200);
-  assert.deepEqual(seen.body.viewer, { blocked: true });
+  assert.equal(seen.body.viewer.blocked, true);
   const anon = await h.request(fx.use(h.makeApp())).get(`/api/users/${benName}`).expect(200);
   assert.equal(anon.body.viewer, undefined);
 

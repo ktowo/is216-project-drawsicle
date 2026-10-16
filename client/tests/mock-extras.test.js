@@ -131,7 +131,7 @@ describe('who gets matched with whom', () => {
     await loginAs('sol');
     const { blocks } = await ok('/profile/blocks', { method: 'POST', body: { username: 'noor' } });
     expect(blocks.map((b) => b.username)).toEqual(['noor']);
-    expect((await ok('/users/noor')).viewer).toEqual({ blocked: true });
+    expect((await ok('/users/noor')).viewer.blocked).toBe(true);
 
     // Summer Splash Swap is waiting for matches; Sol and Noor are both in it
     await loginAs('mika');
@@ -306,5 +306,28 @@ describe('the museum', () => {
       expect(art.giver.displayName).toBeTruthy();
     }
     expect((await fails('/museum/0123456789abcdef01234567')).status).toBe(404);
+  });
+});
+
+describe('following and friends', () => {
+  it('turns a follow back into a friendship', async () => {
+    await loginAs('kit');
+    const first = await ok('/users/pip/follow', { method: 'POST' });
+    expect(first.viewer).toEqual({ following: true, followsYou: false, friends: false });
+    expect((await fails('/users/kit/follow', { method: 'POST' })).code).toBe('VALIDATION');
+
+    await loginAs('pip');
+    const profile = await ok('/users/kit');
+    expect(profile.viewer.followsYou).toBe(true);
+    expect(profile.stats.following).toBe(1);
+    const back = await ok('/users/kit/follow', { method: 'POST' });
+    expect(back.viewer.friends).toBe(true);
+    const list = await ok('/friends');
+    expect(list.friends.map((f) => f.user.displayName)).toEqual(['Kit']);
+
+    await ok('/users/kit/follow', { method: 'DELETE' });
+    const after = await ok('/friends');
+    expect(after.friends).toEqual([]);
+    expect(after.followers.map((f) => f.user.displayName)).toEqual(['Kit']);
   });
 });

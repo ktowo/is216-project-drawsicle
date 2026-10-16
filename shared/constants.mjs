@@ -106,6 +106,8 @@ export const NOTIFICATION_TYPES = [
   'backup_assigned',
   'report_received',
   'report_handled',
+  'new_follower',
+  'new_friend',
   'role_changed',
   'test',
 ];
@@ -187,6 +189,7 @@ export const LIMITS = {
   reportDetails: 1000,
   progressNote: 200,
   reportsPerDay: 20,
+  following: 500,
   deactivationGraceDays: 30,
 };
 
