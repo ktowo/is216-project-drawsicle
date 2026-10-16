@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   Landmark,
 } from 'lucide-vue-next';
+import { can } from '@shared/permissions.mjs';
 import NotificationBell from './NotificationBell.vue';
 import DisplayToggles from './DisplayToggles.vue';
 import UserAvatar from './UserAvatar.vue';
@@ -48,9 +49,12 @@ const loginLink = computed(() =>
     : { name: 'login' }
 );
 
+// Moderators get the same page with fewer tabs
+const adminLabel = computed(() => (auth.user?.role === 'admin' ? 'Site admin' : 'Moderation'));
+
 // The public page only exists once someone has a username
 const accountLinks = computed(() => [
-  ...(auth.user?.role === 'admin' ? [{ to: '/admin', label: 'Site admin', icon: ShieldCheck }] : []),
+  ...(can(auth.user, 'admin.access') ? [{ to: '/admin', label: adminLabel.value, icon: ShieldCheck }] : []),
   { to: '/profile', label: 'Your profile', icon: UserRound },
   ...(auth.user?.username
     ? [{ to: `/users/${encodeURIComponent(auth.user.username)}`, label: 'View public profile', icon: Eye }]
@@ -203,8 +207,8 @@ watch(
         <template v-if="auth.user">
           <RouterLink to="/dashboard" class="nav-link">Dashboard</RouterLink>
           <RouterLink to="/my-events" class="nav-link">My events</RouterLink>
-          <RouterLink v-if="auth.user.role === 'admin'" to="/admin" class="nav-link admin-link">
-            <ShieldCheck :size="16" aria-hidden="true" /> Admin
+          <RouterLink v-if="can(auth.user, 'admin.access')" to="/admin" class="nav-link admin-link">
+            <ShieldCheck :size="16" aria-hidden="true" /> {{ auth.user.role === 'admin' ? 'Admin' : 'Moderation' }}
           </RouterLink>
         </template>
         <RouterLink v-else to="/help" class="nav-link">Help</RouterLink>

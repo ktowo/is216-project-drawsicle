@@ -20,7 +20,7 @@ const Match = require('../models/Match.js');
 const Submission = require('../models/Submission.js');
 const Notification = require('../models/Notification.js');
 const { LOCAL_UPLOAD_DIR, saveFile, storageMode, removeStoredFolder } = require('../services/storage.js');
-const { EVENT_STATUSES } = require('../../shared/constants.mjs');
+const { EVENT_STATUSES, SITE_ROLES } = require('../../shared/constants.mjs');
 
 const DEMO_DATA_FILE = path.join(__dirname, '..', '..', 'shared', 'demo-data.mjs');
 const DEMO_UPLOAD_DIR = path.join(LOCAL_UPLOAD_DIR, 'demo');
@@ -155,7 +155,7 @@ async function seed({ reset = false, now = new Date(), artDir = DEMO_UPLOAD_DIR 
       email: u.email,
       passwordHash,
       username,
-      role: u.role === 'admin' ? 'admin' : 'user',
+      role: SITE_ROLES.includes(u.role) ? u.role : 'user',
       displayName: u.displayName,
       bio: u.bio || '',
       socials: u.socials || {},

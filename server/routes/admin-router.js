@@ -10,7 +10,7 @@ const Character = require('../models/Character.js');
 const Notification = require('../models/Notification.js');
 const AuditLog = require('../models/AuditLog.js');
 const Report = require('../models/Report.js');
-const { requireAuth, requireAdmin } = require('../middleware/auth.js');
+const { requireAuth, requirePermission } = require('../middleware/auth.js');
 const { withdrawApplications, anonymiseUser } = require('../services/accounts.js');
 const { organizerIds, serializeEvent, serializeEvents, deleteEventCascade } = require('../services/events.js');
 const { notify, notifyMany } = require('../services/notify.js');
@@ -20,10 +20,11 @@ const { ALL_EVENT_STATUSES, USER_STATUSES, SITE_ROLES, REPORT_STATUSES } = requi
 
 const { userMini } = User;
 
-// Site admin tools: everything here needs User.role === 'admin'.
-// Every change is written to the audit log.
+// Site admin tools. Who can use what is in shared/permissions.mjs: moderators get reports, chat
+// and lookups; admins get everything. Every change is written to the audit log.
 const router = Router();
-router.use(requireAuth, requireAdmin);
+router.use(requireAuth, requirePermission('admin.access'));
+const may = requirePermission;
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const str = (v) => (typeof v === 'string' ? v.trim() : '');
@@ -72,6 +73,9 @@ async function findEvent(req) {
   return event;
 }
 
+// Higher roles can do more; used to word role changes in the audit log
+const ROLE_RANK = { user: 0, moderator: 1, admin: 2 };
+
 function notSelf(req, user, message) {
   if (user._id.equals(req.user._id)) throw httpError(400, message, 'SELF');
 }
@@ -90,11 +94,12 @@ const quietly = (promise) => promise.catch((err) => console.error('Admin notific
 
 // ---------- Overview ----------
 
-router.get('/stats', asyncHandler(async (req, res) => {
-  const [userRows, admins, eventRows, disabled, applications, matches, submissions, newestUsers, newestEvents, openReports] =
+router.get('/stats', may('stats.view'), asyncHandler(async (req, res) => {
+  const [userRows, admins, moderators, eventRows, disabled, applications, matches, submissions, newestUsers, newestEvents, openReports] =
     await Promise.all([
       User.aggregate([{ $group: { _id: '$status', n: { $sum: 1 } } }]),
       User.countDocuments({ role: 'admin' }),
+      User.countDocuments({ role: 'moderator' }),
       Event.aggregate([{ $group: { _id: '$status', n: { $sum: 1 } } }]),
       Event.countDocuments({ disabledAt: { $ne: null } }),
       Application.countDocuments({ status: { $ne: 'withdrawn' } }),
@@ -111,7 +116,7 @@ router.get('/stats', asyncHandler(async (req, res) => {
   for (const row of eventRows) byStatus[row._id] = row.n;
 
   res.json({
-    users: { ...users, total: Object.values(users).reduce((a, b) => a + b, 0), admins },
+    users: { ...users, total: Object.values(users).reduce((a, b) => a + b, 0), admins, moderators },
     events: { byStatus, total: Object.values(byStatus).reduce((a, b) => a + b, 0), disabled },
     applications,
     matches,
@@ -126,7 +131,7 @@ router.get('/stats', asyncHandler(async (req, res) => {
 
 // ---------- Users ----------
 
-router.get('/users', asyncHandler(async (req, res) => {
+router.get('/users', may('users.view'), asyncHandler(async (req, res) => {
   const { page, limit, skip } = paging(req);
   const filter = {};
   const q = str(req.query.q).slice(0, 100);
@@ -155,27 +160,28 @@ router.get('/users', asyncHandler(async (req, res) => {
   });
 }));
 
-router.patch('/users/:userId', asyncHandler(async (req, res) => {
+router.patch('/users/:userId', may('users.roles'), asyncHandler(async (req, res) => {
   const user = await findUser(req);
   const { role } = req.body || {};
   if (!SITE_ROLES.includes(role)) throw httpError(400, `role must be one of: ${SITE_ROLES.join(', ')}.`, 'VALIDATION');
   notSelf(req, user, "You can't change your own role. Ask another admin.");
-  if (user.status === 'banned' && role === 'admin') {
-    throw httpError(400, 'Unban this account before making it an admin.', 'VALIDATION');
+  if (user.status === 'banned' && role !== 'user') {
+    throw httpError(400, 'Unban this account before giving it a site role.', 'VALIDATION');
   }
   if (user.role !== role) {
+    const was = user.role;
     user.role = role;
     await user.save();
-    await audit(req, role === 'admin' ? 'user.promote' : 'user.demote', 'user', user._id, user.displayName || user.email);
+    await audit(req, ROLE_RANK[role] > ROLE_RANK[was] ? 'user.promote' : 'user.demote', 'user', user._id, user.displayName || user.email, `${was} → ${role}`);
   }
   res.json({ user: adminUser(user) });
 }));
 
-router.post('/users/:userId/ban', asyncHandler(async (req, res) => {
+router.post('/users/:userId/ban', may('users.manage'), asyncHandler(async (req, res) => {
   const user = await findUser(req);
   const reason = readReason(req.body, true);
   notSelf(req, user, "You can't ban yourself.");
-  if (user.role === 'admin') throw httpError(400, 'Remove their admin role before banning them.', 'VALIDATION');
+  if (user.role !== 'user') throw httpError(400, 'Take away their site role before banning them.', 'VALIDATION');
   if (user.status === 'banned') throw httpError(409, 'This account is already banned.', 'ALREADY_BANNED');
 
   user.status = 'banned';
@@ -189,7 +195,7 @@ router.post('/users/:userId/ban', asyncHandler(async (req, res) => {
   res.json({ user: adminUser(user), withdrawnApplications: withdrawn });
 }));
 
-router.post('/users/:userId/unban', asyncHandler(async (req, res) => {
+router.post('/users/:userId/unban', may('users.manage'), asyncHandler(async (req, res) => {
   const user = await findUser(req);
   if (user.status !== 'banned') throw httpError(409, "This account isn't banned.", 'NOT_BANNED');
   user.status = 'active';
@@ -202,10 +208,10 @@ router.post('/users/:userId/unban', asyncHandler(async (req, res) => {
 }));
 
 // Deleting keeps the document (anonymised) so past events, matches and gifts stay intact
-router.delete('/users/:userId', asyncHandler(async (req, res) => {
+router.delete('/users/:userId', may('users.manage'), asyncHandler(async (req, res) => {
   const user = await findUser(req);
   notSelf(req, user, "You can't delete your own account from here.");
-  if (user.role === 'admin') throw httpError(400, 'Remove their admin role before deleting the account.', 'VALIDATION');
+  if (user.role !== 'user') throw httpError(400, 'Take away their site role before deleting the account.', 'VALIDATION');
   const label = user.displayName || user.email;
 
   await withdrawApplications(user);
@@ -224,7 +230,7 @@ router.delete('/users/:userId', asyncHandler(async (req, res) => {
 
 // ---------- Events ----------
 
-router.get('/events', asyncHandler(async (req, res) => {
+router.get('/events', may('events.moderate'), asyncHandler(async (req, res) => {
   const { page, limit, skip } = paging(req);
   const filter = {};
   const q = str(req.query.q).slice(0, 100);
@@ -249,7 +255,7 @@ router.get('/events', asyncHandler(async (req, res) => {
   });
 }));
 
-router.post('/events/:eventId/disable', asyncHandler(async (req, res) => {
+router.post('/events/:eventId/disable', may('events.moderate'), asyncHandler(async (req, res) => {
   const event = await findEvent(req);
   const reason = readReason(req.body, true);
   if (event.disabledAt) throw httpError(409, 'This event is already disabled.', 'ALREADY_DISABLED');
@@ -270,7 +276,7 @@ router.post('/events/:eventId/disable', asyncHandler(async (req, res) => {
   res.json({ event: await serializeEvent(event, req.user) });
 }));
 
-router.post('/events/:eventId/enable', asyncHandler(async (req, res) => {
+router.post('/events/:eventId/enable', may('events.moderate'), asyncHandler(async (req, res) => {
   const event = await findEvent(req);
   if (!event.disabledAt) throw httpError(409, "This event isn't disabled.", 'NOT_DISABLED');
   event.disabledAt = null;
@@ -289,7 +295,7 @@ router.post('/events/:eventId/enable', asyncHandler(async (req, res) => {
   res.json({ event: await serializeEvent(event, req.user) });
 }));
 
-router.post('/events/:eventId/cancel', asyncHandler(async (req, res) => {
+router.post('/events/:eventId/cancel', may('events.moderate'), asyncHandler(async (req, res) => {
   const event = await findEvent(req);
   const reason = readReason(req.body, true);
   if (event.status === 'cancelled') throw httpError(409, 'This event is already cancelled.', 'ALREADY_CANCELLED');
@@ -312,7 +318,7 @@ router.post('/events/:eventId/cancel', asyncHandler(async (req, res) => {
   res.json({ event: await serializeEvent(event, req.user) });
 }));
 
-router.post('/events/:eventId/restore', asyncHandler(async (req, res) => {
+router.post('/events/:eventId/restore', may('events.moderate'), asyncHandler(async (req, res) => {
   const event = await findEvent(req);
   if (event.status !== 'cancelled') throw httpError(409, "This event isn't cancelled.", 'NOT_CANCELLED');
   event.setStatus(event.statusBeforeCancel || 'draft', req.user._id);
@@ -334,7 +340,7 @@ router.post('/events/:eventId/restore', asyncHandler(async (req, res) => {
   res.json({ event: await serializeEvent(event, req.user) });
 }));
 
-router.delete('/events/:eventId', asyncHandler(async (req, res) => {
+router.delete('/events/:eventId', may('events.moderate'), asyncHandler(async (req, res) => {
   const event = await findEvent(req);
   const reason = readReason(req.body, false);
   await quietly(
@@ -383,7 +389,7 @@ const REPORT_POPULATE = [
 ];
 const populateReport = (query) => REPORT_POPULATE.reduce((q, [path, select]) => q.populate(path, select), query);
 
-router.get('/reports', asyncHandler(async (req, res) => {
+router.get('/reports', may('reports.review'), asyncHandler(async (req, res) => {
   const { page, limit, skip } = paging(req);
   const status = REPORT_STATUSES.includes(req.query.status) ? req.query.status : 'open';
   const filter = { status };
@@ -409,7 +415,7 @@ const REPORT_DONE_MESSAGES = {
   dismissed: "An admin looked into it and found it doesn't break the community guidelines. Thanks for letting us know.",
 };
 
-router.patch('/reports/:reportId', asyncHandler(async (req, res) => {
+router.patch('/reports/:reportId', may('reports.review'), asyncHandler(async (req, res) => {
   const { reportId } = req.params;
   const report = mongoose.isValidObjectId(reportId) ? await Report.findById(reportId) : null;
   if (!report) throw httpError(404, 'Report not found.', 'NOT_FOUND');
@@ -446,7 +452,7 @@ router.patch('/reports/:reportId', asyncHandler(async (req, res) => {
 
 // ---------- Audit log ----------
 
-router.get('/audit', asyncHandler(async (req, res) => {
+router.get('/audit', may('audit.view'), asyncHandler(async (req, res) => {
   const { page, limit, skip } = paging(req);
   const filter = {};
   if (['user', 'event', 'report'].includes(req.query.targetType)) filter.targetType = req.query.targetType;

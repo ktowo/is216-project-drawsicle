@@ -1,5 +1,7 @@
 <script setup>
 import { computed } from 'vue';
+import { auth } from '@/stores/auth';
+import { can } from '@shared/permissions.mjs';
 import { useRoute, useRouter } from 'vue-router';
 import { ShieldCheck } from 'lucide-vue-next';
 import { isMockMode } from '@/api';
@@ -14,13 +16,16 @@ import AdminReports from '@/components/admin/AdminReports.vue';
 const route = useRoute();
 const router = useRouter();
 
-const TABS = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'reports', label: 'Reports' },
-  { key: 'users', label: 'Accounts' },
-  { key: 'events', label: 'Events' },
-  { key: 'activity', label: 'Audit log' },
+// Each tab needs a permission (shared/permissions.mjs); moderators see fewer of them
+const ALL_TABS = [
+  { key: 'overview', label: 'Overview', permission: 'stats.view' },
+  { key: 'reports', label: 'Reports', permission: 'reports.review' },
+  { key: 'users', label: 'Accounts', permission: 'users.view' },
+  { key: 'events', label: 'Events', permission: 'events.moderate' },
+  { key: 'activity', label: 'Audit log', permission: 'audit.view' },
 ];
+const TABS = computed(() => ALL_TABS.filter((t) => can(auth.user, t.permission)));
+const isAdmin = computed(() => auth.user?.role === 'admin');
 const PANELS = {
   overview: AdminOverview,
   reports: AdminReports,
@@ -30,15 +35,24 @@ const PANELS = {
 };
 
 const tab = computed({
-  get: () => (PANELS[route.query.tab] ? route.query.tab : 'overview'),
-  set: (key) => router.replace({ query: { ...route.query, tab: key === 'overview' ? undefined : key } }),
+  get: () => (TABS.value.some((t) => t.key === route.query.tab) ? route.query.tab : TABS.value[0]?.key),
+  set: (key) => router.replace({ query: { ...route.query, tab: key === TABS.value[0]?.key ? undefined : key } }),
 });
 </script>
 
 <template>
   <main id="main" class="page" tabindex="-1">
-    <PageHeader title="Site admin" subtitle="Review reports, moderate events, manage accounts and see what other admins have done.">
-      <span class="badge badge-admin inline-flex items-center gap-1"><ShieldCheck :size="14" aria-hidden="true" /> Admin only</span>
+    <PageHeader
+      :title="isAdmin ? 'Site admin' : 'Moderation'"
+      :subtitle="
+        isAdmin
+          ? 'Review reports, moderate events, manage accounts and see what other admins have done.'
+          : 'Review reports and museum chat, and look up accounts. Site admins handle bans and events.'
+      "
+    >
+      <span class="badge badge-admin inline-flex items-center gap-1">
+        <ShieldCheck :size="14" aria-hidden="true" /> {{ isAdmin ? 'Admin only' : 'Moderators' }}
+      </span>
     </PageHeader>
 
     <p v-if="isMockMode" class="alert alert-error mt-6">
@@ -48,7 +62,7 @@ const tab = computed({
       <TabNav v-model="tab" :tabs="TABS" class="mt-6" />
       <div class="mt-6">
         <KeepAlive>
-          <component :is="PANELS[tab]" :key="tab" />
+          <component :is="PANELS[tab]" v-if="tab" :key="tab" />
         </KeepAlive>
       </div>
     </template>
