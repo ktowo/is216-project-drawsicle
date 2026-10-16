@@ -23,6 +23,10 @@ const ACTIONS = {
   'report.resolve': 'took action on a report about',
   'report.dismiss': 'closed with no action a report about',
   'report.reopen': 'reopened a report about',
+  'chat.hide': 'hid a chat message:',
+  'chat.unhide': 'showed again a chat message:',
+  'user.mute': 'paused the chat of',
+  'user.unmute': 'unpaused the chat of',
 };
 
 const targetType = ref('');
@@ -52,6 +56,7 @@ onMounted(load);
         <option value="user">Account actions</option>
         <option value="event">Event actions</option>
         <option value="report">Reports</option>
+        <option value="chat">Chat</option>
       </select>
     </div>
 

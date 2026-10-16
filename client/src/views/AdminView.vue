@@ -12,6 +12,7 @@ import AdminUsers from '@/components/admin/AdminUsers.vue';
 import AdminEvents from '@/components/admin/AdminEvents.vue';
 import AdminActivity from '@/components/admin/AdminActivity.vue';
 import AdminReports from '@/components/admin/AdminReports.vue';
+import AdminChat from '@/components/admin/AdminChat.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -20,6 +21,7 @@ const router = useRouter();
 const ALL_TABS = [
   { key: 'overview', label: 'Overview', permission: 'stats.view' },
   { key: 'reports', label: 'Reports', permission: 'reports.review' },
+  { key: 'chat', label: 'Chat logs', permission: 'chat.logs' },
   { key: 'users', label: 'Accounts', permission: 'users.view' },
   { key: 'events', label: 'Events', permission: 'events.moderate' },
   { key: 'activity', label: 'Audit log', permission: 'audit.view' },
@@ -29,6 +31,7 @@ const isAdmin = computed(() => auth.user?.role === 'admin');
 const PANELS = {
   overview: AdminOverview,
   reports: AdminReports,
+  chat: AdminChat,
   users: AdminUsers,
   events: AdminEvents,
   activity: AdminActivity,

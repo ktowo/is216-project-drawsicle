@@ -6,7 +6,7 @@ const auditLogSchema = new mongoose.Schema(
   {
     actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     action: { type: String, required: true }, // e.g. 'user.ban', 'event.disable'
-    targetType: { type: String, enum: ['user', 'event', 'report'], required: true },
+    targetType: { type: String, enum: ['user', 'event', 'report', 'chat'], required: true },
     targetId: { type: mongoose.Schema.Types.ObjectId, required: true },
     targetLabel: { type: String, default: '' },
     reason: { type: String, trim: true, default: '', maxlength: 500 },

@@ -108,6 +108,7 @@ export const NOTIFICATION_TYPES = [
   'report_handled',
   'new_follower',
   'new_friend',
+  'chat_muted',
   'role_changed',
   'test',
 ];

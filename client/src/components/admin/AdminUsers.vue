@@ -13,7 +13,7 @@ import ErrorBlock from '@/components/ui/ErrorBlock.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue';
 import ReasonDialog from './ReasonDialog.vue';
-import { formatDate } from '@/utils/format';
+import { formatDate, formatDateTime } from '@/utils/format';
 import { can, SITE_ROLE_LABELS } from '@shared/permissions.mjs';
 import { SITE_ROLES } from '@shared/constants.mjs';
 
@@ -146,6 +146,9 @@ async function run(reason = '') {
                 · {{ u.eventsOrganized }} event{{ u.eventsOrganized === 1 ? '' : 's' }} organised
               </div>
               <div v-if="u.status === 'banned' && u.banReason" class="ban-note">Banned: {{ u.banReason }}</div>
+              <div v-if="u.chatMutedUntil" class="ban-note">
+                Museum chat paused until {{ formatDateTime(u.chatMutedUntil) }}<template v-if="u.chatMuteReason">: {{ u.chatMuteReason }}</template>
+              </div>
             </div>
           </div>
           <div v-if="!isMe(u) && !u.email.endsWith('@deleted.invalid')" class="actions">

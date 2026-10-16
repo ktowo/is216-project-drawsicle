@@ -4,7 +4,9 @@ const assert = require('node:assert/strict');
 const mongoose = require('mongoose');
 const h = require('./helpers.js');
 const fx = require('./exchange-fixture.js');
+const AuditLog = require('../models/AuditLog.js');
 const ChatMessage = require('../models/ChatMessage.js');
+const Notification = require('../models/Notification.js');
 const Event = require('../models/Event.js');
 const User = require('../models/User.js');
 const { CHAT } = require('../../shared/chat.mjs');
@@ -147,4 +149,45 @@ test('friends can see which room you are in', async () => {
   const list = await ada.agent.get('/api/friends').expect(200);
   assert.equal(list.body.friends[0].online.label, 'Winter Swap, room 1');
   assert.equal(list.body.friends[0].online.link, `/museum/${ctx.eventId}?room=0`);
+});
+
+test('moderators read the chat logs, hide messages and pause chat for a while', async () => {
+  const { ctx, wing } = await finished();
+  const [ada, ben] = ctx.people;
+  const mod = await h.signUp(app, { displayName: 'Mo Moderator' });
+  await User.updateOne({ _id: mod.user.id }, { role: 'moderator' });
+
+  await ada.agent.post(`${wing}/chat`).send({ text: 'Something rude' }).expect(201);
+  await age(CHAT.gapMs + 100);
+  await ben.agent.post(`${wing}/chat`).send({ text: 'Lovely work, everyone' }).expect(201);
+
+  await ada.agent.get('/api/admin/chat').expect(403);
+  const logs = await mod.agent.get('/api/admin/chat').expect(200);
+  assert.deepEqual(logs.body.messages.map((m) => m.text), ['Lovely work, everyone', 'Something rude']);
+  assert.equal(logs.body.messages[1].roomLabel, 'Winter Swap, room 1');
+  assert.equal((await mod.agent.get('/api/admin/chat?q=rude').expect(200)).body.total, 1);
+  assert.equal((await mod.agent.get('/api/admin/chat?person=ben').expect(200)).body.total, 1);
+
+  // Hide it: it leaves the room but stays in the logs
+  const rude = logs.body.messages[1];
+  await mod.agent.post(`/api/admin/chat/${rude.id}/hide`).send({}).expect(200);
+  const room = await h.request(app).get(`${wing}/sync`).expect(200);
+  assert.deepEqual(room.body.messages.map((m) => m.text), ['Lovely work, everyone']);
+  const hidden = await mod.agent.get('/api/admin/chat?show=hidden').expect(200);
+  assert.equal(hidden.body.messages[0].hiddenBy.displayName, 'Mo Moderator');
+
+  // Pause Ada's chat for an hour: needs a reason and a listed length; she's told
+  await mod.agent.post(`/api/admin/users/${ada.id}/mute`).send({ minutes: 60 }).expect(400);
+  await mod.agent.post(`/api/admin/users/${ada.id}/mute`).send({ minutes: 7, reason: 'x' }).expect(400);
+  await mod.agent.post(`/api/admin/users/${mod.user.id}/mute`).send({ minutes: 60, reason: 'x' }).expect(400);
+  const muted = await mod.agent.post(`/api/admin/users/${ada.id}/mute`).send({ minutes: 60, reason: 'Be kind' }).expect(200);
+  assert.ok(muted.body.user.chatMutedUntil);
+  await age(CHAT.gapMs + 100);
+  assert.equal((await ada.agent.post(`${wing}/chat`).send({ text: 'Sorry' }).expect(403)).body.code, 'MUTED');
+  assert.equal(await Notification.countDocuments({ user: ada.id, type: 'chat_muted' }), 1);
+
+  await mod.agent.post(`/api/admin/users/${ada.id}/unmute`).expect(200);
+  await ada.agent.post(`${wing}/chat`).send({ text: 'Sorry' }).expect(201);
+  const actions = (await AuditLog.find().sort({ createdAt: 1 })).map((a) => a.action);
+  assert.deepEqual(actions, ['chat.hide', 'user.mute', 'user.unmute']);
 });
