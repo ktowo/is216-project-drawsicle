@@ -1,6 +1,7 @@
 <script setup>
 import { RouterLink } from 'vue-router';
-import { Palette } from 'lucide-vue-next';
+// The popsicle logo (client/public), wherever the site is hosted
+const logoUrl = `${import.meta.env.BASE_URL}drawsicle.svg`;
 
 const year = new Date().getFullYear();
 
@@ -37,7 +38,7 @@ const COLUMNS = [
     <div class="inner">
       <div class="brand-col">
         <RouterLink to="/" class="brand" aria-label="Drawsicle home">
-          <span class="brand-tile"><Palette :size="20" aria-hidden="true" /></span>
+          <img :src="logoUrl" alt="" class="brand-logo" width="36" height="36" />
           <span class="brand-name">Drawsicle</span>
         </RouterLink>
         <p class="tagline">Art exchanges for online art communities, without the spreadsheets.</p>
@@ -93,14 +94,9 @@ const COLUMNS = [
 .brand:hover {
   color: var(--text);
 }
-.brand-tile {
+.brand-logo {
   width: 36px;
   height: 36px;
-  border-radius: 50%;
-  background: var(--pink);
-  color: #fff;
-  display: grid;
-  place-items: center;
 }
 .brand-name {
   font-family: var(--font-display);
