@@ -425,3 +425,28 @@ describe('find your style quiz', () => {
     expect(card.artistTags.cardColor).toBe('sky');
   });
 });
+
+describe('recommendations', () => {
+  it('suggests artists and open events with reasons, from quiz answers or your tags', async () => {
+    const none = await ok('/discover/recommendations');
+    expect(none).toEqual({ artists: [], events: [], hasTaste: false });
+
+    const quiz = await ok('/discover/recommendations?tasteThemes=spooky,creatures&tasteMakes=art&tasteWants=writing');
+    expect(quiz.hasTaste).toBe(true);
+    expect(quiz.artists.length).toBeGreaterThan(0);
+    expect(quiz.artists.length).toBeLessThanOrEqual(3);
+    expect(quiz.artists.every((a) => a.reasons.length > 0)).toBe(true);
+    expect(quiz.artists[0].user.username).toBe('kit'); // spooky + creatures
+    expect(quiz.events.every((e) => e.event.status === 'open' && e.reasons.length > 0)).toBe(true);
+
+    await loginAs('kit');
+    const mine = await ok('/discover/recommendations');
+    expect(mine.artists.map((a) => a.user.username)).not.toContain('kit');
+    const organising = (await ok('/events/mine')).organizing.map((e) => e.id);
+    expect(mine.events.some((e) => organising.includes(e.event.id))).toBe(false);
+
+    const sorted = await ok('/discover/artists?sort=recommended');
+    expect(sorted.sort).toBe('recommended');
+    expect(sorted.items[0].reasons.length).toBeGreaterThan(0);
+  });
+});
