@@ -66,7 +66,8 @@ async function send() {
 </script>
 
 <template>
-  <template v-if="!own">
+  <!-- One root element, so a class given to <ReportButton> lands on it -->
+  <span v-if="!own" class="report-root">
     <RouterLink
       v-if="!auth.user"
       :to="{ path: '/login', query: { redirect: route.fullPath } }"
@@ -123,10 +124,13 @@ async function send() {
         </div>
       </form>
     </BaseModal>
-  </template>
+  </span>
 </template>
 
 <style scoped>
+.report-root {
+  display: inline-flex;
+}
 .reasons {
   display: grid;
   gap: 6px;
