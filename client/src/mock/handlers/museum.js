@@ -60,7 +60,7 @@ export function register(router) {
     const gifts = publicGifts(state, [event.id]);
     if (!gifts.length) throw missing();
     return {
-      event: { id: event.id, name: event.name, theme: event.theme || '', completedAt: event.completedAt },
+      event: { id: event.id, name: event.name, theme: event.theme || '', completedAt: event.completedAt, museumTheme: event.museumTheme || 'auto' },
       artworks: gifts.map((s) => artwork(state, s, event)),
     };
   });
