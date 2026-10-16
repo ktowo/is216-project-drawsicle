@@ -38,8 +38,11 @@ function demo() {
   return require('../../shared/demo-data.mjs');
 }
 
-// The art file behind an '/uploads/demo/<name>.svg' URL
-const artFile = (url) => path.join(artDir, path.basename(url));
+// The art file behind an '/uploads/demo/<name>.svg' URL, or a real demo picture the client serves
+const artFile = (url) =>
+  url.startsWith('/demo-art/')
+    ? path.join(__dirname, '../../client/public', url)
+    : path.join(artDir, path.basename(url));
 
 test('seed loads every kind of demo record, linked together', async (t) => {
   if (!demoDataAvailable()) return t.skip('shared/demo-data.mjs is missing');
