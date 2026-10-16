@@ -6,6 +6,8 @@ const Event = require('../models/Event.js');
 const EventMember = require('../models/EventMember.js');
 const Match = require('../models/Match.js');
 const User = require('../models/User.js');
+const Follow = require('../models/Follow.js');
+const Presence = require('../models/Presence.js');
 const { userMini } = User;
 const { organizerIds } = require('./events.js');
 const { notifyMany } = require('./notify.js');
@@ -81,6 +83,13 @@ async function anonymiseUser(userId, filter = {}) {
       $inc: { sessionVersion: 1 },
     }
   );
+  if (result.modifiedCount > 0) {
+    // A deleted account follows nobody and is nobody's friend
+    await Promise.all([
+      Follow.deleteMany({ $or: [{ follower: userId }, { following: userId }] }),
+      Presence.deleteMany({ user: userId }),
+    ]);
+  }
   return result.modifiedCount > 0;
 }
 

@@ -16,6 +16,7 @@ import {
   MailPlus,
   LifeBuoy,
   Flag,
+  UserPlus,
 } from 'lucide-vue-next';
 import { api, qs } from '../api';
 
@@ -57,6 +58,8 @@ const KINDS = {
   event_invite: { icon: MailPlus, group: 'events', tone: 'pink' },
   report_received: { icon: Flag, group: 'events', tone: 'warning' },
   report_handled: { icon: Flag, group: 'events', tone: 'success' },
+  new_follower: { icon: UserPlus, group: 'events', tone: 'info' },
+  new_friend: { icon: Users, group: 'events', tone: 'pink' },
   deadline_reminder: { icon: Clock, group: 'reminders', tone: 'warning' },
   event_status: { icon: CalendarHeart, group: 'events', tone: 'pink' },
   organizer_added: { icon: Users, group: 'events', tone: 'info' },

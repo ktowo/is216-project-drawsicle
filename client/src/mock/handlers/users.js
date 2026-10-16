@@ -1,8 +1,10 @@
 // /users/:username: public artist profiles (server/routes/user-router.js)
-import { isId } from '../db.js';
-import { findUser, miniOf, serializeEvent, submissionPublic, userMini, userProfile } from '../model.js';
+import { isId, newId } from '../db.js';
+import { findUser, miniOf, notify, serializeEvent, submissionPublic, userMini, userProfile } from '../model.js';
 import { httpError } from '../util.js';
 import { earnedBadges } from '@shared/badges.mjs';
+import { LIMITS } from '@shared/constants.mjs';
+import { followCounts, friendList, relation } from '../social.js';
 
 const USERNAME_RE = /^[a-z0-9_]{3,30}$/;
 const PROFILE_EVENTS_MAX = 12;
@@ -79,6 +81,36 @@ function giftItem(state, submission, giver) {
 }
 
 export function register(router) {
+  // ---------- Following (user-router.js) ----------
+  router.post('/users/:username/follow', (ctx) => {
+    const { state } = ctx;
+    const me = ctx.requireAuth();
+    const user = visibleProfileUser(state, ctx.params.username);
+    if (user.id === me.id) throw httpError(400, "You can't follow yourself.", 'VALIDATION');
+    if (!state.follows.some((f) => f.follower === me.id && f.following === user.id)) {
+      if (state.follows.filter((f) => f.follower === me.id).length >= LIMITS.following) {
+        throw httpError(400, `You can follow up to ${LIMITS.following} people.`, 'VALIDATION');
+      }
+      state.follows.push({ id: newId(), follower: me.id, following: user.id, createdAt: ctx.now.toISOString() });
+      const link = me.username ? `/users/${me.username}` : '/friends';
+      notify(state, user.id, relation(state, me.id, user.id).friends
+        ? { type: 'new_friend', title: `You and ${me.displayName} are friends now`, message: 'You follow each other.', link }
+        : { type: 'new_follower', title: `${me.displayName} followed you`, message: 'Follow them back to become friends.', link });
+    }
+    return { viewer: relation(state, me.id, user.id), stats: followCounts(state, user.id) };
+  });
+
+  router.delete('/users/:username/follow', (ctx) => {
+    const { state } = ctx;
+    const me = ctx.requireAuth();
+    const user = visibleProfileUser(state, ctx.params.username);
+    state.follows = state.follows.filter((f) => !(f.follower === me.id && f.following === user.id));
+    return { viewer: relation(state, me.id, user.id), stats: followCounts(state, user.id) };
+  });
+
+  // ---------- The friend list (friends-router.js) ----------
+  router.get('/friends', (ctx) => friendList(ctx.state, ctx.requireAuth().id));
+
   router.get('/users/:username/gifts', (ctx) => {
     const { state } = ctx;
     const limit = Math.min(Math.max(Number(ctx.query.limit) || GIFTS_PAGE, 1), GIFTS_PAGE_MAX);
@@ -109,7 +141,7 @@ export function register(router) {
     const body = {
       profile: { ...userProfile(user), createdAt: user.createdAt },
       organizing: newestFirst.slice(0, PROFILE_EVENTS_MAX).map((event) => serializeEvent(state, event, viewer)),
-      stats: { eventsOrganized: listed.length },
+      stats: { eventsOrganized: listed.length, ...followCounts(state, user.id) },
       badges: earnedBadges({
         eventsRun: listed.filter(isFinished).length,
         gifts: showExchanges ? badgeGifts(state, user) : null,
@@ -127,7 +159,9 @@ export function register(router) {
     }
 
     body.hasGifts = publicGifts(state, user).length > 0;
-    if (viewer && viewer.id !== user.id) body.viewer = { blocked: (viewer.blockedUsers || []).includes(user.id) };
+    if (viewer && viewer.id !== user.id) {
+      body.viewer = { blocked: (viewer.blockedUsers || []).includes(user.id), ...relation(state, viewer.id, user.id) };
+    }
     return body;
   });
 }

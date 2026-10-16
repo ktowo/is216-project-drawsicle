@@ -19,6 +19,7 @@ import {
   Eye,
   ShieldCheck,
   Landmark,
+  Users,
 } from 'lucide-vue-next';
 import { can } from '@shared/permissions.mjs';
 import NotificationBell from './NotificationBell.vue';
@@ -56,6 +57,7 @@ const adminLabel = computed(() => (auth.user?.role === 'admin' ? 'Site admin' : 
 const accountLinks = computed(() => [
   ...(can(auth.user, 'admin.access') ? [{ to: '/admin', label: adminLabel.value, icon: ShieldCheck }] : []),
   { to: '/profile', label: 'Your profile', icon: UserRound },
+  { to: '/friends', label: 'Friends', icon: Users },
   ...(auth.user?.username
     ? [{ to: `/users/${encodeURIComponent(auth.user.username)}`, label: 'View public profile', icon: Eye }]
     : []),
@@ -157,7 +159,7 @@ function onBreakpoint(e) {
 onMounted(() => {
   document.addEventListener('click', onClickOutside);
   document.addEventListener('keydown', onKeydown);
-  mediaQuery = window.matchMedia('(min-width: 960px)');
+  mediaQuery = window.matchMedia('(min-width: 1200px)');
   mediaQuery.addEventListener?.('change', onBreakpoint);
 });
 onBeforeUnmount(() => {
@@ -616,6 +618,9 @@ watch(
   .user-name {
     display: none;
   }
+  .nav-link {
+    padding: 8px 9px;
+  }
   .user-btn {
     padding-right: 8px;
   }
@@ -634,7 +639,8 @@ watch(
     margin-left: 4px;
   }
 }
-@media (max-width: 959.98px) {
+/* Museum and Moderation made the bar longer: switch to the menu a little earlier */
+@media (max-width: 1199.98px) {
   .desktop-nav,
   .desktop-only {
     display: none;

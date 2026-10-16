@@ -91,7 +91,7 @@ test('public profiles show public events, stats and socials, never private detai
   assert.equal(organizing[0].viewer, null);
   assert.equal(organizing[0].inviteCode, undefined);
   // Only public exchanges count, matching the list on the page (Done B is private)
-  assert.deepEqual(stats, { eventsOrganized: 2, exchangesCompleted: 1 });
+  assert.deepEqual(stats, { eventsOrganized: 2, followers: 0, following: 0, exchangesCompleted: 1 });
 
   // Logged in: events carry the viewer, and the id works as well as the username
   const asViewer = await viewer.agent.get(`/api/users/${mika.id}`).expect(200);
@@ -205,7 +205,7 @@ test('exchanges joined: hiding them leaves out the list and the count', async ()
 
   const { body } = await h.request(app).get('/api/users/mika_draws').expect(200);
   assert.equal(body.exchanges, undefined);
-  assert.deepEqual(body.stats, { eventsOrganized: 0 });
+  assert.deepEqual(body.stats, { eventsOrganized: 0, followers: 0, following: 0 });
 });
 
 // ---------- Gift gallery ----------

@@ -280,11 +280,14 @@ export function buildState(now = new Date()) {
     notifications,
     announcements: [],
     reports: [],
+    follows: [],
+    presence: [],
+    chats: [],
   };
 }
 
 // Collections added after the first release; older saved demos get them empty
-const LATER_COLLECTIONS = ['announcements', 'reports'];
+const LATER_COLLECTIONS = ['announcements', 'reports', 'follows', 'presence', 'chats'];
 
 // ---------- Loading and saving ----------
 
