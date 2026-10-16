@@ -4,6 +4,8 @@ const Announcement = require('../models/Announcement.js');
 const Application = require('../models/Application.js');
 const Event = require('../models/Event.js');
 const EventMember = require('../models/EventMember.js');
+const Match = require('../models/Match.js');
+const Submission = require('../models/Submission.js');
 const User = require('../models/User.js');
 const { userMini } = require('../models/User.js');
 const { requireAuth, optionalAuth, loadEvent, requireEventRole, getEventRoles } = require('../middleware/auth.js');
@@ -14,7 +16,7 @@ const { LIMITS } = require('../../shared/constants.mjs');
 const { asyncHandler, apiErrorHandler, httpError, clientUrl } = require('../utils/helpers.js');
 
 // Organisers reaching their people: updates on the event page, and inviting the group from an
-// earlier exchange. Mounted at /api/events/:eventId.
+// earlier exchange. Also the activity timeline on the manage page. Mounted at /api/events/:eventId.
 const router = Router({ mergeParams: true });
 
 const invalid = (message) => httpError(400, message, 'VALIDATION');
@@ -95,6 +97,48 @@ router.delete('/announcements/:announcementId', ...organizerOnly, asyncHandler(a
 }));
 
 // A test post, so organisers know their webhook works before a real milestone
+// ---------- Activity timeline ----------
+
+const ACTIVITY_MAX = 60;
+const USER_FIELDS = 'displayName username avatarUrl';
+const mini = (user) => (user && user._id ? userMini(user) : null);
+
+// Everything that happened in the event, newest first: stage changes (with who made them),
+// sign-ups and withdrawals, updates, gifts arriving and backup artists stepping in.
+router.get('/activity', ...organizerOnly, asyncHandler(async (req, res) => {
+  const { event } = req;
+  const [historyUsers, applications, announcements, submissions, backups] = await Promise.all([
+    User.find({ _id: { $in: (event.statusHistory || []).map((h) => h.by).filter(Boolean) } }).select(USER_FIELDS),
+    Application.find({ event: event._id }).select('user status createdAt updatedAt').populate('user', USER_FIELDS),
+    Announcement.find({ event: event._id }).select('author message createdAt').populate('author', USER_FIELDS),
+    Submission.find({ event: event._id }).select('giver submittedAt late').populate('giver', USER_FIELDS),
+    Match.find({ event: event._id, backupGiver: { $ne: null } }).select('backupGiver backupAssignedAt').populate('backupGiver', USER_FIELDS),
+  ]);
+  const byId = new Map(historyUsers.map((u) => [u._id.toString(), u]));
+
+  const items = [
+    ...(event.statusHistory || []).map((h) => ({
+      kind: 'status',
+      status: h.status,
+      at: h.at,
+      by: h.by ? mini(byId.get(h.by.toString())) : null, // null: it happened automatically
+    })),
+    ...applications.map((a) => ({ kind: 'signup', at: a.createdAt, user: mini(a.user) })),
+    ...applications
+      .filter((a) => a.status === 'withdrawn')
+      .map((a) => ({ kind: 'withdrawn', at: a.updatedAt, user: mini(a.user) })),
+    ...announcements.map((a) => ({ kind: 'announcement', at: a.createdAt, by: mini(a.author), text: a.message.slice(0, 140) })),
+    ...submissions.map((s) => ({ kind: 'gift', at: s.submittedAt, user: mini(s.giver), late: Boolean(s.late) })),
+    ...backups
+      .filter((m) => m.backupAssignedAt)
+      .map((m) => ({ kind: 'backup', at: m.backupAssignedAt, user: mini(m.backupGiver) })),
+  ]
+    .filter((item) => item.at)
+    .sort((a, b) => new Date(b.at) - new Date(a.at));
+
+  res.json({ items: items.slice(0, ACTIVITY_MAX), total: items.length });
+}));
+
 router.post('/discord/test', ...organizerOnly, asyncHandler(async (req, res) => {
   const { event } = req;
   if (!event.discordWebhookUrl) throw httpError(409, 'Add a Discord webhook to this event first.', 'NO_WEBHOOK');

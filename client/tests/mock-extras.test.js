@@ -277,3 +277,18 @@ describe('safety', () => {
     expect(application.status).toBeTruthy();
   });
 });
+
+describe('activity timeline', () => {
+  it('lists what happened, newest first, for organisers only', async () => {
+    await loginAs('mika');
+    const autumn = await eventByName('Autumn Leaves Art Trade');
+    const { items } = await ok(`/events/${autumn.id}/activity`);
+    expect(items.length).toBeGreaterThan(3);
+    expect(items.some((i) => i.kind === 'status' && i.status === 'active')).toBe(true);
+    const times = items.map((i) => new Date(i.at).getTime());
+    expect(times).toEqual([...times].sort((a, b) => b - a));
+
+    await loginAs('sol');
+    expect((await fails(`/events/${autumn.id}/activity`)).status).toBe(403);
+  });
+});

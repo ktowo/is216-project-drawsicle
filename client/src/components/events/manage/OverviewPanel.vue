@@ -22,6 +22,7 @@ import StatTile from './StatTile.vue';
 import ShareLinkBox from './ShareLinkBox.vue';
 import ReminderModal from './ReminderModal.vue';
 import InvitePastCard from './InvitePastCard.vue';
+import ActivityTimeline from './ActivityTimeline.vue';
 import AnnouncementsPanel from '@/components/events/AnnouncementsPanel.vue';
 import { api } from '@/api';
 import { toast } from '@/stores/toast';
@@ -454,6 +455,8 @@ const reminderOpen = ref(false);
     <InvitePastCard v-if="event.status === 'open'" :event="event" @updated="emit('updated', $event)" />
 
     <ShareLinkBox :event="event" @updated="emit('updated', $event)" />
+
+    <ActivityTimeline :event="event" />
 
     <ConfirmDialog
       :open="dialog.open"
