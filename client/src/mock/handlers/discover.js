@@ -1,5 +1,6 @@
 // /discover: Discover artists (server/routes/discover-router.js)
-import { artistTagsOf, THEME_VALUES } from '@shared/taste.mjs';
+import { artistTagsOf, THEME_VALUES, tasteOf, hasTaste, scoreArtist, scoreEvent } from '@shared/taste.mjs';
+import { serializeEvent } from '../model.js';
 import { CREATION_TYPE_VALUES } from '@shared/constants.mjs';
 import { httpError } from '../util.js';
 import { artistCard, isFinished } from './users.js';
@@ -58,7 +59,28 @@ const ORDERS = {
   default: [interesting, (c) => c.exchanges, (c) => c.createdAt],
   newest: [(c) => c.createdAt],
   exchanges: [(c) => c.exchanges, interesting, (c) => c.createdAt],
+  // Best fit first; people you already follow after new faces
+  recommended: [(c) => c.score, (c) => Number(!c.followed), interesting, (c) => c.exchanges, (c) => c.createdAt],
 };
+
+// Quiz answers in the query, otherwise the viewer's tags plus their sign-up "would like"
+function tasteFor(query, viewer) {
+  const fromQuery = tasteOf({
+    makes: String(query.tasteMakes || '').split(','),
+    wants: String(query.tasteWants || '').split(','),
+    themes: String(query.tasteThemes || '').split(','),
+    activity: query.tasteActivity,
+  });
+  if (hasTaste(fromQuery)) return fromQuery;
+  if (!viewer) return null;
+  const taste = tasteOf({ ...artistTagsOf(viewer.artistTags), wants: viewer.defaultForm?.wantsTypes || [] });
+  return hasTaste(taste) ? taste : null;
+}
+
+// Only public facts about the other artist count (never their private sign-up defaults)
+const publicTaste = (c) => ({ makes: c.tags.makes, themes: c.tags.themes, activity: c.tags.activity });
+const followedBy = (state, viewer) =>
+  new Set(viewer ? state.follows.filter((f) => f.follower === viewer.id).map((f) => f.following) : []);
 
 // ?makes=art,writing&themes=fantasy&hasGifts=true&following=true. Within makes or themes any value
 // matches; different filters must all match.
@@ -116,9 +138,59 @@ export function register(router) {
       filters.following ? state.follows.filter((f) => f.follower === viewer.id).map((f) => f.following) : []
     );
     const list = candidates(state, { q: ctx.query.q, viewer }).filter(matches(filters, followed));
-    const ordered = sortBy(list, ORDERS[filters.sort]);
-    const items = ordered.slice(offset, offset + limit).map((c) => artistCard(state, c.user, viewer));
+    const taste = filters.sort === 'recommended' ? tasteFor(ctx.query, viewer) : null;
+    let sort = filters.sort;
+    if (sort === 'recommended') {
+      if (!taste) sort = 'default';
+      else {
+        const mine = followedBy(state, viewer);
+        for (const c of list) Object.assign(c, scoreArtist(taste, publicTaste(c)), { followed: mine.has(c.id) });
+      }
+    }
+    const ordered = sortBy(list, ORDERS[sort]);
+    const items = ordered
+      .slice(offset, offset + limit)
+      .map((c) => ({ ...artistCard(state, c.user, viewer), ...(c.reasons ? { reasons: c.reasons } : {}) }));
     const hasMore = ordered.length > offset + limit;
-    return { items, hasMore, nextCursor: hasMore ? String(offset + limit) : null, total: ordered.length };
+    return { items, hasMore, nextCursor: hasMore ? String(offset + limit) : null, total: ordered.length, sort };
+  });
+
+  router.get('/discover/recommendations', (ctx) => {
+    const { state } = ctx;
+    const viewer = ctx.currentUser();
+    const taste = tasteFor(ctx.query, viewer);
+    if (!taste) return { artists: [], events: [], hasTaste: false };
+
+    const list = candidates(state, { viewer });
+    const mine = followedBy(state, viewer);
+    for (const c of list) Object.assign(c, scoreArtist(taste, publicTaste(c)), { followed: mine.has(c.id) });
+    const artists = sortBy(list.filter((c) => c.score > 0), ORDERS.recommended)
+      .slice(0, 3)
+      .map((c) => ({ ...artistCard(state, c.user, viewer), reasons: c.reasons }));
+
+    const skip = new Set(
+      viewer
+        ? [
+            ...state.members.filter((m) => m.user === viewer.id && m.roles.includes('organizer')).map((m) => m.event),
+            ...state.applications.filter((a) => a.user === viewer.id && a.status !== 'withdrawn').map((a) => a.event),
+          ]
+        : []
+    );
+    const now = ctx.now.getTime();
+    const events = state.events
+      .filter((e) => e.status === 'open' && e.publicity === 'public' && !e.disabledAt && !skip.has(e.id))
+      .filter((e) => new Date(e.signupDeadline).getTime() > now)
+      .map((event) => ({ event, ...scoreEvent(taste, event) }))
+      .filter((e) => e.score > 0)
+      .sort(
+        (a, b) =>
+          b.score - a.score ||
+          String(a.event.signupDeadline).localeCompare(String(b.event.signupDeadline)) ||
+          a.event.id.localeCompare(b.event.id)
+      )
+      .slice(0, 3)
+      .map(({ event, reasons }) => ({ event: serializeEvent(state, event, viewer), reasons }));
+
+    return { hasTaste: true, artists, events };
   });
 }

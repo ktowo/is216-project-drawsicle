@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, onBeforeUnmount } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { Search, UsersRound, LoaderCircle, SlidersHorizontal, X } from 'lucide-vue-next';
+import { useRoute, useRouter, RouterLink } from 'vue-router';
+import { Search, UsersRound, LoaderCircle, SlidersHorizontal, X, Sparkles, ArrowRight } from 'lucide-vue-next';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingBlock from '@/components/ui/LoadingBlock.vue';
@@ -11,15 +11,26 @@ import ChoiceChips from '@/components/ui/ChoiceChips.vue';
 import { api, qs } from '@/api';
 import { auth } from '@/stores/auth';
 import { CREATION_TYPES } from '@shared/constants.mjs';
-import { THEMES } from '@shared/taste.mjs';
+import { THEMES, artistTagsOf } from '@shared/taste.mjs';
+import { loadQuiz, hasAnswers, tasteQuery } from '@/utils/styleQuiz';
 
 // Discover artists. The URL holds the search, filters and sort, so a link (or the back button)
 // brings back the same list.
-const SORTS = [
+const BASE_SORTS = [
   { value: '', label: 'Most to see' },
   { value: 'newest', label: 'Newest' },
   { value: 'exchanges', label: 'Most exchanges' },
 ];
+
+// "Recommended" needs a taste: your saved artist tags, or quiz answers in this browser
+const quiz = loadQuiz();
+const quizTaste = hasAnswers(quiz.answers) ? tasteQuery(quiz.answers) : null;
+const ownTags = computed(() => {
+  const t = artistTagsOf(auth.user?.artistTags);
+  return t.makes.length || t.themes.length;
+});
+const hasTaste = computed(() => Boolean(ownTags.value || quizTaste));
+const SORTS = computed(() => (hasTaste.value ? [{ value: 'recommended', label: 'Recommended for you' }, ...BASE_SORTS] : BASE_SORTS));
 const THEME_OPTIONS = THEMES.map(({ value, label }) => ({ value, label }));
 const route = useRoute();
 const router = useRouter();
@@ -56,7 +67,7 @@ const extras = computed(() => [
   ...(route.query.hasGifts === 'true' ? ['hasGifts'] : []),
   ...(route.query.following === 'true' && auth.user ? ['following'] : []),
 ]);
-const sort = computed(() => (SORTS.some((s) => s.value === route.query.sort) ? route.query.sort : ''));
+const sort = computed(() => (SORTS.value.some((s) => s.value === route.query.sort) ? route.query.sort : ''));
 const extraOptions = computed(() => [
   { value: 'hasGifts', label: 'Has gifts to see' },
   ...(auth.user ? [{ value: 'following', label: 'People I follow' }] : []),
@@ -86,6 +97,8 @@ const params = computed(() => ({
   hasGifts: extras.value.includes('hasGifts') ? 'true' : '',
   following: extras.value.includes('following') ? 'true' : '',
   sort: sort.value,
+  // Quiz answers only stand in when you haven't saved artist tags yet
+  ...(sort.value === 'recommended' && !ownTags.value && quizTaste ? quizTaste : {}),
 }));
 const filtersOpen = ref(false);
 
@@ -143,6 +156,21 @@ function onFollowChanged({ username, following }) {
 <template>
   <main id="main" class="page discover-page">
     <PageHeader title="Discover artists" subtitle="Find artists who love what you love, and follow the ones you'd like to swap with." />
+
+    <RouterLink v-if="!hasTaste" to="/find-your-style" class="card quiz-banner">
+      <Sparkles :size="22" aria-hidden="true" class="quiz-icon" />
+      <span>
+        <strong>Not sure where to start?</strong>
+        Take the 1-minute Find your style quiz and we'll suggest artists and events for you.
+      </span>
+      <ArrowRight :size="20" aria-hidden="true" />
+    </RouterLink>
+    <p v-else-if="sort !== 'recommended'" class="hint taste-note">
+      <button type="button" class="link-btn" @click="setQuery({ sort: 'recommended' })">
+        <Sparkles :size="15" aria-hidden="true" /> Show artists recommended for you
+      </button>
+      · <RouterLink to="/find-your-style">Retake the quiz</RouterLink>
+    </p>
 
     <div class="toolbar card">
       <div class="input-wrap search">
@@ -221,7 +249,7 @@ function onFollowChanged({ username, following }) {
     <template v-else>
       <ul class="artist-grid" :class="{ dim: loading }" :aria-busy="loading ? 'true' : 'false'">
         <li v-for="card in items" :key="card.user.id">
-          <ArtistCard :card="card" class="h-full" @follow-changed="onFollowChanged" />
+          <ArtistCard :card="card" :reasons="card.reasons || []" class="h-full" @follow-changed="onFollowChanged" />
         </li>
       </ul>
       <div v-if="nextCursor" class="more">
@@ -237,6 +265,40 @@ function onFollowChanged({ username, following }) {
 <style scoped>
 .discover-page {
   max-width: 1120px;
+}
+.quiz-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  margin-top: 8px;
+  color: var(--text);
+  background: linear-gradient(120deg, var(--pink-soft), var(--surface));
+}
+.quiz-banner:hover {
+  color: var(--pink-dark);
+}
+.quiz-icon {
+  flex-shrink: 0;
+  color: var(--pink-dark);
+}
+.taste-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+.link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--pink-dark);
+  font-weight: 700;
+  cursor: pointer;
 }
 .toolbar {
   padding: 16px;

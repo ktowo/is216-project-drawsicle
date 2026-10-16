@@ -5,8 +5,9 @@ import { ArrowLeft, ArrowRight, Sparkles, Save, Loader2, RotateCcw, UsersRound, 
 import ChoiceChips from '@/components/ui/ChoiceChips.vue';
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue';
 import ArtistCard from '@/components/discover/ArtistCard.vue';
+import EventCard from '@/components/events/EventCard.vue';
 import CardColorPicker from '@/components/profile/CardColorPicker.vue';
-import { api } from '@/api';
+import { api, qs } from '@/api';
 import { auth, setUser } from '@/stores/auth';
 import { toast } from '@/stores/toast';
 import { CREATION_TYPES } from '@shared/constants.mjs';
@@ -20,6 +21,7 @@ import {
   hasAnswers,
   profileUpdateFrom,
   sameTags,
+  tasteQuery,
 } from '@/utils/styleQuiz';
 
 // Find your style: five quick questions, with your artist card building up beside them.
@@ -87,6 +89,30 @@ function restart() {
   pendingSave.value = false;
   clearQuiz();
   go(0);
+}
+
+// ---------- Suggestions on the result screen ----------
+
+const suggestions = ref(null); // { artists, events } once loaded
+const suggestionsError = ref('');
+async function loadSuggestions() {
+  suggestionsError.value = '';
+  try {
+    suggestions.value = await api(`/discover/recommendations${qs(tasteQuery(answers))}`);
+  } catch (e) {
+    suggestionsError.value = e.message || "Couldn't load suggestions.";
+  }
+}
+watch(
+  onResult,
+  (now) => {
+    if (now && hasAnswers(answers)) loadSuggestions();
+  },
+  { immediate: true }
+);
+function onFollowChanged({ username, following }) {
+  const card = suggestions.value?.artists.find((c) => c.user.username === username);
+  if (card) card.following = following;
 }
 
 // ---------- Saving ----------
@@ -258,6 +284,32 @@ watch(() => auth.user?.id, savePendingIfReady);
       </aside>
     </div>
 
+    <section v-if="onResult && suggestions?.hasTaste" class="suggestions" aria-labelledby="like-you">
+      <h2 id="like-you" class="section-title">Artists like you</h2>
+      <ul v-if="suggestions.artists.length" class="suggest-grid">
+        <li v-for="card in suggestions.artists" :key="card.user.id">
+          <ArtistCard :card="card" :reasons="card.reasons" class="h-full" @follow-changed="onFollowChanged" />
+        </li>
+      </ul>
+      <p v-else class="hint">Nobody shares these yet. Have a look around Discover instead.</p>
+
+      <h2 class="section-title events-title">Events that fit you</h2>
+      <ul v-if="suggestions.events.length" class="suggest-grid">
+        <li v-for="item in suggestions.events" :key="item.event.id">
+          <EventCard :event="item.event" class="h-full">
+            <ul class="reasons" aria-label="Why it fits">
+              <li v-for="r in item.reasons" :key="r">{{ r }}</li>
+            </ul>
+          </EventCard>
+        </li>
+      </ul>
+      <p v-else class="hint">
+        No open exchange fits these answers right now.
+        <RouterLink to="/events">Browse every event</RouterLink>.
+      </p>
+    </section>
+    <p v-else-if="onResult && suggestionsError" class="alert alert-error">{{ suggestionsError }}</p>
+
     <ConfirmDialog
       :open="confirmOpen"
       title="Replace your artist tags?"
@@ -365,6 +417,38 @@ watch(() => auth.user?.id, savePendingIfReady);
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+.suggestions {
+  margin-top: 36px;
+}
+.events-title {
+  margin-top: 32px;
+}
+.suggest-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 18px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  position: relative;
+  z-index: 1;
+}
+.reasons li {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: var(--pink-soft);
+  color: var(--pink-dark);
 }
 @media (max-width: 760px) {
   .quiz-layout {

@@ -216,3 +216,88 @@ test('sorts: newest and most exchanges', async () => {
   assert.deepEqual(names((await h.request(app).get('/api/discover/artists?sort=newest')).body), ['fresh', 'busy', 'old_one']);
   assert.deepEqual(names((await h.request(app).get('/api/discover/artists?sort=exchanges')).body), ['busy', 'old_one', 'fresh']);
 });
+
+// ---------- Recommendations ----------
+
+async function openEvent(organizerId, fields = {}) {
+  const event = await Event.create({
+    name: 'Open Swap',
+    signupDeadline: h.daysFromNow(10),
+    submissionDeadline: h.daysFromNow(40),
+    minParticipants: 2,
+    status: 'open',
+    allowedTypes: ['art'],
+    createdBy: organizerId,
+    ...fields,
+  });
+  await EventMember.grant(organizerId, event._id, 'organizer');
+  return event;
+}
+
+test('recommendations: three artists and three events that fit, with reasons', async () => {
+  const me = await artist('Me', 'me_artist', {
+    artistTags: { makes: ['art'], themes: ['spooky', 'ocean'], activity: 'seasonal', cardColor: '' },
+    'defaultForm.wantsTypes': ['writing'],
+  });
+  const org = await artist('Org', 'org', { 'profilePrivacy.listInDiscover': false });
+  await artist('Ghost', 'ghost', TAGS(['spooky', 'ocean'], ['writing']));
+  await artist('Witch', 'witch', TAGS(['spooky']));
+  await artist('Sailor', 'sailor', TAGS(['ocean']));
+  await artist('Baker', 'baker', TAGS(['food']));
+  await artist('Hermit', 'hermit', { ...TAGS(['spooky', 'ocean']), 'profilePrivacy.listInDiscover': false });
+
+  await openEvent(org.id, { name: 'Haunted Harbour', theme: 'Ghost ships', tags: ['halloween', 'sea'] });
+  await openEvent(org.id, { name: 'Spooky Writing Night', allowedTypes: ['writing'], tags: ['spooky'] });
+  await openEvent(org.id, { name: 'Pumpkin Patch', tags: ['halloween'] });
+  await openEvent(org.id, { name: 'Cake Off', tags: ['baking'], allowedTypes: ['writing'] });
+  await openEvent(org.id, { name: 'Secret Club', tags: ['halloween'], publicity: 'private' });
+  await openEvent(org.id, { name: 'Pulled', tags: ['halloween'], disabledAt: new Date() });
+  await openEvent(org.id, { name: 'Too Late', tags: ['halloween'], signupDeadline: h.daysFromNow(-1) });
+  await openEvent(org.id, { name: 'Already Running', tags: ['halloween'], status: 'active' });
+  const joinedOne = await openEvent(org.id, { name: 'Joined Already', tags: ['halloween'] });
+  await joined(joinedOne, me.id);
+  await openEvent(me.id, { name: 'My Own Spooky Swap', tags: ['halloween'] });
+
+  const { body } = await me.agent.get('/api/discover/recommendations').expect(200);
+  assert.equal(body.hasTaste, true);
+  // Witch and Sailor tie on fit, so the newer account comes first
+  assert.deepEqual(body.artists.map((a) => a.user.username), ['ghost', 'sailor', 'witch']);
+  assert.deepEqual(body.artists[0].reasons, ['You both like spooky and ocean', 'Makes writing']);
+  assert.deepEqual(body.events.map((e) => e.event.name), ['Haunted Harbour', 'Pumpkin Patch', 'Spooky Writing Night']);
+  assert.deepEqual(body.events[0].reasons, ['Takes art', 'Fits spooky and ocean']);
+});
+
+test('recommendations: quiz answers work logged out, no taste means no suggestions', async () => {
+  await artist('Ghost', 'ghost', TAGS(['spooky']));
+  const empty = (await h.request(app).get('/api/discover/recommendations').expect(200)).body;
+  assert.deepEqual(empty, { artists: [], events: [], hasTaste: false });
+  const quiz = (await h.request(app).get('/api/discover/recommendations?tasteThemes=spooky&tasteMakes=art').expect(200)).body;
+  assert.deepEqual(quiz.artists.map((a) => a.user.username), ['ghost']);
+  assert.equal(quiz.artists[0].following, undefined);
+});
+
+test("recommendations never use someone else's private sign-up defaults", async () => {
+  const me = await artist('Me', 'me_artist', TAGS(['cosy'], ['art']));
+  await artist('Quiet', 'quiet', { ...TAGS(['cosy'], ['writing']), 'defaultForm.wantsTypes': ['art'] });
+  const { body } = await me.agent.get('/api/discover/recommendations').expect(200);
+  assert.deepEqual(body.artists[0].reasons, ['You both like cosy']);
+});
+
+test('the Recommended sort puts the best fits first with reasons, and falls back without a taste', async () => {
+  const me = await artist('Me', 'me_artist', TAGS(['fantasy', 'cosy']));
+  await artist('Close', 'close', TAGS(['fantasy', 'cosy']));
+  await artist('Half', 'half', TAGS(['fantasy']));
+  await artist('Followed', 'followed', TAGS(['fantasy', 'cosy']));
+  await artist('Far', 'far', TAGS(['sci_fi']));
+  await me.agent.post('/api/users/followed/follow').expect(200);
+
+  const { body } = await me.agent.get('/api/discover/artists?sort=recommended').expect(200);
+  assert.equal(body.sort, 'recommended');
+  assert.deepEqual(names(body), ['close', 'followed', 'half', 'far']);
+  assert.deepEqual(body.items[0].reasons, ['You both like fantasy and cosy']);
+  assert.deepEqual(body.items[3].reasons, []);
+
+  const guest = (await h.request(app).get('/api/discover/artists?sort=recommended').expect(200)).body;
+  assert.equal(guest.sort, 'default');
+  assert.equal(guest.items[0].reasons, undefined);
+});
