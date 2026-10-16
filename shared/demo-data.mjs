@@ -521,6 +521,8 @@ export function buildDemoData(now = new Date()) {
     match('spring', 'kit', 'mika', 65, [ART, ONE], 'submitted'),
   ];
 
+  // art: [{ seed, title }] draws placeholder artwork (shared/demo-art.mjs); add src to use a real
+  // picture from client/public/demo-art instead (see the CREDITS.md there).
   const submission = (eventKey, giver, recipient, fields) => ({
     event: eventKey,
     giver,
@@ -562,14 +564,14 @@ export function buildDemoData(now = new Date()) {
     submission('spring', 'mika', 'sol', {
       title: 'Ember in the cherry blossoms',
       message: 'Happy spring, Sol! Thank you for being such a lovely part of the club.',
-      art: [{ seed: 'spring-mika-sol', title: 'Ember in the cherry blossoms' }],
+      art: [{ seed: 'spring-mika-sol', src: '/demo-art/spring-mika-sol.jpg', title: 'Ember in the cherry blossoms' }],
       submittedAt: ago(18, 4),
       verified: true,
     }),
     submission('spring', 'sol', 'remy', {
       title: 'Marzipan nap time',
       message: 'A loaf among the tulips.',
-      art: [{ seed: 'spring-sol-remy', title: 'Marzipan nap time' }],
+      art: [{ seed: 'spring-sol-remy', src: '/demo-art/spring-sol-remy.jpg', title: 'Marzipan nap time' }],
       submittedAt: ago(17, 6),
       verified: true,
     }),
@@ -577,8 +579,8 @@ export function buildDemoData(now = new Date()) {
       title: 'Saffron at the oasis',
       message: 'Sorry it was a little late, I hope it was worth the wait!',
       art: [
-        { seed: 'spring-remy-noor-1', title: 'Saffron at the oasis' },
-        { seed: 'spring-remy-noor-2', title: 'Colour study' },
+        { seed: 'spring-remy-noor-1', src: '/demo-art/spring-remy-noor-1.jpg', title: 'Saffron at the oasis' },
+        { seed: 'spring-remy-noor-2', src: '/demo-art/spring-remy-noor-2.jpg', title: 'Colour study' },
       ],
       submittedAt: ago(14, 8),
       late: true,
@@ -588,7 +590,7 @@ export function buildDemoData(now = new Date()) {
       title: 'The Lantern Tea Stall',
       message: 'A short story about Lantern opening the stall on the first warm night of spring.',
       type: 'writing',
-      art: [{ seed: 'spring-noor-kit', title: 'The Lantern Tea Stall' }],
+      art: [{ seed: 'spring-noor-kit', src: '/demo-art/spring-noor-kit.jpg', title: 'The Lantern Tea Stall' }],
       links: [{ label: 'Read the story', url: 'https://example.com/stories/lantern-tea-stall' }],
       submittedAt: ago(16, 2),
       verified: true,
@@ -596,7 +598,7 @@ export function buildDemoData(now = new Date()) {
     submission('spring', 'kit', 'mika', {
       title: 'Biscuit in bloom',
       message: 'Biscuit surrounded by spring teacups. Thank you for the lovely prompts!',
-      art: [{ seed: 'spring-kit-mika', title: 'Biscuit in bloom' }],
+      art: [{ seed: 'spring-kit-mika', src: '/demo-art/spring-kit-mika.jpg', title: 'Biscuit in bloom' }],
       submittedAt: ago(19, 1),
       verified: true,
     }),

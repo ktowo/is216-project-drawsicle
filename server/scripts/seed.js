@@ -300,7 +300,8 @@ async function seed({ reset = false, now = new Date(), artDir = DEMO_UPLOAD_DIR 
     const match = lookup(matchesByGiver, pair(s.event, s.giver), 'match');
     match.status = 'submitted';
     const images = [];
-    for (const piece of s.art || []) images.push(await writeArt(piece, { width: 800, height: 600 }));
+    // Real demo pictures (client/public/demo-art) are served with the client; the rest are drawn
+    for (const piece of s.art || []) images.push(piece.src || (await writeArt(piece, { width: 800, height: 600 })));
     const submittedAt = new Date(s.submittedAt);
     const event = lookup(eventsByKey, s.event, 'event');
     submissions.push({

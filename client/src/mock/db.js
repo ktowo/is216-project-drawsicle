@@ -246,7 +246,7 @@ export function buildState(now = new Date()) {
       title: s.title || '',
       message: s.message || '',
       type: s.type || 'art',
-      images: (s.art || []).map((art) => demoArtDataUrl(art)),
+      images: (s.art || []).map((art) => art.src || demoArtDataUrl(art)),
       links: (s.links || []).map((l) => ({ label: l.label || '', url: l.url })),
       submittedAt,
       late: Boolean(s.late),
