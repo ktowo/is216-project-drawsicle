@@ -398,3 +398,27 @@ describe('museum extras', () => {
     expect((await ok(`${place}/guestbook`)).entries).toEqual([]);
   });
 });
+
+describe('questions for your giftee', () => {
+  it('lets a secret artist ask, and the recipient answer without learning who asked', async () => {
+    const autumn = await eventByName('Autumn Leaves Art Trade');
+    const base = `/events/${autumn.id}`;
+
+    // Mika is making Sol's gift
+    await loginAs('mika');
+    expect((await fails(`${base}/my-match/questions`, { method: 'POST', body: { text: '?' } })).code).toBe('VALIDATION');
+    const { questions } = await ok(`${base}/my-match/questions`, { method: 'POST', body: { text: 'Day or night scene?' } });
+    expect(questions.map((q) => [q.text, q.answer])).toEqual([['Day or night scene?', '']]);
+
+    await loginAs('sol');
+    const mine = await ok(`${base}/questions-for-me`);
+    expect(mine.canAnswer).toBe(true);
+    expect(Object.keys(mine.questions[0]).sort()).toEqual(['answer', 'answeredAt', 'askedAt', 'id', 'text']);
+    const { items } = await ok('/notifications');
+    expect(items.find((n) => n.type === 'gift_question').title).toBe('Your secret artist has a question');
+    await ok(`${base}/questions-for-me/${mine.questions[0].id}/answer`, { method: 'POST', body: { answer: 'Night, with lanterns!' } });
+
+    await loginAs('mika');
+    expect((await ok(`${base}/my-match`)).match.questions[0].answer).toBe('Night, with lanterns!');
+  });
+});

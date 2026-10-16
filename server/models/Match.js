@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { MATCH_STATUSES, PROGRESS_VALUES, LIMITS } = require('../../shared/constants.mjs');
+const { GIFT_QUESTIONS } = require('../../shared/gift-questions.mjs');
 
 // giver makes a gift for recipient. Unpublished matches are the organiser's
 // draft; publishing makes them visible to givers and starts the event.
@@ -28,6 +29,21 @@ const matchSchema = new mongoose.Schema(
       stage: { type: String, enum: [...PROGRESS_VALUES, ''], default: '' },
       note: { type: String, trim: true, default: '', maxlength: LIMITS.progressNote },
       at: { type: Date, default: null },
+    },
+
+    // Questions the person making the gift asked its recipient (shared/gift-questions.mjs).
+    // askedBy is kept for moderators; the recipient never sees it.
+    questions: {
+      type: [
+        {
+          text: { type: String, required: true, maxlength: GIFT_QUESTIONS.textMax },
+          askedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+          askedAt: { type: Date, default: Date.now },
+          answer: { type: String, default: '', maxlength: GIFT_QUESTIONS.answerMax },
+          answeredAt: { type: Date, default: null },
+        },
+      ],
+      default: [],
     },
   },
   { timestamps: true }
