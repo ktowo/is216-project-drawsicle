@@ -7,6 +7,7 @@ import ContentWarningGate from './ContentWarningGate.vue';
 import WrappedPresent from './WrappedPresent.vue';
 import PersonLink from './PersonLink.vue';
 import ReportButton from '@/components/ReportButton.vue';
+import FavouriteButton from '@/components/FavouriteButton.vue';
 import { auth } from '@/stores/auth';
 import { assetUrl } from '@/api';
 import { safeUrl, linkHost, typeLabel } from '@/utils/events';
@@ -125,6 +126,12 @@ function open(tile) {
           <div v-else class="cover placeholder" aria-hidden="true">
             <component :is="tile.item.submission ? tile.icon : Gift" :size="34" :stroke-width="1.6" />
           </div>
+          <FavouriteButton
+            v-if="tile.item.submission"
+            :submission-id="tile.item.submission.id"
+            :title="tile.item.submission.title || 'this gift'"
+            class="fav-corner"
+          />
           <span
             v-if="reactionOf(tile.item.submission)"
             class="reaction"
@@ -213,6 +220,13 @@ function open(tile) {
 }
 .tile.missing {
   opacity: 0.75;
+}
+.fav-corner {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
 }
 .reaction {
   position: absolute;
