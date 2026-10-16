@@ -29,6 +29,7 @@ import {
 } from '../model.js';
 import { escapeRegex, formatDate, httpError, invalid, queryParam, readBoolean, toMs, URL_RE } from '../util.js';
 import { organizerEvent, visibleEvent } from './common.js';
+import { MUSEUM_THEME_CHOICES } from '@shared/museum-themes.mjs';
 import { promoteFromWaitlist } from '../waitlist.js';
 
 // ---------- Reading event fields from a request ----------
@@ -557,6 +558,16 @@ export function register(router) {
       });
     }
     return { event: serializeEvent(state, event, user, viewer) };
+  });
+
+  // The museum's room design: it can change after the event is over, when its museum opens
+  router.put('/events/:eventId/museum-theme', (ctx) => {
+    const { event } = organizerEvent(ctx);
+    const choice = ctx.body?.museumTheme;
+    if (!MUSEUM_THEME_CHOICES.includes(choice)) throw invalid('Pick one of the room designs.');
+    event.museumTheme = choice;
+    event.updatedAt = ctx.now.toISOString();
+    return { museumTheme: event.museumTheme };
   });
 
   router.post('/events/:eventId/invite/regenerate', (ctx) => {

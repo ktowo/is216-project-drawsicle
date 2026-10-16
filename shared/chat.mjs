@@ -4,8 +4,11 @@
 //   parseChat('/wave')            -> { kind: 'emote', emote: 'wave', text: 'waves' }
 //   parseChat('/me does a twirl') -> { kind: 'emote', emote: '', text: 'does a twirl' }
 //   parseChat('/shout Hello!')    -> { kind: 'shout', text: 'Hello!' }
+//   parseChat('/pet mochi')       -> { kind: 'emote', emote: 'pet', text: 'pets Mochi', target: 'mochi' }
 //   parseChat('/sit')             -> { command: 'sit' }   (handled in the room, never sent)
 //   cooldownLeft(recent, now)     -> ms to wait before the next message (0: go ahead)
+
+import { findCat } from './museum-cats.mjs';
 
 export const CHAT = {
   maxLength: 120,
@@ -27,8 +30,14 @@ export const EMOTES = [
   { key: 'cheer', label: 'Cheer', icon: '🎉', text: 'cheers' },
 ];
 export const EMOTE_KEYS = EMOTES.map((e) => e.key);
+// Petting one of the museum cats is an emote too, aimed at the cat (not in the emote bar)
+export const PET_EMOTE = 'pet';
+export const CHAT_EMOTE_KEYS = [...EMOTE_KEYS, PET_EMOTE];
 export const CHAT_KINDS = ['say', 'shout', 'emote'];
 const ROOM_COMMANDS = ['sit', 'stand', 'stop'];
+
+// The guestbook by the entrance of an exchange's museum rooms: one note every 10 minutes each
+export const GUESTBOOK = { maxLength: 200, gapMs: 10 * 60 * 1000, shown: 60 };
 
 export const MUTE_OPTIONS = [
   { minutes: 60, label: '1 hour' },
@@ -65,6 +74,11 @@ export function parseChat(input) {
     if (ROOM_COMMANDS.includes(command)) return { command };
     const emote = EMOTES.find((e) => e.key === command);
     if (emote) return { kind: 'emote', emote: emote.key, text: emote.text };
+    if (command === PET_EMOTE) {
+      const cat = findCat(after);
+      if (!cat) return { error: 'Which cat? Try "/pet Mochi".' };
+      return { kind: 'emote', emote: PET_EMOTE, text: `pets ${cat.name}`, target: cat.key };
+    }
     if (command === 'me') {
       if (!after) return { error: 'Add what you do, like "/me looks closer".' };
       return checkLength({ kind: 'emote', emote: '', text: after });
@@ -73,7 +87,7 @@ export function parseChat(input) {
       if (!after) return { error: 'Add what to shout, like "/shout Hello!".' };
       return checkLength({ kind: 'shout', text: after });
     }
-    return { error: 'Unknown command. Try /wave, /dance, /laugh, /heart, /clap, /cheer, /me, /shout, /sit, /stand or /stop.' };
+    return { error: 'Unknown command. Try /wave, /dance, /laugh, /heart, /clap, /cheer, /pet, /me, /shout, /sit, /stand or /stop.' };
   }
   return checkLength({ kind: 'say', text });
 }
