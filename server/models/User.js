@@ -71,6 +71,9 @@ const userSchema = new mongoose.Schema(
 
     // People this person never wants to be matched with, in either direction. Private.
     blockedUsers: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], default: [] },
+    // A moderator paused this person's museum chat until then
+    chatMutedUntil: { type: Date, default: null },
+    chatMuteReason: { type: String, trim: true, default: '', maxlength: 500 },
 
     // In-app notifications are always on; these control the email copies.
     notificationPrefs: {
@@ -124,6 +127,7 @@ userSchema.methods.toPublic = function () {
     },
     providers: { google: Boolean(this.googleId), discord: Boolean(this.discordId) },
     profileComplete: Boolean(this.displayName && this.bio),
+    chatMutedUntil: this.chatMutedUntil && this.chatMutedUntil > new Date() ? this.chatMutedUntil : null,
     createdAt: this.createdAt,
   };
 };

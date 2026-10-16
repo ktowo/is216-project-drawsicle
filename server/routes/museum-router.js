@@ -4,6 +4,7 @@ const Event = require('../models/Event.js');
 const Submission = require('../models/Submission.js');
 const { userMini } = require('../models/User.js');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
+const roomsRouter = require('./museum-rooms.js');
 
 // The public museum: one wing per finished public exchange, hung with the gifts that both the
 // artist and the recipient chose to show on their profiles. Anyone can visit, signed in or not.
@@ -35,6 +36,9 @@ function artwork(submission, event) {
     recipient: userMini(submission.recipient),
   };
 }
+
+// Shared rooms: who's here, and chat (museum-rooms.js)
+router.use('/rooms', roomsRouter);
 
 router.get('/', asyncHandler(async (req, res) => {
   const events = await Event.find(FINISHED).sort({ completedAt: -1, _id: -1 }).limit(WINGS_MAX * 2);
