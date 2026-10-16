@@ -9,11 +9,11 @@ const Submission = require('../models/Submission.js');
 const { userMini } = require('../models/User.js');
 const { requireAuth, loadEvent, requireEventRole } = require('../middleware/auth.js');
 const { serializeEvent, viewerContext } = require('../services/events.js');
-const { notify } = require('../services/notify.js');
+const { notify, notifyMany } = require('../services/notify.js');
 const { announceMilestone } = require('../services/discord.js');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
 const { generateMatches, scorePair, skippedAccountsWarning } = require('../../shared/matching.mjs');
-const { LIMITS } = require('../../shared/constants.mjs');
+const { LIMITS, PROGRESS_VALUES } = require('../../shared/constants.mjs');
 
 // Mounted at /api/events/:eventId. Every route names its own middleware, because the
 // application and submission routers share this mount point.
@@ -36,12 +36,19 @@ function submissionSummary(submission) {
   };
 }
 
-// MatchAdmin (docs/ARCHITECTURE.md). giver/recipient must be populated.
+function progressJson(match) {
+  const p = match.progress;
+  return p?.stage ? { stage: p.stage, note: p.note || '', at: p.at } : null;
+}
+
+// MatchAdmin (docs/ARCHITECTURE.md). giver/recipient (and backupGiver) must be populated.
 function matchAdmin(match, submission = null) {
   return {
     id: match._id.toString(),
     giver: userMini(match.giver),
     recipient: userMini(match.recipient),
+    backupGiver: match.backupGiver ? userMini(match.backupGiver) : null,
+    progress: progressJson(match),
     score: match.score,
     reasons: [...(match.reasons || [])],
     status: match.status,
@@ -55,7 +62,8 @@ function matchAdmin(match, submission = null) {
 async function loadMatchRows(eventId, filter = {}) {
   const matches = await Match.find({ event: eventId, ...filter })
     .populate('giver', USER_FIELDS)
-    .populate('recipient', USER_FIELDS);
+    .populate('recipient', USER_FIELDS)
+    .populate('backupGiver', USER_FIELDS);
   const submissions = matches.length
     ? await Submission.find({ event: eventId, match: { $in: matches.map((m) => m._id) } })
     : [];
@@ -425,8 +433,9 @@ router.post('/matches/publish', ...organizerOnly, asyncHandler(async (req, res) 
 
 // The giver's view of their match: who they're making a gift for and what that person
 // asked for. Never says who is making the viewer's own gift.
-router.get('/my-match', requireAuth, loadEvent, requireParticipant, loadMyMatch, asyncHandler(async (req, res) => {
-  const { event, match } = req;
+// What the person making a gift sees: who it's for, their wishes and characters, and the gift so far.
+// For the original giver of a match that was handed to a backup, handedOver is true.
+async function myMatchJson(event, match, { asBackup = false } = {}) {
   const [recipient, submission] = await Promise.all([
     mongoose.model('User').findById(match.recipient).select('displayName username avatarUrl email'),
     Submission.findOne({ match: match._id }),
@@ -436,25 +445,209 @@ router.get('/my-match', requireAuth, loadEvent, requireParticipant, loadMyMatch,
     (await Application.findOne({ event: event._id, user: match.recipient }).populate('offeredCharacters'));
 
   const mini = userMini(recipient);
-  res.json({
-    match: {
-      id: match._id.toString(),
-      status: match.status,
-      submissionDeadline: event.submissionDeadline,
-      recipient: {
-        displayName: mini.displayName,
-        username: mini.username,
-        avatarUrl: mini.avatarUrl,
-        communityUsername: recipientApplication?.communityUsername || '',
-        wantsTypes: [...(recipientApplication?.wantsTypes || [])],
-        likes: recipientApplication?.likes || '',
-        avoid: recipientApplication?.avoid || '',
-        // Archived characters stay visible: they were offered for this event
-        characters: (recipientApplication?.offeredCharacters || []).filter(Boolean).map((c) => c.toPublic()),
-      },
-      submission: submission ? submission.toPublic() : null,
+  return {
+    id: match._id.toString(),
+    status: match.status,
+    asBackup,
+    handedOver: !asBackup && Boolean(match.backupGiver),
+    progress: progressJson(match),
+    submissionDeadline: event.submissionDeadline,
+    recipient: {
+      displayName: mini.displayName,
+      username: mini.username,
+      avatarUrl: mini.avatarUrl,
+      communityUsername: recipientApplication?.communityUsername || '',
+      wantsTypes: [...(recipientApplication?.wantsTypes || [])],
+      likes: recipientApplication?.likes || '',
+      avoid: recipientApplication?.avoid || '',
+      // Archived characters stay visible: they were offered for this event
+      characters: (recipientApplication?.offeredCharacters || []).filter(Boolean).map((c) => c.toPublic()),
     },
+    // The original giver doesn't see the backup's gift
+    submission: submission && (asBackup || !match.backupGiver) ? submission.toPublic() : null,
+  };
+}
+
+router.get('/my-match', requireAuth, loadEvent, requireParticipant, loadMyMatch, asyncHandler(async (req, res) => {
+  res.json({ match: await myMatchJson(req.event, req.match) });
+}));
+
+// ---------- Progress check-ins ----------
+
+const requireActiveEvent = (req, res, next) =>
+  req.event.status === 'active' ? next() : next(httpError(409, 'Progress can only be shared while gifts are being made.', 'WRONG_STATUS'));
+
+async function saveProgress(req, res) {
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const stage = String(body.stage ?? '');
+  if (!PROGRESS_VALUES.includes(stage)) throw httpError(400, 'Pick how far along you are.', 'VALIDATION');
+  const note = typeof body.note === 'string' ? body.note.trim() : '';
+  if (note.length > LIMITS.progressNote) {
+    throw httpError(400, `Keep the note under ${LIMITS.progressNote} characters.`, 'VALIDATION');
+  }
+  req.match.progress = { stage, note, at: new Date() };
+  await req.match.save();
+  res.json({ progress: progressJson(req.match) });
+}
+
+const rejectIfHandedOver = (req, res, next) =>
+  req.match.backupGiver
+    ? next(httpError(409, 'This gift was handed to a backup artist, so you no longer need to make it.', 'HANDED_OVER'))
+    : next();
+
+router.put('/my-match/progress', requireAuth, loadEvent, requireParticipant, loadMyMatch, rejectIfHandedOver, requireActiveEvent, asyncHandler(saveProgress));
+
+// ---------- Backup artists ----------
+// Accepted participants who ticked "I can be a backup" can take over a gift whose giver dropped
+// out. The organisers pick them; the backup then sees the recipient and submits the gift.
+
+// A match the viewer is the backup for. Sets req.match.
+const loadBackupMatch = asyncHandler(async (req, res, next) => {
+  const { matchId } = req.params;
+  const missing = () => httpError(404, "You aren't making a backup gift for that match.", 'NO_MATCH');
+  if (!mongoose.isValidObjectId(matchId)) throw missing();
+  const match = await Match.findOne({ _id: matchId, event: req.event._id, backupGiver: req.user._id, published: true });
+  if (!match) throw missing();
+  req.match = match;
+  next();
+});
+
+router.get('/backups/mine', requireAuth, loadEvent, requireParticipant, asyncHandler(async (req, res) => {
+  const matches = await Match.find({ event: req.event._id, backupGiver: req.user._id, published: true });
+  res.json({ backups: await Promise.all(matches.map((m) => myMatchJson(req.event, m, { asBackup: true }))) });
+}));
+
+router.get('/backups/:matchId', requireAuth, loadEvent, requireParticipant, loadBackupMatch, asyncHandler(async (req, res) => {
+  res.json({ match: await myMatchJson(req.event, req.match, { asBackup: true }) });
+}));
+
+router.put('/backups/:matchId/progress', requireAuth, loadEvent, requireParticipant, loadBackupMatch, requireActiveEvent, asyncHandler(saveProgress));
+
+// Volunteers for one match, for the organisers' "Find a backup" list
+router.get('/backups/volunteers/:matchId', ...organizerOnly, asyncHandler(async (req, res) => {
+  const { matchId } = req.params;
+  if (!mongoose.isValidObjectId(matchId)) throw httpError(404, 'Match not found.', 'NOT_FOUND');
+  const match = await Match.findOne({ _id: matchId, event: req.event._id });
+  if (!match) throw httpError(404, 'Match not found.', 'NOT_FOUND');
+
+  const volunteers = await Application.find({ event: req.event._id, status: 'accepted', canBackup: true }).populate(
+    'user',
+    `${USER_FIELDS} status`
+  );
+  const people = volunteers.filter(
+    (a) => a.user && a.user.status === 'active' && !a.user._id.equals(match.giver) && !a.user._id.equals(match.recipient)
+  );
+  const ids = people.map((a) => a.user._id);
+  const [ownMatches, backingUp] = await Promise.all([
+    Match.find({ event: req.event._id, giver: { $in: ids }, published: true }).select('_id giver'),
+    Match.find({ event: req.event._id, backupGiver: { $in: ids } }).select('backupGiver'),
+  ]);
+  const submitted = new Set(
+    (await Submission.find({ match: { $in: ownMatches.map((m) => m._id) } }).select('match')).map((s) => s.match.toString())
+  );
+  const ownByGiver = new Map(ownMatches.map((m) => [m.giver.toString(), m._id.toString()]));
+  res.json({
+    volunteers: people.map((a) => {
+      const id = a.user._id.toString();
+      return {
+        user: userMini(a.user),
+        submittedOwn: submitted.has(ownByGiver.get(id)),
+        backingUp: backingUp.filter((m) => m.backupGiver.toString() === id).length,
+      };
+    }),
   });
+}));
+
+async function loadPublishedMatch(req) {
+  const { matchId } = req.params;
+  const missing = () => httpError(404, 'Match not found.', 'NOT_FOUND');
+  if (!mongoose.isValidObjectId(matchId)) throw missing();
+  const match = await Match.findOne({ _id: matchId, event: req.event._id, published: true });
+  if (!match) throw missing();
+  if (req.event.status !== 'active') {
+    throw httpError(409, 'Backups can only be arranged while gifts are being made.', 'WRONG_STATUS');
+  }
+  if (await Submission.exists({ match: match._id })) {
+    throw httpError(409, 'This gift has already been submitted.', 'ALREADY_SUBMITTED');
+  }
+  return match;
+}
+
+router.put('/matches/:matchId/backup', ...organizerOnly, asyncHandler(async (req, res) => {
+  const { event } = req;
+  const match = await loadPublishedMatch(req);
+  const userId = String(req.body?.userId ?? '');
+  if (!mongoose.isValidObjectId(userId)) throw httpError(400, 'Pick a volunteer.', 'VALIDATION');
+  if (match.giver.equals(userId) || match.recipient.equals(userId)) {
+    throw httpError(400, "That person can't make this gift.", 'VALIDATION');
+  }
+  const volunteer = await Application.findOne({ event: event._id, user: userId, status: 'accepted', canBackup: true });
+  if (!volunteer) throw httpError(400, "That person didn't volunteer as a backup in this event.", 'VALIDATION');
+
+  const previousBackup = match.backupGiver;
+  match.backupGiver = userId;
+  match.backupAssignedAt = new Date();
+  match.progress = { stage: '', note: '', at: null };
+  await match.save();
+  await match.populate('recipient', USER_FIELDS);
+  const recipientName = userMini(match.recipient).displayName;
+
+  const tasks = [
+    notify(userId, {
+      type: 'backup_assigned',
+      title: `Thank you! You're making a backup gift in ${event.name}`,
+      message: `You're making a gift for ${recipientName}. It's a secret, just like your own. Gifts are due ${event.submissionDeadline.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}.`,
+      link: `/events/${event.id}/matches?backup=${match.id}`,
+      email: 'matches',
+    }),
+  ];
+  if (!previousBackup) {
+    tasks.push(
+      notify(match.giver, {
+        type: 'event_status',
+        title: `Your gift for ${event.name} was handed to a backup artist`,
+        message: "The organisers found someone else to make it, so you don't need to any more. If that's a mistake, ask them.",
+        link: `/events/${event.id}/matches`,
+      })
+    );
+  } else if (!previousBackup.equals(userId)) {
+    tasks.push(
+      notify(previousBackup, {
+        type: 'event_status',
+        title: `You're no longer making a backup gift in ${event.name}`,
+        message: 'The organisers asked someone else. Thanks for offering!',
+        link: `/events/${event.id}`,
+      })
+    );
+  }
+  const results = await Promise.allSettled(tasks);
+  for (const r of results) if (r.status === 'rejected') console.error('Backup notification failed:', r.reason?.message);
+
+  res.json({ matches: await adminMatchList(event._id) });
+}));
+
+router.delete('/matches/:matchId/backup', ...organizerOnly, asyncHandler(async (req, res) => {
+  const match = await loadPublishedMatch(req);
+  if (!match.backupGiver) throw httpError(404, 'This gift has no backup artist.', 'NOT_FOUND');
+  const backup = match.backupGiver;
+  match.backupGiver = null;
+  match.backupAssignedAt = null;
+  await match.save();
+  await Promise.allSettled([
+    notifyMany([backup], {
+      type: 'event_status',
+      title: `You're no longer making a backup gift in ${req.event.name}`,
+      message: 'The original artist is making it after all. Thanks for offering!',
+      link: `/events/${req.event.id}`,
+    }),
+    notify(match.giver, {
+      type: 'event_status',
+      title: `Your gift for ${req.event.name} is yours again`,
+      message: 'The organisers handed it back to you.',
+      link: `/events/${req.event.id}/matches`,
+    }),
+  ]);
+  res.json({ matches: await adminMatchList(req.event._id) });
 }));
 
 router.use(apiErrorHandler);
@@ -464,4 +657,6 @@ module.exports.loadMatchRows = loadMatchRows;
 module.exports.matchAdmin = matchAdmin;
 module.exports.requireParticipant = requireParticipant;
 module.exports.loadMyMatch = loadMyMatch;
+module.exports.loadBackupMatch = loadBackupMatch;
+module.exports.rejectIfHandedOver = rejectIfHandedOver;
 module.exports.USER_FIELDS = USER_FIELDS;

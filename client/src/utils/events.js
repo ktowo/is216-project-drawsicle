@@ -103,8 +103,9 @@ export function viewerActions(event, { invite } = {}) {
 
   if (!viewer) {
     const here = eventLink(event) + (invite ? `?invite=${encodeURIComponent(invite)}` : '');
-    if (open && !isFull(event)) {
-      actions.push({ key: 'login', label: 'Log in to sign up', to: { path: '/login', query: { redirect: here } }, primary: true });
+    if (open) {
+      const label = isFull(event) ? 'Log in to join the waitlist' : 'Log in to sign up';
+      actions.push({ key: 'login', label, to: { path: '/login', query: { redirect: here } }, primary: true });
       actions.push({ key: 'register', label: 'Create a free account', to: { path: '/register', query: { redirect: here } }, primary: false });
     } else {
       // Members who aren't logged in still need a way back to their match or the reveal
@@ -116,10 +117,11 @@ export function viewerActions(event, { invite } = {}) {
   }
 
   if (open) {
-    if (appStatus === 'pending' || appStatus === 'accepted') {
+    if (appStatus === 'pending' || appStatus === 'accepted' || appStatus === 'waitlisted') {
       actions.push({ key: 'edit-application', label: 'Edit sign-up', to: withInvite('/apply'), primary: false });
-    } else if ((!appStatus || appStatus === 'withdrawn') && !isFull(event)) {
-      const label = appStatus === 'withdrawn' ? 'Sign up again' : 'Sign up';
+    } else if (!appStatus || appStatus === 'withdrawn') {
+      // A full event still takes sign-ups, onto the waitlist
+      const label = isFull(event) ? 'Join the waitlist' : appStatus === 'withdrawn' ? 'Sign up again' : 'Sign up';
       actions.push({ key: 'apply', label, to: withInvite('/apply'), primary: true });
     }
   }
@@ -204,11 +206,18 @@ export function viewerNote(event) {
         message: 'You can change your answers or withdraw until sign-ups close.',
       };
     }
+    if (appStatus === 'waitlisted') {
+      return {
+        tone: 'info',
+        title: "You're on the waitlist",
+        message: "If a place opens up before sign-ups close, you'll move in automatically and get a notification.",
+      };
+    }
     if (isFull(event)) {
       return {
         tone: 'info',
         title: 'This event is full',
-        message: 'Every spot has been taken. A spot may open up if someone withdraws.',
+        message: "Every place is taken, but you can join the waitlist. If someone drops out, the next person in line moves in.",
       };
     }
     if (!viewer) {
@@ -236,6 +245,9 @@ export function viewerNote(event) {
     }
     if (appStatus === 'rejected') {
       return { tone: 'danger', title: 'Your sign-up was not accepted', message: 'Sign-ups for this event are now closed.' };
+    }
+    if (appStatus === 'waitlisted') {
+      return { tone: 'info', title: 'No place opened up this time', message: "Sign-ups closed before a place came free. We hope to see you in the next one!" };
     }
     return { tone: 'info', title: 'Matches are being made', message: 'Sign-ups for this event are closed.' };
   }

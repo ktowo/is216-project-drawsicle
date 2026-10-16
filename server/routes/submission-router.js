@@ -9,7 +9,13 @@ const { requireAuth, loadEvent, requireEventRole } = require('../middleware/auth
 const { organizerIds, serializeEvent, viewerContext, canViewEvent } = require('../services/events.js');
 const { notify, notifyMany } = require('../services/notify.js');
 const { uploadImage, looksLikeImage, IMAGE_TYPES } = require('../services/storage.js');
-const { loadMatchRows, requireParticipant, loadMyMatch } = require('./match-router.js');
+const {
+  loadMatchRows,
+  requireParticipant,
+  loadMyMatch,
+  loadBackupMatch,
+  rejectIfHandedOver,
+} = require('./match-router.js');
 const {
   LIMITS,
   CONTENT_WARNING_VALUES,
@@ -180,15 +186,21 @@ const requireActive = (req, res, next) => {
 };
 
 const giverOnly = [requireAuth, loadEvent, requireParticipant, loadMyMatch];
+// The same gift routes for someone making a backup gift: /backups/:matchId/submission
+const backupOnly = [requireAuth, loadEvent, requireParticipant, loadBackupMatch];
 
 // ---------- My gift ----------
 
-router.get('/submission', ...giverOnly, asyncHandler(async (req, res) => {
+async function getGift(req, res) {
   const submission = await Submission.findOne({ match: req.match._id });
   res.json({ submission: submission ? submission.toPublic() : null });
-}));
+}
 
-router.put('/submission', ...giverOnly, requireActive, upload, asyncHandler(async (req, res) => {
+router.get('/submission', ...giverOnly, rejectIfHandedOver, asyncHandler(getGift));
+router.get('/backups/:matchId/submission', ...backupOnly, asyncHandler(getGift));
+
+// Saves the gift for req.match, made by the logged-in person (the giver, or a backup)
+async function saveGift(req, res) {
   const { event, match, user } = req;
   const body = req.body && typeof req.body === 'object' ? req.body : {};
   const files = req.files || [];
@@ -219,7 +231,7 @@ router.put('/submission', ...giverOnly, requireActive, upload, asyncHandler(asyn
     new Submission({
       event: event._id,
       match: match._id,
-      giver: match.giver,
+      giver: user._id,
       recipient: match.recipient,
       submittedAt: now,
     });
@@ -262,15 +274,21 @@ router.put('/submission', ...giverOnly, requireActive, upload, asyncHandler(asyn
   }
 
   res.status(existing ? 200 : 201).json({ submission: submission.toPublic() });
-}));
+}
 
-router.delete('/submission', ...giverOnly, requireActive, asyncHandler(async (req, res) => {
+router.put('/submission', ...giverOnly, rejectIfHandedOver, requireActive, upload, asyncHandler(saveGift));
+router.put('/backups/:matchId/submission', ...backupOnly, requireActive, upload, asyncHandler(saveGift));
+
+async function deleteGift(req, res) {
   const submission = await Submission.findOne({ match: req.match._id });
   if (!submission) throw httpError(404, "You haven't submitted a gift yet.", 'NOT_FOUND');
   await submission.deleteOne();
   await Match.updateOne({ _id: req.match._id }, { $set: { status: 'assigned' } });
   res.json({ ok: true });
-}));
+}
+
+router.delete('/submission', ...giverOnly, rejectIfHandedOver, requireActive, asyncHandler(deleteGift));
+router.delete('/backups/:matchId/submission', ...backupOnly, requireActive, asyncHandler(deleteGift));
 
 // ---------- Organisers ----------
 
@@ -354,11 +372,11 @@ router.post('/reminders', ...organizerOnly, asyncHandler(async (req, res) => {
       throw httpError(409, 'Submission reminders can only be sent while the event is active.', 'WRONG_STATUS');
     }
     const [matches, submittedMatchIds] = await Promise.all([
-      Match.find({ event: event._id, published: true }).select('giver'),
+      Match.find({ event: event._id, published: true }).select('giver backupGiver'),
       Submission.find({ event: event._id }).distinct('match'),
     ]);
     const done = new Set(submittedMatchIds.map(String));
-    userIds = matches.filter((m) => !done.has(m._id.toString())).map((m) => m.giver);
+    userIds = matches.filter((m) => !done.has(m._id.toString())).map((m) => m.backupGiver || m.giver);
   } else {
     if (['draft', 'completed'].includes(event.status)) {
       throw httpError(409, 'Reminders can only be sent while the event is running.', 'WRONG_STATUS');
@@ -399,21 +417,31 @@ router.get('/results', requireAuth, loadEvent, asyncHandler(async (req, res) => 
 
   const rows = await loadMatchRows(event._id, { published: true });
   const me = user._id.toString();
-  const mine = (field) => rows.find((r) => (r.match[field]?._id || r.match[field])?.toString() === me);
-  const received = mine('recipient');
-  const given = mine('giver');
+  const idOf = (x) => (x?._id || x)?.toString();
+  // Who actually made each gift: the backup when one took it over
+  const madeBy = (r) =>
+    r.submission && idOf(r.submission.giver) !== idOf(r.match.giver) && r.admin.backupGiver ? r.admin.backupGiver : r.admin.giver;
+  const received = rows.find((r) => idOf(r.match.recipient) === me);
+  const given = rows.find((r) => idOf(r.match.giver) === me);
+  const handedOver = Boolean(given && given.match.backupGiver);
+  const backups = rows.filter((r) => r.submission && idOf(r.submission.giver) === me && idOf(r.match.giver) !== me);
 
   res.json({
     event: await serializeEvent(event, user, { ctx }),
     received: received
-      ? { giver: received.admin.giver, submission: received.submission ? received.submission.toPublic() : null }
+      ? { giver: madeBy(received), submission: received.submission ? received.submission.toPublic() : null }
       : null,
     given: given
-      ? { recipient: given.admin.recipient, submission: given.submission ? given.submission.toPublic() : null }
+      ? {
+          recipient: given.admin.recipient,
+          handedOver,
+          submission: given.submission && !handedOver ? given.submission.toPublic() : null,
+        }
       : null,
+    backups: backups.map((r) => ({ recipient: r.admin.recipient, submission: r.submission.toPublic() })),
     gallery: rows
       .filter((r) => r.submission)
-      .map((r) => ({ giver: r.admin.giver, recipient: r.admin.recipient, submission: r.submission.toPublic() })),
+      .map((r) => ({ giver: madeBy(r), recipient: r.admin.recipient, submission: r.submission.toPublic() })),
   });
 }));
 

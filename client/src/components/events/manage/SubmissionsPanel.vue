@@ -1,6 +1,20 @@
 <script setup>
 import { ref, computed, watch, useId } from 'vue';
-import { ArrowRight, Eye, Send, Gift, Inbox, Download, LayoutGrid, List, CheckCheck, Loader2, Images } from 'lucide-vue-next';
+import {
+  ArrowRight,
+  Eye,
+  Send,
+  Gift,
+  Inbox,
+  Download,
+  LayoutGrid,
+  List,
+  CheckCheck,
+  Loader2,
+  Images,
+  LifeBuoy,
+  Brush,
+} from 'lucide-vue-next';
 import TabNav from '@/components/ui/TabNav.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
@@ -11,9 +25,11 @@ import PersonLink from '@/components/events/PersonLink.vue';
 import StatTile from './StatTile.vue';
 import ReminderModal from './ReminderModal.vue';
 import SubmissionViewModal from './SubmissionViewModal.vue';
+import FindBackupModal from './FindBackupModal.vue';
+import { PROGRESS_STAGES } from '@shared/constants.mjs';
 import { api, assetUrl } from '@/api';
 import { toast } from '@/stores/toast';
-import { formatDate, formatDateTime, pluralize } from '@/utils/format';
+import { formatDate, formatDateTime, pluralize, timeAgo } from '@/utils/format';
 import { personName, submissionState, downloadCsv, fileSlug } from './helpers';
 
 const props = defineProps({
@@ -29,6 +45,7 @@ const filter = ref('all');
 const savingId = ref(null);
 const viewing = ref(null);
 const reminderOpen = ref(false);
+const backupFor = ref(null); // the row whose gift needs a backup artist
 
 const status = computed(() => props.event.status);
 const started = computed(() => status.value === 'active' || status.value === 'completed');
@@ -56,6 +73,16 @@ async function load() {
 }
 
 watch(() => [props.event.id, props.event.status], load, { immediate: true });
+
+// The artist's own "how's it going?" check-in
+const STAGE_LABELS = Object.fromEntries(PROGRESS_STAGES.map((s) => [s.value, s.label]));
+function progressText(match) {
+  return match?.progress?.stage ? STAGE_LABELS[match.progress.stage] || '' : '';
+}
+// Who is making the gift now: the backup artist if one took over
+function makerName(match) {
+  return personName(match?.backupGiver || match?.giver);
+}
 
 const overdueCount = computed(() => rows.value.filter((r) => !r.submission && r.overdue).length);
 const unverifiedCount = computed(() => rows.value.filter((r) => r.submission && !r.submission.verified).length);
@@ -141,7 +168,20 @@ async function verifyShown() {
 const view = ref('list');
 
 // ---- Export ----
-const CSV_HEADER = ['Artist', 'Recipient', 'Status', 'Submitted', 'Late', 'Verified', 'Title', 'Type', 'Images', 'Links'];
+const CSV_HEADER = [
+  'Artist',
+  'Recipient',
+  'Backup artist',
+  'Progress',
+  'Status',
+  'Submitted',
+  'Late',
+  'Verified',
+  'Title',
+  'Type',
+  'Images',
+  'Links',
+];
 const STATUS_TEXT = { on_time: 'Submitted', late: 'Submitted late', overdue: 'Overdue', missing: 'Not submitted' };
 
 function exportCsv() {
@@ -150,6 +190,8 @@ function exportCsv() {
     return [
       personName(r.match.giver),
       personName(r.match.recipient),
+      r.match.backupGiver ? personName(r.match.backupGiver) : '',
+      sub ? '' : progressText(r.match),
       STATUS_TEXT[submissionState(sub, r.overdue)],
       sub ? formatDateTime(sub.submittedAt) : '',
       sub ? (sub.late ? 'Yes' : 'No') : '',
@@ -285,6 +327,12 @@ function exportCsv() {
               <div class="gift-meta">
                 <StatusBadge :status="submissionState(r.submission, r.overdue)" kind="submission" />
                 <span v-if="r.submission?.verified" class="badge badge-success">Verified</span>
+                <span v-if="r.match.backupGiver" class="badge badge-info">
+                  <LifeBuoy :size="12" aria-hidden="true" /> {{ personName(r.match.backupGiver) }}
+                </span>
+                <span v-if="!r.submission && progressText(r.match)" class="badge badge-muted">
+                  {{ progressText(r.match) }}
+                </span>
               </div>
             </div>
           </li>
@@ -300,11 +348,27 @@ function exportCsv() {
           </div>
           <ul class="m-0 p-0 list-none">
             <li v-for="r in visible" :key="r.match.id" class="row" :class="{ overdue: !r.submission && r.overdue }">
-              <div class="people">
-                <PersonLink :user="r.match.giver" :size="32" class="person" />
-                <ArrowRight :size="16" class="text-brand shrink-0" aria-hidden="true" />
-                <span class="sr-only">makes a gift for</span>
-                <PersonLink :user="r.match.recipient" :size="32" class="person" />
+              <div class="min-w-0">
+                <div class="people">
+                  <PersonLink :user="r.match.giver" :size="32" class="person" :class="{ replaced: r.match.backupGiver }" />
+                  <ArrowRight :size="16" class="text-brand shrink-0" aria-hidden="true" />
+                  <span class="sr-only">makes a gift for</span>
+                  <PersonLink :user="r.match.recipient" :size="32" class="person" />
+                </div>
+                <p v-if="r.match.backupGiver || (!r.submission && r.match.progress)" class="extra">
+                  <span v-if="r.match.backupGiver" class="extra-item backup">
+                    <LifeBuoy :size="14" aria-hidden="true" /> Backup: {{ personName(r.match.backupGiver) }}
+                  </span>
+                  <span
+                    v-if="!r.submission && r.match.progress"
+                    class="extra-item"
+                    :title="r.match.progress.note || undefined"
+                  >
+                    <Brush :size="14" aria-hidden="true" />
+                    {{ progressText(r.match) }} · {{ timeAgo(r.match.progress.at) }}
+                    <template v-if="r.match.progress.note">: “{{ r.match.progress.note }}”</template>
+                  </span>
+                </p>
               </div>
               <div class="cell">
                 <span class="cell-label">Status</span>
@@ -343,6 +407,15 @@ function exportCsv() {
                 >
                   <Eye :size="15" aria-hidden="true" /> View
                 </button>
+                <button
+                  v-else-if="status === 'active'"
+                  type="button"
+                  class="btn btn-ghost btn-xs"
+                  :aria-label="`Find a backup artist for ${makerName(r.match)}'s gift`"
+                  @click="backupFor = r"
+                >
+                  <LifeBuoy :size="15" aria-hidden="true" /> Backup
+                </button>
               </div>
             </li>
           </ul>
@@ -351,6 +424,14 @@ function exportCsv() {
     </template>
 
     <SubmissionViewModal :open="Boolean(viewing)" :row="viewing" @close="viewing = null" />
+
+    <FindBackupModal
+      :open="Boolean(backupFor)"
+      :event-id="event.id"
+      :row="backupFor"
+      @close="backupFor = null"
+      @changed="load"
+    />
 
     <ReminderModal
       :open="reminderOpen"
@@ -492,6 +573,27 @@ li.row:first-child {
   gap: 8px;
   min-width: 0;
   max-width: 100%;
+}
+.person.replaced {
+  opacity: 0.6;
+}
+.extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 6px 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.extra-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.extra-item.backup {
+  color: var(--info);
+  font-weight: 600;
 }
 .cell {
   display: flex;

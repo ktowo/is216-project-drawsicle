@@ -92,6 +92,13 @@ function assignmentState(item) {
   return { label: 'Not submitted yet', cls: 'badge-muted' };
 }
 
+// Backup gifts open the same pages with ?backup=<matchId>
+function assignmentLink(item, suffix) {
+  return item.backupMatchId
+    ? { path: eventLink(item.event, suffix), query: { backup: item.backupMatchId } }
+    : eventLink(item.event, suffix);
+}
+
 // ---- Organising ----
 function percent(part, whole) {
   if (!whole) return 0;
@@ -242,7 +249,7 @@ async function sendTestNotification() {
               </RouterLink>
             </EmptyState>
             <ul v-else class="list">
-              <li v-for="item in assignments" :key="item.event.id" class="assignment">
+              <li v-for="item in assignments" :key="`${item.event.id}-${item.backupMatchId || 'own'}`" class="assignment">
                 <div class="min-w-0 flex-1">
                   <RouterLink :to="eventLink(item.event)" class="item-title">{{ item.event.name }}</RouterLink>
                   <p class="m-0 text-cocoa">
@@ -250,6 +257,7 @@ async function sendTestNotification() {
                   </p>
                   <div class="chips">
                     <span class="badge" :class="assignmentState(item).cls">{{ assignmentState(item).label }}</span>
+                    <span v-if="item.backupMatchId" class="badge badge-info">Backup gift</span>
                     <DeadlineChip
                       v-if="item.event.status === 'active'"
                       :at="item.event.submissionDeadline"
@@ -265,11 +273,11 @@ async function sendTestNotification() {
                     </RouterLink>
                   </template>
                   <template v-else>
-                    <RouterLink :to="eventLink(item.event, '/matches')" class="btn btn-outline btn-sm">
+                    <RouterLink :to="assignmentLink(item, '/matches')" class="btn btn-outline btn-sm">
                       <Eye :size="16" aria-hidden="true" /> View match
                     </RouterLink>
                     <RouterLink
-                      :to="eventLink(item.event, '/submit')"
+                      :to="assignmentLink(item, '/submit')"
                       class="btn btn-sm"
                       :class="item.submitted ? 'btn-outline' : 'btn-primary'"
                     >

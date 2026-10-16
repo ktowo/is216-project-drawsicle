@@ -67,11 +67,13 @@ export const CREATION_TYPE_VALUES = CREATION_TYPES.map((t) => t.value);
 
 // ---------- Applications, matches ----------
 
-export const APPLICATION_STATUSES = ['pending', 'accepted', 'rejected', 'withdrawn'];
+// waitlisted: the event was full; they move in, first come first served, when a place opens
+export const APPLICATION_STATUSES = ['pending', 'accepted', 'waitlisted', 'rejected', 'withdrawn'];
 
 export const APPLICATION_STATUS_LABELS = {
   pending: 'Pending review',
   accepted: 'Accepted',
+  waitlisted: 'On the waitlist',
   rejected: 'Not accepted',
   withdrawn: 'Withdrawn',
 };

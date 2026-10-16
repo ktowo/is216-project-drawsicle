@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
-import { ArrowLeft, CalendarSearch, Hourglass, Lock, Gift, Palette, Images, PartyPopper } from 'lucide-vue-next';
+import { ArrowLeft, CalendarSearch, Hourglass, Lock, Gift, Palette, Images, PartyPopper, LifeBuoy } from 'lucide-vue-next';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingBlock from '@/components/ui/LoadingBlock.vue';
@@ -103,6 +103,8 @@ watch(
 
 const received = computed(() => results.value?.received || null);
 const given = computed(() => results.value?.given || null);
+// Gifts I made as a backup artist for someone else's recipient
+const backupGifts = computed(() => results.value?.backups || []);
 const gallery = computed(() => results.value?.gallery || []);
 const submittedCount = computed(() => gallery.value.filter((g) => g.submission).length);
 const nameOf = (user) => user?.displayName || 'Someone';
@@ -184,7 +186,7 @@ const confetti = Array.from({ length: 30 }, (_, i) => ({
         </div>
       </header>
 
-      <div v-if="received || given" class="mine">
+      <div v-if="received || given || backupGifts.length" class="mine">
         <section v-if="received" class="card panel gift-card received" aria-labelledby="received-heading">
           <div class="card-head">
             <span class="icon-tile" aria-hidden="true"><Gift :size="22" /></span>
@@ -225,18 +227,39 @@ const confetti = Array.from({ length: 30 }, (_, i) => ({
               </p>
             </div>
           </div>
-          <SubmissionDetails
-            v-if="given.submission"
-            :submission="given.submission"
-            :caption="`From you to ${nameOf(given.recipient)}`"
-          />
-          <ThanksBox
-            v-if="given.submission?.thanks"
-            :event-id="event.id"
-            :submission="given.submission"
-            :name="nameOf(given.recipient)"
-          />
+          <template v-if="given.submission">
+            <SubmissionDetails :submission="given.submission" :caption="`From you to ${nameOf(given.recipient)}`" />
+            <ThanksBox
+              v-if="given.submission.thanks"
+              :event-id="event.id"
+              :submission="given.submission"
+              :name="nameOf(given.recipient)"
+            />
+          </template>
+          <p v-else-if="given.handedOver" class="muted">
+            A backup artist made this gift for {{ nameOf(given.recipient) }} in your place.
+          </p>
           <p v-else class="muted">You didn't submit a gift for {{ nameOf(given.recipient) }}.</p>
+        </section>
+
+        <section
+          v-for="(b, i) in backupGifts"
+          :key="b.submission.id"
+          class="card panel gift-card"
+          :aria-labelledby="`backup-heading-${i}`"
+        >
+          <div class="card-head">
+            <span class="icon-tile soft" aria-hidden="true"><LifeBuoy :size="22" /></span>
+            <div>
+              <h2 :id="`backup-heading-${i}`" class="panel-title">Your backup gift</h2>
+              <p class="from">
+                for
+                <PersonLink :user="b.recipient" :size="26" class="from-person" />
+              </p>
+            </div>
+          </div>
+          <SubmissionDetails :submission="b.submission" :caption="`From you to ${nameOf(b.recipient)}`" />
+          <ThanksBox v-if="b.submission.thanks" :event-id="event.id" :submission="b.submission" :name="nameOf(b.recipient)" />
         </section>
       </div>
 

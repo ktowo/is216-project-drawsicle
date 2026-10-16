@@ -33,7 +33,7 @@ const emit = defineEmits(['reload']);
 
 const uid = useId();
 const applications = ref([]);
-const counts = ref({ pending: 0, accepted: 0, rejected: 0, withdrawn: 0 });
+const counts = ref({ pending: 0, accepted: 0, waitlisted: 0, rejected: 0, withdrawn: 0 });
 const loading = ref(true);
 const error = ref('');
 const filter = ref('all');
@@ -55,7 +55,7 @@ async function load() {
     applications.value = [...(data.applications || [])].sort(
       (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
     );
-    counts.value = { pending: 0, accepted: 0, rejected: 0, withdrawn: 0, ...(data.counts || {}) };
+    counts.value = { pending: 0, accepted: 0, waitlisted: 0, rejected: 0, withdrawn: 0, ...(data.counts || {}) };
     // Open on the review queue when there is one
     if (firstLoad && counts.value.pending > 0 && canReview.value) filter.value = 'pending';
     firstLoad = false;
@@ -73,6 +73,7 @@ const tabs = computed(() => [
   { key: 'all', label: 'All', count: total.value },
   { key: 'pending', label: 'Pending', count: counts.value.pending },
   { key: 'accepted', label: 'Accepted', count: counts.value.accepted },
+  ...(counts.value.waitlisted ? [{ key: 'waitlisted', label: 'Waitlist', count: counts.value.waitlisted }] : []),
   { key: 'rejected', label: 'Rejected', count: counts.value.rejected },
   { key: 'withdrawn', label: 'Withdrawn', count: counts.value.withdrawn },
 ]);
@@ -373,6 +374,9 @@ function exportCsv() {
                 <p v-if="app.user?.username" class="m-0 text-sm text-cocoa truncate">
                   <RouterLink :to="userProfileLink(app.user)" class="handle-link" :aria-label="`${personName(app.user)}'s profile`">@{{ app.user.username }}</RouterLink>
                 </p>
+                <span v-if="app.canBackup && app.status === 'accepted'" class="backup-chip" title="Happy to make an extra gift if someone drops out">
+                  Can be a backup
+                </span>
               </div>
             </div>
             <div class="cell">
@@ -486,6 +490,16 @@ function exportCsv() {
 <style scoped>
 .search .input {
   padding: 10px 0;
+}
+.backup-chip {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--info-soft);
+  color: var(--info);
+  font-size: 0.75rem;
+  font-weight: 700;
 }
 .bulk-bar {
   display: flex;

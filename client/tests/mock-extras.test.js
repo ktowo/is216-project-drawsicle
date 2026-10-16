@@ -162,3 +162,79 @@ describe('who gets matched with whom', () => {
     expect(bad.code).toBe('VALIDATION');
   });
 });
+
+describe('waitlists, backups and progress', () => {
+  it('puts people on a waitlist when an event is full and moves them in when a place opens', async () => {
+    await loginAs('kit');
+    const { event } = await ok('/events', {
+      method: 'POST',
+      body: {
+        name: 'Tiny Swap',
+        signupDeadline: new Date(Date.now() + 5 * 864e5).toISOString(),
+        submissionDeadline: new Date(Date.now() + 20 * 864e5).toISOString(),
+        minParticipants: 2,
+        maxParticipants: 2,
+      },
+    });
+    await ok(`/events/${event.id}/status`, { method: 'POST', body: { status: 'open' } });
+
+    const signUp = async (key, extra = {}) => {
+      await loginAs(key);
+      const { characters } = await ok('/characters');
+      return mockRequest(`/events/${event.id}/application`, {
+        method: 'PUT',
+        body: { communityUsername: key, canCreate: ['art'], wantsTypes: ['art'], offeredCharacterIds: [characters[0].id], ...extra },
+      });
+    };
+    expect((await signUp('mika')).status).toBe(201);
+    expect((await signUp('sol')).status).toBe(201);
+    const full = await signUp('noor');
+    expect(full.data.code).toBe('EVENT_FULL');
+    const waiting = await signUp('noor', { waitlist: true });
+    expect(waiting.data.application.status).toBe('waitlisted');
+
+    await loginAs('sol');
+    await ok(`/events/${event.id}/application`, { method: 'DELETE' });
+    await loginAs('noor');
+    expect((await ok(`/events/${event.id}/application`)).application.status).toBe('accepted');
+    const { items } = await ok('/notifications?limit=10');
+    expect(items[0].type).toBe('waitlist_promoted');
+  });
+
+  it('hands a gift to a volunteer backup and tracks progress', async () => {
+    await loginAs('mika');
+    const autumn = await eventByName('Autumn Leaves Art Trade');
+    const base = `/events/${autumn.id}`;
+    const { rows } = await ok(`${base}/submissions`);
+    const missing = rows.find((r) => !r.submission && r.match.giver.username !== 'mika' && r.match.recipient.username !== 'mika');
+    expect(missing).toBeTruthy();
+
+    // Mika volunteers (as a participant of Autumn) and is picked as the backup
+    const { getState } = await import('../src/mock/db.js');
+    const state = getState();
+    const mikaApp = state.applications.find((a) => a.event === autumn.id && state.users.find((u) => u.id === a.user)?.username === 'mika');
+    mikaApp.canBackup = true;
+    const { volunteers } = await ok(`${base}/backups/volunteers/${missing.match.id}`);
+    expect(volunteers.map((v) => v.user.username)).toContain('mika');
+    const { matches } = await ok(`${base}/matches/${missing.match.id}/backup`, {
+      method: 'PUT',
+      body: { userId: mikaApp.user },
+    });
+    expect(matches.find((m) => m.id === missing.match.id).backupGiver.username).toBe('mika');
+
+    const { backups } = await ok(`${base}/backups/mine`);
+    expect(backups).toHaveLength(1);
+    const { progress } = await ok(`${base}/backups/${missing.match.id}/progress`, { method: 'PUT', body: { stage: 'sketch' } });
+    expect(progress.stage).toBe('sketch');
+    await ok(`${base}/backups/${missing.match.id}/submission`, {
+      method: 'PUT',
+      body: { links: [{ url: 'https://example.com/backup' }] },
+    });
+
+    // The original giver is released
+    await loginAs(missing.match.giver.username);
+    const mine = await ok(`${base}/my-match`);
+    expect(mine.match.handedOver).toBe(true);
+    expect((await fails(`${base}/submission`, { method: 'PUT', body: { links: [{ url: 'https://x.com' }] } })).code).toBe('HANDED_OVER');
+  });
+});
