@@ -70,7 +70,7 @@ async function anonymiseUser(userId, filter = {}) {
         socials,
         defaultForm: { communityUsername: '', canCreate: [], wantsTypes: [], likes: '', avoid: '', cannotDraw: [] },
         // A deleted account can't agree to anything being shown
-        profilePrivacy: { showExchanges: false, showGifts: false },
+        profilePrivacy: { showExchanges: false, showGifts: false, listInDiscover: false },
         artistTags: { makes: [], themes: [], activity: '', cardColor: '' },
       },
       $unset: {

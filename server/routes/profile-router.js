@@ -130,7 +130,7 @@ router.patch('/', requireAuth, asyncHandler(async (req, res) => {
 
   if (profilePrivacy !== undefined) {
     if (!isPlainObject(profilePrivacy)) throw invalid('profilePrivacy must be an object.');
-    for (const key of ['showExchanges', 'showGifts']) {
+    for (const key of ['showExchanges', 'showGifts', 'listInDiscover']) {
       if (profilePrivacy[key] === undefined) continue;
       if (typeof profilePrivacy[key] !== 'boolean') throw invalid(`${key} must be true or false.`);
       user.profilePrivacy[key] = profilePrivacy[key];

@@ -10,6 +10,7 @@ import { MockHttpError } from './util.js';
 import * as auth from './handlers/auth.js';
 import * as profile from './handlers/profile.js';
 import * as users from './handlers/users.js';
+import * as discover from './handlers/discover.js';
 import * as notifications from './handlers/notifications.js';
 import * as characters from './handlers/characters.js';
 import * as events from './handlers/events.js';
@@ -39,6 +40,7 @@ for (const feature of [
   museumRooms,
   museum,
   dashboard,
+  discover,
 ]) {
   feature.register(router);
 }
