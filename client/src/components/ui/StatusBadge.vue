@@ -22,7 +22,7 @@ const LABELS = {
 
 const TONES = {
   event: { draft: 'muted', open: 'success', matching: 'warning', active: 'brand', completed: 'info', cancelled: 'danger' },
-  application: { pending: 'warning', accepted: 'success', rejected: 'danger', withdrawn: 'muted' },
+  application: { pending: 'warning', accepted: 'success', waitlisted: 'info', rejected: 'danger', withdrawn: 'muted' },
   match: { assigned: 'warning', submitted: 'success' },
   submission: { on_time: 'success', late: 'warning', verified: 'info', missing: 'muted', overdue: 'danger' },
   user: { active: 'success', deactivated: 'muted', banned: 'danger' },

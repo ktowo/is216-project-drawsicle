@@ -240,7 +240,7 @@ describe('a whole exchange in mock mode', () => {
     // Organiser reviews and closes sign-ups
     await loginAs('mika');
     const { counts } = await ok(`/events/${event.id}/applications`);
-    expect(counts).toEqual({ pending: 0, accepted: 4, rejected: 0, withdrawn: 0 });
+    expect(counts).toEqual({ pending: 0, accepted: 4, rejected: 0, waitlisted: 0, withdrawn: 0 });
     expect((await ok(`/events/${event.id}/status`, { method: 'POST', body: { status: 'matching' } })).event.status).toBe(
       'matching'
     );

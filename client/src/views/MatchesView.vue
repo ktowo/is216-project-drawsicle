@@ -19,6 +19,8 @@ import {
   Printer,
   Link as LinkIcon,
   CalendarPlus,
+  LifeBuoy,
+  HandHeart,
 } from 'lucide-vue-next';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
@@ -33,6 +35,7 @@ import { api, qs } from '@/api';
 import { toast } from '@/stores/toast';
 import { formatDateTime } from '@/utils/format';
 import { eventCalendarEntries, downloadIcs } from '@/utils/calendar';
+import ProgressPicker from '@/components/events/ProgressPicker.vue';
 import {
   eventLink,
   inviteFrom,
@@ -54,6 +57,18 @@ const notFound = ref(false);
 const unavailable = ref(null); // { title, message } when there's no match to show
 
 const invite = computed(() => inviteFrom(route));
+// ?backup=<matchId>: a gift taken over as a backup artist
+const backupId = computed(() => {
+  const value = route.query.backup;
+  return typeof value === 'string' && /^[a-f0-9]{24}$/.test(value) ? value : '';
+});
+const backups = ref([]); // other gifts I'm making as a backup in this event
+const submitLink = computed(() =>
+  backupId.value ? { path: eventLink(route.params.id, '/submit'), query: { backup: backupId.value } } : eventLink(route.params.id, '/submit')
+);
+const progressUrl = computed(() =>
+  backupId.value ? `/events/${route.params.id}/backups/${backupId.value}/progress` : `/events/${route.params.id}/my-match/progress`
+);
 const backTo = computed(() =>
   invite.value ? { path: eventLink(route.params.id), query: { invite: invite.value } } : eventLink(route.params.id)
 );
@@ -67,10 +82,12 @@ async function load() {
   notFound.value = false;
   unavailable.value = null;
 
-  const [eventRes, matchRes] = await Promise.allSettled([
+  const [eventRes, matchRes, backupsRes] = await Promise.allSettled([
     api(`/events/${eventId}${qs({ invite: invite.value })}`),
-    api(`/events/${eventId}/my-match`),
+    api(backupId.value ? `/events/${eventId}/backups/${backupId.value}` : `/events/${eventId}/my-match`),
+    backupId.value ? Promise.resolve({ backups: [] }) : api(`/events/${eventId}/backups/mine`),
   ]);
+  backups.value = backupsRes.status === 'fulfilled' ? backupsRes.value.backups || [] : [];
   if (id !== requestId) return;
 
   const failed = [eventRes, matchRes].find((r) => r.status === 'rejected');
@@ -85,7 +102,7 @@ async function load() {
     event.value = null;
   } else {
     event.value = eventRes.value.event;
-    document.title = `Your match: ${event.value.name} · Drawsicle`;
+    document.title = `${backupId.value ? 'Your backup gift' : 'Your match'}: ${event.value.name} · Drawsicle`;
     if (matchRes.status === 'fulfilled') {
       match.value = matchRes.value.match;
     } else {
@@ -99,7 +116,7 @@ async function load() {
 }
 
 watch(
-  () => route.params.id,
+  () => [route.params.id, route.query.backup],
   () => {
     if (route.name === 'event-matches') load();
   },
@@ -177,7 +194,7 @@ async function copyUsername() {
     </template>
 
     <template v-else-if="event">
-      <PageHeader title="Your match" :subtitle="event.name" :back="backTo" back-label="Back to event">
+      <PageHeader :title="backupId ? 'Your backup gift' : 'Your match'" :subtitle="event.name" :back="backTo" back-label="Back to event">
         <StatusBadge :status="event.status" />
       </PageHeader>
 
@@ -188,7 +205,23 @@ async function copyUsername() {
         </RouterLink>
       </EmptyState>
 
+      <section v-else-if="match?.handedOver" class="card hero handed-over" aria-labelledby="handed-heading">
+        <p class="eyebrow"><HandHeart :size="18" aria-hidden="true" /> Handed over</p>
+        <h2 id="handed-heading" class="who-name small">A backup artist is making this gift</h2>
+        <p class="muted">
+          The organisers asked someone else to make the gift for {{ recipient?.displayName || 'your recipient' }}, so you
+          don't need to. If that's a mistake, get in touch with them.
+        </p>
+      </section>
+
       <template v-else-if="match && recipient">
+        <p v-if="match.asBackup" class="alert alert-info backup-note">
+          <LifeBuoy :size="18" aria-hidden="true" />
+          <span>
+            Thank you for stepping in! You're making this gift in place of an artist who couldn't finish. It's a secret,
+            just like your own.
+          </span>
+        </p>
         <p class="print-only print-head">
           {{ event.name }} · Gift for {{ recipient.displayName }} · Due {{ formatDateTime(deadline) }}
         </p>
@@ -309,7 +342,7 @@ async function copyUsername() {
               <div class="actions">
                 <RouterLink
                   v-if="isActive"
-                  :to="eventLink(event, '/submit')"
+                  :to="submitLink"
                   class="btn btn-block"
                   :class="submission ? 'btn-outline' : 'btn-primary'"
                 >
@@ -322,6 +355,26 @@ async function copyUsername() {
                 </RouterLink>
               </div>
               <p v-if="isCompleted" class="muted small">This event has finished, so gifts can no longer be changed.</p>
+            </section>
+
+            <ProgressPicker
+              v-if="isActive && !submission"
+              :url="progressUrl"
+              :progress="match.progress"
+              @saved="match.progress = $event"
+            />
+
+            <section v-if="backups.length" class="card panel tools" aria-labelledby="backups-heading">
+              <h2 id="backups-heading" class="panel-title small-title"><LifeBuoy :size="18" aria-hidden="true" /> Backup gifts</h2>
+              <p class="muted small">You're also making a gift as a backup artist:</p>
+              <RouterLink
+                v-for="b in backups"
+                :key="b.id"
+                :to="{ path: eventLink(event, '/matches'), query: { backup: b.id } }"
+                class="btn btn-outline btn-sm btn-block"
+              >
+                For {{ b.recipient.displayName }}{{ b.submission ? ' (submitted)' : '' }}
+              </RouterLink>
             </section>
 
             <section class="card panel tools" aria-labelledby="tools-heading">
@@ -555,6 +608,19 @@ async function copyUsername() {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+.handed-over .who-name.small {
+  font-size: 1.5rem;
+}
+.handed-over .muted {
+  margin-top: 8px;
+  max-width: 60ch;
+}
+.backup-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 16px;
 }
 .tools {
   display: flex;

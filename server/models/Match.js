@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { MATCH_STATUSES } = require('../../shared/constants.mjs');
+const { MATCH_STATUSES, PROGRESS_VALUES, LIMITS } = require('../../shared/constants.mjs');
 
 // giver makes a gift for recipient. Unpublished matches are the organiser's
 // draft; publishing makes them visible to givers and starts the event.
@@ -17,11 +17,24 @@ const matchSchema = new mongoose.Schema(
     published: { type: Boolean, default: false },
     status: { type: String, enum: MATCH_STATUSES, default: 'assigned' },
     remindersSent: { type: [String], default: [] },
+
+    // A volunteer who took over this gift after the giver dropped out. The giver can no longer
+    // submit it; the backup makes it instead and is shown as the giver at the reveal.
+    backupGiver: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    backupAssignedAt: { type: Date, default: null },
+
+    // How far along the gift is, as the person making it last said
+    progress: {
+      stage: { type: String, enum: [...PROGRESS_VALUES, ''], default: '' },
+      note: { type: String, trim: true, default: '', maxlength: LIMITS.progressNote },
+      at: { type: Date, default: null },
+    },
   },
   { timestamps: true }
 );
 
 matchSchema.index({ event: 1, giver: 1 }, { unique: true });
 matchSchema.index({ event: 1, recipient: 1 });
+matchSchema.index({ event: 1, backupGiver: 1 });
 
 module.exports = mongoose.models.Match || mongoose.model('Match', matchSchema);

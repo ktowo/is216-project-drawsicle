@@ -108,7 +108,7 @@ function remindGivers(state, now) {
     if (!pending.length) continue;
     notifyMany(
       state,
-      pending.map((m) => m.giver),
+      pending.map((m) => m.backupGiver || m.giver),
       {
         type: 'deadline_reminder',
         title: `Your gift for ${event.name} is due ${timeLeft(event.submissionDeadline, now)}`,

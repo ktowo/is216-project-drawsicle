@@ -38,6 +38,10 @@ const applicationSchema = new mongoose.Schema(
     // Tags/species this person can't draw, used by matching (e.g. "mecha", "humans")
     cannotDraw: { type: [String], default: [] },
     notes: { type: String, trim: true, default: '', maxlength: LIMITS.formText }, // for organisers
+    // Happy to make an extra gift if someone drops out (a "pinch hitter")
+    canBackup: { type: Boolean, default: false },
+    // When they joined the waitlist, which is first come, first served
+    waitlistedAt: { type: Date, default: null },
 
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     reviewedAt: { type: Date, default: null },
@@ -74,6 +78,8 @@ applicationSchema.methods.toPublic = function ({ user = null, characters = null 
     avoid: this.avoid || '',
     cannotDraw: [...(this.cannotDraw || [])],
     notes: this.notes || '',
+    canBackup: Boolean(this.canBackup),
+    waitlistedAt: this.waitlistedAt || null,
     reviewedAt: this.reviewedAt,
     createdAt: this.createdAt,
     updatedAt: this.updatedAt,

@@ -9,6 +9,7 @@ const { requireAuth, loadEvent, requireEventRole } = require('../middleware/auth
 const { organizerIds, participantCount, viewerContext, canViewEvent } = require('../services/events.js');
 const { notify, notifyMany } = require('../services/notify.js');
 const { readCharacterInput } = require('./character-router.js');
+const { promoteFromWaitlist } = require('../services/waitlist.js');
 const {
   APPLICATION_STATUSES,
   CREATION_TYPES,
@@ -132,6 +133,7 @@ function readSignupForm(body, event) {
     cannotDraw: normalizeTags(readList(src.cannotDraw, "Things you can't draw")),
     notes: readText(src.notes, 'Notes for the organisers', LIMITS.formText),
     saveAsDefault: src.saveAsDefault === true || src.saveAsDefault === 'true',
+    canBackup: src.canBackup === true || src.canBackup === 'true',
   };
 }
 
@@ -151,7 +153,12 @@ router.put('/application', ...applicant, asyncHandler(async (req, res) => {
   const existing = req.viewer.application;
   if (existing?.status === 'rejected') throw rejected();
   const isNew = !existing || existing.status === 'withdrawn';
-  if (isNew && (await isFull(event))) throw eventFull();
+  // A full event: join the waitlist if asked to, otherwise say it's full
+  let joinWaitlist = false;
+  if (isNew && (await isFull(event))) {
+    if (req.body?.waitlist !== true) throw eventFull();
+    joinWaitlist = true;
+  }
 
   const form = readSignupForm(req.body, event);
 
@@ -189,9 +196,11 @@ router.put('/application', ...applicant, asyncHandler(async (req, res) => {
     avoid: form.avoid,
     cannotDraw: form.cannotDraw,
     notes: form.notes,
+    canBackup: form.canBackup,
   });
   if (isNew) {
-    application.status = event.requireApproval ? 'pending' : 'accepted';
+    application.status = joinWaitlist ? 'waitlisted' : event.requireApproval ? 'pending' : 'accepted';
+    application.waitlistedAt = joinWaitlist ? new Date() : null;
     application.reviewedBy = null;
     application.reviewedAt = null;
   }
@@ -228,9 +237,11 @@ router.put('/application', ...applicant, asyncHandler(async (req, res) => {
         type: 'application_received',
         title: `New sign-up for ${event.name}`,
         message:
-          application.status === 'pending'
-            ? `${name} applied and is waiting for your review.`
-            : `${name} joined the exchange.`,
+          application.status === 'waitlisted'
+            ? `${name} joined the waitlist.`
+            : application.status === 'pending'
+              ? `${name} applied and is waiting for your review.`
+              : `${name} joined the exchange.`,
         link: `/events/${event.id}/manage?tab=participants`,
       })
     );
@@ -256,9 +267,12 @@ router.delete('/application', ...applicant, asyncHandler(async (req, res) => {
   if (application.status === 'rejected') throw rejected();
   if (!signupsOpen(event)) throw signupsClosed();
 
+  const freedPlace = application.status === 'accepted';
   application.status = 'withdrawn';
+  application.waitlistedAt = null;
   await application.save();
   await EventMember.revoke(user._id, event._id, 'participant');
+  if (freedPlace) await promoteFromWaitlist(event);
   res.json({ ok: true });
 }));
 
@@ -305,10 +319,12 @@ router.patch('/applications/:applicationId', ...organizerOnly, asyncHandler(asyn
   }
 
   let matchesCleared = false;
+  const freedPlace = application.status === 'accepted' && status === 'rejected';
   if (application.status !== status) {
     if (status === 'accepted' && (await isFull(event))) throw eventFull();
 
     application.status = status;
+    application.waitlistedAt = null;
     application.reviewedBy = req.user._id;
     application.reviewedAt = new Date();
     await application.save();
@@ -340,6 +356,8 @@ router.patch('/applications/:applicationId', ...organizerOnly, asyncHandler(asyn
           })
     );
   }
+
+  if (freedPlace) await promoteFromWaitlist(event);
 
   await populateApplication(application);
   const body = { application: applicationJson(application) };

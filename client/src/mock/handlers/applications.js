@@ -2,6 +2,7 @@
 // (server/routes/application-router.js)
 import { APPLICATION_STATUSES, CREATION_TYPES, LIMITS, labelFor, normalizeTags, signupsOpen } from '@shared/constants.mjs';
 import { newId } from '../db.js';
+import { promoteFromWaitlist } from '../waitlist.js';
 import {
   applicationJson,
   characterPublic,
@@ -63,6 +64,7 @@ function readSignupForm(body, event) {
     cannotDraw: normalizeTags(readList(src.cannotDraw, "Things you can't draw")),
     notes: readText(src.notes, 'Notes for the organisers', LIMITS.formText),
     saveAsDefault: src.saveAsDefault === true || src.saveAsDefault === 'true',
+    canBackup: src.canBackup === true || src.canBackup === 'true',
   };
 }
 
@@ -82,7 +84,11 @@ export function register(router) {
     const existing = viewer.application;
     if (existing?.status === 'rejected') throw rejected();
     const isNew = !existing || existing.status === 'withdrawn';
-    if (isNew && isFull(state, event)) throw eventFull();
+    let joinWaitlist = false;
+    if (isNew && isFull(state, event)) {
+      if (ctx.body?.waitlist !== true) throw eventFull();
+      joinWaitlist = true;
+    }
 
     const form = readSignupForm(ctx.body, event);
 
@@ -123,10 +129,12 @@ export function register(router) {
       avoid: form.avoid,
       cannotDraw: form.cannotDraw,
       notes: form.notes,
+      canBackup: form.canBackup,
       updatedAt: at,
     });
     if (isNew) {
-      application.status = event.requireApproval ? 'pending' : 'accepted';
+      application.status = joinWaitlist ? 'waitlisted' : event.requireApproval ? 'pending' : 'accepted';
+      application.waitlistedAt = joinWaitlist ? at : null;
       application.reviewedBy = null;
       application.reviewedAt = null;
     }
@@ -155,7 +163,11 @@ export function register(router) {
           type: 'application_received',
           title: `New sign-up for ${event.name}`,
           message:
-            application.status === 'pending' ? `${name} applied and is waiting for your review.` : `${name} joined the exchange.`,
+            application.status === 'waitlisted'
+              ? `${name} joined the waitlist.`
+              : application.status === 'pending'
+                ? `${name} applied and is waiting for your review.`
+                : `${name} joined the exchange.`,
           link: `/events/${event.id}/manage?tab=participants`,
         }
       );
@@ -179,9 +191,12 @@ export function register(router) {
     if (application.status === 'rejected') throw rejected();
     if (!signupsOpen(event, ctx.now)) throw signupsClosed();
 
+    const freedPlace = application.status === 'accepted';
     application.status = 'withdrawn';
+    application.waitlistedAt = null;
     application.updatedAt = ctx.now.toISOString();
     revokeRole(ctx.state, user.id, event.id, 'participant');
+    if (freedPlace) promoteFromWaitlist(ctx.state, event, ctx.now);
     return { ok: true };
   });
 
@@ -220,10 +235,12 @@ export function register(router) {
     }
 
     let matchesCleared = false;
+    const freedPlace = application.status === 'accepted' && status === 'rejected';
     if (application.status !== status) {
       if (status === 'accepted' && isFull(state, event)) throw eventFull();
 
       application.status = status;
+      application.waitlistedAt = null;
       application.reviewedBy = user.id;
       application.reviewedAt = ctx.now.toISOString();
       application.updatedAt = application.reviewedAt;
@@ -257,6 +274,7 @@ export function register(router) {
       );
     }
 
+    if (freedPlace) promoteFromWaitlist(state, event, ctx.now);
     const body = { application: applicationJson(state, application) };
     if (event.status === 'matching') body.matchesCleared = matchesCleared;
     return body;
