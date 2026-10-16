@@ -9,6 +9,7 @@ const COLUMNS = [
     title: 'Explore',
     links: [
       { to: '/events', label: 'Browse events' },
+      { to: '/museum', label: 'The museum' },
       { to: '/events/new', label: 'Create an event' },
     ],
   },

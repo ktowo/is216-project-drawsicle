@@ -12,6 +12,7 @@ import {
   PartyPopper,
   LifeBuoy,
   PackageOpen,
+  Footprints,
 } from 'lucide-vue-next';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
@@ -233,6 +234,9 @@ const confetti = Array.from({ length: 30 }, (_, i) => ({
             <template v-if="event.completedAt"> Revealed {{ formatDate(event.completedAt) }}.</template>
           </p>
           <p v-if="submittedCount" class="stats">{{ pluralize(submittedCount, 'gift') }} revealed</p>
+          <RouterLink v-if="submittedCount" :to="eventLink(event, '/museum')" class="btn btn-primary btn-sm museum-link">
+            <Footprints :size="16" aria-hidden="true" /> Walk through the gallery
+          </RouterLink>
         </div>
       </header>
 
@@ -368,6 +372,9 @@ const confetti = Array.from({ length: 30 }, (_, i) => ({
 </template>
 
 <style scoped>
+.museum-link {
+  margin-top: 12px;
+}
 .unwrap-stage {
   display: grid;
   place-items: center;
