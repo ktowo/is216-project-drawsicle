@@ -10,6 +10,7 @@ const Follow = require('../models/Follow.js');
 const Presence = require('../models/Presence.js');
 const ChatMessage = require('../models/ChatMessage.js');
 const StyleProfile = require('../models/StyleProfile.js');
+const Favourite = require('../models/Favourite.js');
 const { userMini } = User;
 const { organizerIds } = require('./events.js');
 const { notifyMany } = require('./notify.js');
@@ -92,6 +93,7 @@ async function anonymiseUser(userId, filter = {}) {
       Presence.deleteMany({ user: userId }),
       // Their art style goes too: the pictures they chose and what was worked out from them
       StyleProfile.deleteMany({ user: userId }),
+      Favourite.deleteMany({ user: userId }),
       User.updateOne({ _id: userId }, { $set: { styleSamples: [], museumLook: null } }),
     ]);
     // Chat logs keep their messages (moderators may need them) but no longer show in rooms

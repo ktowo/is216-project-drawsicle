@@ -15,6 +15,7 @@ const userRouter = require('./routes/user-router.js');
 const adminRouter = require('./routes/admin-router.js');
 const reportRouter = require('./routes/report-router.js');
 const museumRouter = require('./routes/museum-router.js');
+const favouriteRouter = require('./routes/favourite-router.js');
 const friendsRouter = require('./routes/friends-router.js');
 const fileRouter = require('./routes/file-router.js');
 const cronRouter = require('./routes/cron-router.js');
@@ -72,6 +73,7 @@ function createApp({ ready } = {}) {
   server.use('/api/admin', adminRouter);
   server.use('/api/reports', reportRouter);
   server.use('/api/museum', museumRouter);
+  server.use('/api/favourites', favouriteRouter);
   server.use('/api/friends', friendsRouter);
   server.use('/api/files', fileRouter);
   server.use('/api/cron', cronRouter);

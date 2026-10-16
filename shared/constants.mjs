@@ -191,6 +191,7 @@ export const LIMITS = {
   avoidPairs: 50,
   reportDetails: 1000,
   progressNote: 200,
+  favourites: 500,
   reportsPerDay: 20,
   following: 500,
   deactivationGraceDays: 30,
