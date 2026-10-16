@@ -10,6 +10,7 @@ const {
   normalizeTags,
 } = require('../../shared/constants.mjs');
 const { STYLE_MODES } = require('../../shared/style.mjs');
+const { MUSEUM_THEME_CHOICES } = require('../../shared/museum-themes.mjs');
 
 const newInviteCode = () => crypto.randomBytes(8).toString('base64url');
 
@@ -84,6 +85,8 @@ const eventSchema = new mongoose.Schema(
       // Pair similar or contrasting art styles (shared/style.mjs); people can ask for their own at sign-up
       style: { type: String, enum: STYLE_MODES, default: 'off' },
     },
+    // How the exchange's museum rooms look (shared/museum-themes.mjs); 'auto' changes room by room
+    museumTheme: { type: String, enum: MUSEUM_THEME_CHOICES, default: 'auto' },
     // The organisers' last "scan art styles" run (match-router.js)
     styleScan: {
       _id: false,
@@ -200,6 +203,7 @@ eventSchema.methods.toPublic = function ({
     adultOnly: Boolean(this.adultOnly),
     bannerUrl: this.bannerUrl || null,
     timeZone: this.timeZone || '',
+    museumTheme: this.museumTheme || 'auto',
     publishedAt: this.publishedAt,
     completedAt: this.completedAt,
     cancelledAt: this.cancelledAt,

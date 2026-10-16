@@ -4,11 +4,16 @@ const Event = require('../models/Event.js');
 const EventMember = require('../models/EventMember.js');
 const Presence = require('../models/Presence.js');
 const ChatMessage = require('../models/ChatMessage.js');
+const CatStat = require('../models/CatStat.js');
+const GuestbookEntry = require('../models/GuestbookEntry.js');
 const { userMini } = require('../models/User.js');
+const { organizerIds } = require('../services/events.js');
 const { requireAuth, optionalAuth } = require('../middleware/auth.js');
 const { asyncHandler, httpError } = require('../utils/helpers.js');
-const { CHAT, ROOM_KINDS, roomKey, parseChat, cooldownLeft, isRepeat } = require('../../shared/chat.mjs');
+const { CHAT, GUESTBOOK, PET_EMOTE, ROOM_KINDS, roomKey, parseChat, cleanText, cooldownLeft, isRepeat } = require('../../shared/chat.mjs');
 const { cleanLook } = require('../../shared/looks.mjs');
+const { CATS } = require('../../shared/museum-cats.mjs');
+const { can } = require('../../shared/permissions.mjs');
 
 // The museum's rooms are shared: everyone in a room sees where the others stand and what they
 // say. There are no sockets (the site runs on serverless functions), so each visitor's page
@@ -19,6 +24,10 @@ const { cleanLook } = require('../../shared/looks.mjs');
 //   POST /:kind/:eventId/:room/sync          the same, after saving where you are
 //   POST /:kind/:eventId/:room/chat          say something (cooldowns and mutes apply)
 //   POST /leave                              you left the museum
+//   GET  /cats                               how often each museum cat has been petted
+//   GET  /:kind/:eventId/guestbook           the exchange's guestbook (newest first)
+//   POST /:kind/:eventId/guestbook           sign it (one note every 10 minutes)
+//   DELETE /guestbook/:entryId               take a note down (its writer, organisers, moderators)
 //
 // kind 'wing' is the public museum (finished public exchanges); 'gallery' is an exchange's own
 // members-only gallery.
@@ -31,13 +40,10 @@ const ROOM_SIZE = 10;
 
 const notFound = () => httpError(404, "That room isn't open.", 'NOT_FOUND');
 
-// Can this visitor be in this room? Returns { key, event, label, link }.
-async function enterRoom(req) {
+// Can this visitor come into this exchange's rooms? Returns the event.
+async function enterPlace(req) {
   const { kind, eventId } = req.params;
-  const room = Number(req.params.room);
-  if (!ROOM_KINDS.includes(kind) || !mongoose.isValidObjectId(eventId) || !Number.isInteger(room) || room < 0 || room > 99) {
-    throw notFound();
-  }
+  if (!ROOM_KINDS.includes(kind) || !mongoose.isValidObjectId(eventId)) throw notFound();
   const event = await Event.findOne({ _id: eventId, ...(kind === 'wing' ? FINISHED : { status: 'completed', disabledAt: null }) });
   if (!event) throw notFound();
   if (kind === 'gallery') {
@@ -45,6 +51,15 @@ async function enterRoom(req) {
     const member = await EventMember.exists({ event: event._id, user: req.user._id, roles: { $in: ['organizer', 'participant'] } });
     if (!member) throw httpError(403, 'Only members of this exchange can come in.', 'ACCESS_DENIED');
   }
+  return event;
+}
+
+// Can this visitor be in this room? Returns { key, event, label, link }.
+async function enterRoom(req) {
+  const { kind } = req.params;
+  const room = Number(req.params.room);
+  if (!Number.isInteger(room) || room < 0 || room > 99) throw notFound();
+  const event = await enterPlace(req);
   return {
     key: roomKey(kind, event.id, room),
     event,
@@ -61,6 +76,7 @@ const chatJson = (m) => ({
   user: person(m.user),
   kind: m.kind,
   emote: m.emote || '',
+  target: m.target || '',
   text: m.text,
   createdAt: m.createdAt,
 });
@@ -166,14 +182,118 @@ router.post('/:kind/:eventId/:room/chat', requireAuth, asyncHandler(async (req, 
     user: req.user._id,
     kind: parsed.kind,
     emote: parsed.emote || '',
+    target: parsed.target || '',
     text: parsed.text,
   });
+  if (parsed.emote === PET_EMOTE) {
+    await CatStat.updateOne(
+      { key: parsed.target },
+      { $inc: { pets: 1 }, $set: { lastPetAt: new Date(), lastPetBy: req.user._id } },
+      { upsert: true }
+    );
+  }
   message.user = req.user;
   res.status(201).json({ message: chatJson(message), cooldownMs: CHAT.gapMs });
 }));
 
 router.post('/leave', requireAuth, asyncHandler(async (req, res) => {
   await Presence.deleteOne({ user: req.user._id });
+  res.json({ ok: true });
+}));
+
+// ---------- The museum cats ----------
+
+router.get('/cats', asyncHandler(async (req, res) => {
+  const stats = await CatStat.find().populate('lastPetBy', USER_FIELDS);
+  const byKey = new Map(stats.map((s) => [s.key, s]));
+  res.json({
+    cats: CATS.map((c) => {
+      const s = byKey.get(c.key);
+      const by = s?.lastPetBy;
+      return {
+        key: c.key,
+        name: c.name,
+        pets: s?.pets || 0,
+        lastPetAt: s?.lastPetAt || null,
+        lastPetBy: by && (by.status || 'active') === 'active' ? userMini(by) : null,
+      };
+    }),
+  });
+}));
+
+// ---------- The guestbook ----------
+
+async function canRemoveNotes(user, eventId) {
+  if (!user) return false;
+  if (can(user, 'chat.moderate')) return true;
+  return (await organizerIds(eventId)).some((id) => id.toString() === user._id.toString());
+}
+
+function noteJson(entry, viewer, moderator) {
+  const mine = Boolean(viewer && entry.user?._id?.toString() === viewer._id.toString());
+  return {
+    id: entry._id.toString(),
+    user: person(entry.user),
+    text: entry.text,
+    createdAt: entry.createdAt,
+    mine,
+    canRemove: mine || moderator,
+  };
+}
+
+router.get('/:kind/:eventId/guestbook', optionalAuth, asyncHandler(async (req, res) => {
+  const event = await enterPlace(req);
+  const [entries, total, moderator, last] = await Promise.all([
+    GuestbookEntry.find({ event: event._id, hiddenAt: null })
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(GUESTBOOK.shown * 2)
+      .populate('user', USER_FIELDS),
+    GuestbookEntry.countDocuments({ event: event._id, hiddenAt: null }),
+    canRemoveNotes(req.user, event._id),
+    req.user ? GuestbookEntry.findOne({ event: event._id, user: req.user._id }).sort({ createdAt: -1 }) : null,
+  ]);
+  const notes = entries.filter((e) => e.user && (e.user.status || 'active') === 'active').slice(0, GUESTBOOK.shown);
+  const nextAt = last ? new Date(last.createdAt.getTime() + GUESTBOOK.gapMs) : null;
+  res.json({
+    entries: notes.map((e) => noteJson(e, req.user, moderator)),
+    total,
+    nextAt: nextAt && nextAt > new Date() ? nextAt : null,
+  });
+}));
+
+router.post('/:kind/:eventId/guestbook', requireAuth, asyncHandler(async (req, res) => {
+  const event = await enterPlace(req);
+  const until = mutedUntil(req.user);
+  if (until) {
+    return res.status(403).json({ error: 'A moderator has paused your chat for a while.', code: 'MUTED', mutedUntil: until });
+  }
+  const text = cleanText(req.body?.text);
+  if (text.length < 2) throw httpError(400, 'Write a few words for the guestbook.', 'VALIDATION');
+  if (text.length > GUESTBOOK.maxLength) {
+    throw httpError(400, `Keep it under ${GUESTBOOK.maxLength} characters.`, 'VALIDATION');
+  }
+  const last = await GuestbookEntry.findOne({ event: event._id, user: req.user._id }).sort({ createdAt: -1 });
+  const wait = last ? last.createdAt.getTime() + GUESTBOOK.gapMs - Date.now() : 0;
+  if (wait > 0) {
+    return res.status(429).json({ error: 'You signed the guestbook a moment ago.', code: 'SLOW_DOWN', retryAfterMs: wait });
+  }
+  const entry = await GuestbookEntry.create({ event: event._id, user: req.user._id, text });
+  entry.user = req.user;
+  res.status(201).json({ entry: noteJson(entry, req.user, await canRemoveNotes(req.user, event._id)) });
+}));
+
+router.delete('/guestbook/:entryId', requireAuth, asyncHandler(async (req, res) => {
+  const missing = () => httpError(404, "That note isn't in the guestbook.", 'NOT_FOUND');
+  if (!mongoose.isValidObjectId(req.params.entryId)) throw missing();
+  const entry = await GuestbookEntry.findOne({ _id: req.params.entryId, hiddenAt: null });
+  if (!entry) throw missing();
+  const mine = entry.user.toString() === req.user._id.toString();
+  if (!mine && !(await canRemoveNotes(req.user, entry.event))) {
+    throw httpError(403, 'Only the person who wrote it, the organisers or a moderator can take it down.', 'ACCESS_DENIED');
+  }
+  entry.hiddenAt = new Date();
+  entry.hiddenBy = req.user._id;
+  await entry.save();
   res.json({ ok: true });
 }));
 

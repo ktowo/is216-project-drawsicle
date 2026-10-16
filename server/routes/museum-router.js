@@ -79,7 +79,7 @@ router.get('/:eventId', asyncHandler(async (req, res) => {
   if (!gifts.length) throw missing();
   res.set('Cache-Control', PUBLIC_CACHE);
   res.json({
-    event: { id: event.id, name: event.name, theme: event.theme || '', completedAt: event.completedAt },
+    event: { id: event.id, name: event.name, theme: event.theme || '', completedAt: event.completedAt, museumTheme: event.museumTheme || 'auto' },
     artworks: gifts.map((s) => artwork(s, event)),
   });
 }));

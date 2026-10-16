@@ -368,3 +368,33 @@ describe('museum avatars', () => {
     expect((await fails('/profile/style/analyse', { method: 'POST' })).code).toBe('NOT_IN_DEMO');
   });
 });
+
+describe('museum extras', () => {
+  it('counts pets, keeps a guestbook, and lets organisers pick the room design', async () => {
+    const { wings } = await ok('/museum');
+    const id = wings[0].event.id;
+    const place = `/museum/rooms/wing/${id}`;
+
+    await loginAs('mika');
+    const { message } = await ok(`${place}/0/chat`, { method: 'POST', body: { text: '/pet Biscuit' } });
+    expect([message.emote, message.target, message.text]).toEqual(['pet', 'biscuit', 'pets Biscuit']);
+    expect((await fails(`${place}/0/chat`, { method: 'POST', body: { text: '/pet nobody' } })).code).toBe('VALIDATION');
+    const { cats } = await ok('/museum/rooms/cats');
+    expect(cats.find((c) => c.key === 'biscuit')).toMatchObject({ pets: 1, lastPetBy: { displayName: 'Mika' } });
+
+    const { entry } = await ok(`${place}/guestbook`, { method: 'POST', body: { text: 'Such a cosy wing' } });
+    expect(entry).toMatchObject({ text: 'Such a cosy wing', mine: true, canRemove: true });
+    expect((await fails(`${place}/guestbook`, { method: 'POST', body: { text: 'Again!' } })).code).toBe('SLOW_DOWN');
+    expect((await ok(`${place}/guestbook`)).total).toBe(1);
+
+    // Only the organisers choose the design, from the list
+    expect((await fails(`/events/${id}/museum-theme`, { method: 'PUT', body: { museumTheme: 'midnight' } })).status).toBe(403);
+    await loginAs('juniper');
+    expect((await fails(`/events/${id}/museum-theme`, { method: 'PUT', body: { museumTheme: 'disco' } })).code).toBe('VALIDATION');
+    await ok(`/events/${id}/museum-theme`, { method: 'PUT', body: { museumTheme: 'midnight' } });
+    expect((await ok(`/museum/${id}`)).event.museumTheme).toBe('midnight');
+    // Organisers can take any note down
+    await ok(`/museum/rooms/guestbook/${entry.id}`, { method: 'DELETE' });
+    expect((await ok(`${place}/guestbook`)).entries).toEqual([]);
+  });
+});

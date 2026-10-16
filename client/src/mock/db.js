@@ -283,11 +283,13 @@ export function buildState(now = new Date()) {
     follows: [],
     presence: [],
     chats: [],
+    guestbook: [],
+    catPets: [],
   };
 }
 
 // Collections added after the first release; older saved demos get them empty
-const LATER_COLLECTIONS = ['announcements', 'reports', 'follows', 'presence', 'chats'];
+const LATER_COLLECTIONS = ['announcements', 'reports', 'follows', 'presence', 'chats', 'guestbook', 'catPets'];
 
 // ---------- Loading and saving ----------
 

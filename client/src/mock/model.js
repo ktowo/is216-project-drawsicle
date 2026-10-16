@@ -204,6 +204,7 @@ export function serializeEvent(state, event, user, ctx = viewerContext(state, ev
     adultOnly: Boolean(event.adultOnly),
     bannerUrl: event.bannerUrl || null,
     timeZone: event.timeZone || '',
+    museumTheme: event.museumTheme || 'auto',
     publishedAt: event.publishedAt || null,
     completedAt: event.completedAt || null,
     createdAt: event.createdAt,
