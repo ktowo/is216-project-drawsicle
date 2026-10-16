@@ -422,3 +422,25 @@ describe('questions for your giftee', () => {
     expect((await ok(`${base}/my-match`)).match.questions[0].answer).toBe('Night, with lanterns!');
   });
 });
+
+describe('saved art', () => {
+  it('saves gifts you can see, and only those', async () => {
+    const spring = await eventByName('Spring Bloom Exchange');
+    await loginAs('mika'); // took part in Spring Bloom
+    const { gallery } = await ok(`/events/${spring.id}/results`);
+    const gift = gallery.find((g) => g.submission).submission;
+
+    await ok(`/favourites/${gift.id}`, { method: 'PUT' });
+    await ok(`/favourites/${gift.id}`, { method: 'PUT' }); // twice is fine
+    const saved = await ok('/favourites');
+    expect(saved.ids).toEqual([gift.id]);
+    expect(saved.items[0]).toMatchObject({ submission: { id: gift.id }, event: { name: 'Spring Bloom Exchange' } });
+    expect(saved.items[0].submission.message).toBeUndefined();
+
+    await ok(`/favourites/${gift.id}`, { method: 'DELETE' });
+    expect((await ok('/favourites')).items).toEqual([]);
+    expect((await fails('/favourites/0123456789abcdef01234567', { method: 'PUT' })).status).toBe(404);
+    await mockRequest('/auth/logout', { method: 'POST' });
+    expect((await fails('/favourites')).status).toBe(401);
+  });
+});
