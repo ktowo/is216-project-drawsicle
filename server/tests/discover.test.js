@@ -301,3 +301,23 @@ test('the Recommended sort puts the best fits first with reasons, and falls back
   assert.equal(guest.sort, 'default');
   assert.equal(guest.items[0].reasons, undefined);
 });
+
+// ---------- Hover cards ----------
+
+test('the hover card endpoint returns the artist card, with the same not-found rules as profiles', async () => {
+  const ada = await artist('Ada', 'ada', TAGS(['fantasy']));
+  await artist('Ben', 'ben', { status: 'banned' });
+  await artist('Cleo', 'cleo', { status: 'deactivated' });
+  await artist('Dev', 'dev', { 'profilePrivacy.listInDiscover': false });
+
+  const { card } = (await h.request(app).get('/api/users/ADA/card').expect(200)).body;
+  assert.equal(card.user.username, 'ada');
+  assert.deepEqual(card.artistTags.themes, ['fantasy']);
+  assert.equal(card.following, undefined);
+  for (const handle of ['ben', 'cleo', 'nobody_here']) {
+    assert.equal((await h.request(app).get(`/api/users/${handle}/card`).expect(404)).body.code, 'USER_NOT_FOUND');
+  }
+  // Unlisted from Discover still has a card: the name is linked wherever it already appears
+  await h.request(app).get('/api/users/dev/card').expect(200);
+  assert.equal((await ada.agent.get('/api/users/dev/card').expect(200)).body.card.following, false);
+});

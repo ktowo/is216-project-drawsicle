@@ -151,6 +151,12 @@ export function register(router) {
   // ---------- The friend list (friends-router.js) ----------
   router.get('/friends', (ctx) => friendList(ctx.state, ctx.requireAuth().id));
 
+  // The small card shown when you hover or focus someone's name (and on Discover)
+  router.get('/users/:username/card', (ctx) => {
+    const user = visibleProfileUser(ctx.state, ctx.params.username);
+    return { card: artistCard(ctx.state, user, ctx.currentUser()) };
+  });
+
   router.get('/users/:username/gifts', (ctx) => {
     const { state } = ctx;
     const limit = Math.min(Math.max(Number(ctx.query.limit) || GIFTS_PAGE, 1), GIFTS_PAGE_MAX);

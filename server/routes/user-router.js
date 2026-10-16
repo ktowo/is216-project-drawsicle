@@ -13,7 +13,7 @@ const { LIMITS } = require('../../shared/constants.mjs');
 const { serializeEvents } = require('../services/events.js');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
 const { earnedBadges } = require('../../shared/badges.mjs');
-const { FINISHED, visibleProfileUser, publicGiftsFilter, badgeGifts } = require('../services/artists.js');
+const { FINISHED, visibleProfileUser, publicGiftsFilter, badgeGifts, artistCard } = require('../services/artists.js');
 
 // Public artist profiles: /api/users/:username
 const router = Router();
@@ -77,6 +77,12 @@ router.get('/:username', optionalAuth, asyncHandler(async (req, res) => {
   }
 
   res.json(body);
+}));
+
+// The small card shown when you hover or focus someone's name (and on Discover)
+router.get('/:username/card', optionalAuth, asyncHandler(async (req, res) => {
+  const user = await visibleProfileUser(req.params.username);
+  res.json({ card: await artistCard(user, req.user) });
 }));
 
 // The artist's public gift gallery, newest first. ?before=<ISO date> pages backwards
