@@ -10,7 +10,9 @@ import { demoArtDataUrl } from '@shared/demo-art.mjs';
 
 export const STATE_KEY = 'drawsicle-mock-v1';
 export const SESSION_KEY = 'drawsicle-mock-session';
-const STATE_VERSION = 1;
+// Bumped when the demo data changes shape or gains something people should see (2: the
+// Museum Club's sample wings), so saved demos start over with it
+const STATE_VERSION = 2;
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
@@ -173,6 +175,7 @@ export function buildState(now = new Date()) {
       statusHistory: history,
       publishedAt: iso(e.publishedAt),
       completedAt: iso(e.completedAt),
+      museumTheme: e.museumTheme || 'auto',
       // Reminders that would already have gone out by now, so they don't all fire on first load
       remindersSent: e.status === 'open' ? [] : ['signup-48h', 'signup-closed'],
       createdAt: iso(createdMs),

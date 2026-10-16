@@ -86,7 +86,16 @@ describe('demo data', () => {
     // Sorted by sign-up deadline: Moth (6 days) before Winter (10 days)
     expect(open.events[0].name).toBe('Moth & Lantern Exchange');
 
-    expect((await ok('/events?status=completed')).events.map((e) => e.name)).toEqual(['Spring Bloom Exchange']);
+    // Most recently finished first: Spring Bloom, then the Museum Club's sample wings
+    expect((await ok('/events?status=completed')).events.map((e) => e.name)).toEqual([
+      'Spring Bloom Exchange',
+      'Petal Post Swap',
+      'Midnight Lantern Gallery',
+      'Greenhouse Doodle Swap',
+      'Lavender Letters Exchange',
+      'Golden Hour Sketch Trade',
+      'White Cube Mini Show',
+    ]);
     expect((await ok('/events?season=summer')).events.map((e) => e.name)).toEqual(['Summer Splash Swap']);
     // Organiser names count in the search
     expect((await ok('/events?q=kit')).events.map((e) => e.name)).toEqual(['Moth & Lantern Exchange']);
@@ -94,7 +103,7 @@ describe('demo data', () => {
     expect((await ok('/events?sort=popular')).events[0].participantCount).toBe(6);
 
     const page = await ok('/events?limit=2&page=2');
-    expect(page).toMatchObject({ total: 5, page: 2, pages: 3 });
+    expect(page).toMatchObject({ total: 11, page: 2, pages: 6 });
     expect(page.events).toHaveLength(2);
 
     expect((await fails('/events?status=nope')).code).toBe('VALIDATION');
@@ -463,6 +472,12 @@ describe('build-out additions', () => {
       'Winter Secret Santa 2026',
       'Summer Splash Swap',
       'Spring Bloom Exchange',
+      'Petal Post Swap',
+      'Midnight Lantern Gallery',
+      'Greenhouse Doodle Swap',
+      'Lavender Letters Exchange',
+      'Golden Hour Sketch Trade',
+      'White Cube Mini Show',
     ]);
     expect((await ok('/events')).events.map((e) => e.name)).toEqual(events.map((e) => e.name));
   });

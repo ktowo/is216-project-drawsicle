@@ -71,7 +71,8 @@ const tracks = computed(() => {
   return ['left', 'right'].flatMap((wall) => {
     const spots = props.lights.pools.filter((p) => p.kind === 'picture' && p.frame.wall === wall).map((p) => p.frame.at);
     if (!spots.length) return [];
-    const from = Math.min(...spots) - 0.6;
+    // Never past the corner where the two tracks meet, so they join in an L rather than cross
+    const from = Math.max(OUT, Math.min(...spots) - 0.6);
     const to = Math.max(...spots) + 0.6;
     return [wall === 'left' ? [up(OUT, from), up(OUT, to)] : [up(from, OUT), up(to, OUT)]];
   });
