@@ -106,21 +106,24 @@ function onFollow(res) {
   padding: 0 18px 18px;
   flex: 1;
 }
+/* The avatar overlaps the colour band; the name always starts below it so it stays readable
+   on any card colour, in light and dark mode */
 .who {
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
-  margin-top: -28px;
+  position: relative;
+  padding-left: 76px;
+  min-height: 40px;
+  margin-top: 8px;
 }
 .avatar {
-  flex-shrink: 0;
+  position: absolute;
+  left: 0;
+  top: -36px;
   border: 4px solid var(--surface);
   border-radius: 50%;
   background: var(--surface);
 }
 .names {
   min-width: 0;
-  padding-bottom: 2px;
 }
 .name {
   margin: 0;
