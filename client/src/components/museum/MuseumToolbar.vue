@@ -1,20 +1,21 @@
 <script setup>
 import { ref, computed, onBeforeUnmount, useId } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
-import { Users, MessagesSquare, Smile, Send, Loader2 } from 'lucide-vue-next';
+import { Users, MessagesSquare, Smile, Send, Loader2, BookOpen } from 'lucide-vue-next';
 import PixelHead from './PixelHead.vue';
 import { CHAT, EMOTES, parseChat } from '@shared/chat.mjs';
 import { formatDateTime } from '@/utils/format';
 
-// The bar under the room: your head (opens your card), friends, the chat history, emotes, and
-// the chat box. send(text) does the talking and throws the API's error, which shows here.
+// The bar under the room: your head (opens your card), friends, the chat history, the
+// guestbook, emotes, and the chat box. send(text) does the talking and throws the API's error, which shows here.
 const props = defineProps({
   me: { type: Object, default: null },
   send: { type: Function, required: true },
   mutedUntil: { type: [String, Date], default: null },
-  open: { type: String, default: '' }, // which panel is open: me | friends | log
+  open: { type: String, default: '' }, // which panel is open: me | friends | log | guestbook
   logCount: { type: Number, default: 0 },
   dancing: { type: Boolean, default: false },
+  guestbook: { type: Boolean, default: false }, // show the guestbook button
 });
 const emit = defineEmits(['toggle', 'command']);
 
@@ -117,6 +118,16 @@ defineExpose({ focus: () => inputRef.value?.focus() });
       >
         <MessagesSquare :size="18" aria-hidden="true" /> <span class="tool-label">Chat</span>
         <span v-if="logCount" class="count">{{ logCount }}</span>
+      </button>
+      <button
+        v-if="guestbook"
+        type="button"
+        class="tool"
+        :class="{ on: open === 'guestbook' }"
+        :aria-pressed="open === 'guestbook' ? 'true' : 'false'"
+        @click="emit('toggle', 'guestbook')"
+      >
+        <BookOpen :size="18" aria-hidden="true" /> <span class="tool-label">Guestbook</span>
       </button>
     </div>
 

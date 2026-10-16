@@ -11,7 +11,7 @@ const HIDDEN_EVERY_MS = 12000; // a background tab keeps its place, but slowly
 //     place: () => ({ kind: 'wing', eventId, room: 0 }),  // null: don't sync
 //     signedIn: () => Boolean(auth.user),
 //     spot: () => ({ x, y, facing, sitting }),
-//     onPeople: (people) => ..., onMessages: (messages) => ...,
+//     onPeople: (people) => ..., onMessages: (messages, { history }) => ...,
 //   });
 //   await sync.say('/wave');   // throws ApiError (SLOW_DOWN, REPEAT, MUTED...) like api()
 //   sync.now();                // sync straight away (after sitting down, say)
@@ -37,6 +37,8 @@ export function useRoomSync({ place, signedIn, spot, onPeople, onMessages }) {
       cursor = null; // a new room: start with its recent history
     }
     busy = true;
+    // The first answer in a room is its recent history, said before you arrived
+    const history = cursor === null;
     try {
       const data = signedIn()
         ? await api(`${url}/sync`, { method: 'POST', body: { ...spot(), since: cursor } })
@@ -46,7 +48,7 @@ export function useRoomSync({ place, signedIn, spot, onPeople, onMessages }) {
       cursor = data.cursor || cursor;
       if ('mutedUntil' in data) mutedUntil.value = data.mutedUntil;
       onPeople(data.people || []);
-      if (data.messages?.length) onMessages(data.messages);
+      if (data.messages?.length) onMessages(data.messages, { history });
     } catch (e) {
       error.value = e.message;
       // Rooms you can't be in won't open by retrying
@@ -76,7 +78,7 @@ export function useRoomSync({ place, signedIn, spot, onPeople, onMessages }) {
     if (!url) throw new Error('Not in a room.');
     try {
       const { message } = await api(`${url}/chat`, { method: 'POST', body: { text } });
-      onMessages([message]);
+      onMessages([message], { history: false });
       return message;
     } catch (e) {
       if (e.code === 'MUTED') mutedUntil.value = e.data?.mutedUntil || null;
