@@ -1,7 +1,7 @@
 <script setup>
 import { ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
-import { X, Armchair, Award, Users, UserRound } from 'lucide-vue-next';
+import { X, Armchair, Award, Users, UserRound, Shirt } from 'lucide-vue-next';
 import PixelHead from './PixelHead.vue';
 import FollowButton from '@/components/profile/FollowButton.vue';
 import { api } from '@/api';
@@ -60,6 +60,7 @@ function onFollow({ viewer, stats }) {
         <button type="button" class="btn btn-outline btn-xs" @click="emit('sit')">
           <Armchair :size="14" aria-hidden="true" /> {{ sitting ? 'Stand up' : 'Sit down' }}
         </button>
+        <RouterLink to="/avatar" class="btn btn-ghost btn-xs"><Shirt :size="14" aria-hidden="true" /> Change your look</RouterLink>
         <RouterLink to="/profile" class="btn btn-ghost btn-xs"><UserRound :size="14" aria-hidden="true" /> Your profile</RouterLink>
         <RouterLink to="/friends" class="btn btn-ghost btn-xs"><Users :size="14" aria-hidden="true" /> Friends</RouterLink>
       </template>

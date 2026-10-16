@@ -15,3 +15,6 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# run-ollama settings (the tunnel token is a secret; ollama.env.example is the template)
+ollama.env

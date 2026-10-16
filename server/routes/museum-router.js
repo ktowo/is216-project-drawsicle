@@ -40,7 +40,12 @@ function artwork(submission, event) {
 // Shared rooms: who's here, and chat (museum-rooms.js)
 router.use('/rooms', roomsRouter);
 
+// The public museum looks the same for everyone, so browsers and Vercel's edge can keep it a
+// little while (people's choices about showing gifts reach it within a minute or so)
+const PUBLIC_CACHE = 'public, max-age=60, s-maxage=60, stale-while-revalidate=300';
+
 router.get('/', asyncHandler(async (req, res) => {
+  res.set('Cache-Control', PUBLIC_CACHE);
   const events = await Event.find(FINISHED).sort({ completedAt: -1, _id: -1 }).limit(WINGS_MAX * 2);
   const gifts = await publicGifts(events.map((e) => e._id));
   const byEvent = new Map();
@@ -72,6 +77,7 @@ router.get('/:eventId', asyncHandler(async (req, res) => {
   if (!event) throw missing();
   const gifts = await publicGifts([event._id]);
   if (!gifts.length) throw missing();
+  res.set('Cache-Control', PUBLIC_CACHE);
   res.json({
     event: { id: event.id, name: event.name, theme: event.theme || '', completedAt: event.completedAt },
     artworks: gifts.map((s) => artwork(s, event)),

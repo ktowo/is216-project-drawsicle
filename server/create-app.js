@@ -83,7 +83,15 @@ function createApp({ ready } = {}) {
   // Optional: serve the built Vue app from the same origin (SERVE_CLIENT=true after `pnpm build` in client/)
   const clientDist = path.join(__dirname, '..', 'client', 'dist');
   if (process.env.SERVE_CLIENT === 'true' && fs.existsSync(clientDist)) {
-    server.use(express.static(clientDist));
+    server.use(
+      express.static(clientDist, {
+        // Built files have content hashes in their names; index.html must always be fresh
+        setHeaders(res, filePath) {
+          if (filePath.includes(`${path.sep}assets${path.sep}`)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          else res.setHeader('Cache-Control', 'no-cache');
+        },
+      })
+    );
     server.get(/^\/(?!api\/|uploads\/).*/, (req, res) => res.sendFile(path.join(clientDist, 'index.html')));
   }
 

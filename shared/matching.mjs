@@ -7,7 +7,10 @@
 //   participant: { id, name?, canCreate[], wantsTypes[], cannotDraw[], likes, avoid,
 //                  characters: [{ id, name, species, tags[] }],
 //                  blockedIds?: [],          people they must never be matched with (either way)
-//                  previousRecipients?: [] } people they made gifts for in earlier exchanges
+//                  previousRecipients?: [], people they made gifts for in earlier exchanges
+//                  style?: { features, tags, vector },  their art style (shared/style.mjs)
+//                  styleWish?: 'similar' | 'different' }  for their own gift: a giver whose
+//                                              style is like theirs, or unlike it
 //
 // Hard rules: nobody gives to themselves, nobody is matched with someone either of them blocked
 // (or the organisers kept apart), the giver can make at least one thing the recipient asked for,
@@ -19,6 +22,7 @@
 // the same result, so an organiser can get back a result they liked.
 
 import { normalizeTag, CREATION_TYPE_VALUES } from './constants.mjs';
+import { styleFit } from './style.mjs';
 
 const BASE_SCORE = 40;
 const EXTRA_TYPE_POINTS = 10;
@@ -129,6 +133,8 @@ function prepare(p) {
     avoid: new Set(words(p?.avoid).map(stem)),
     blocked: new Set(asList(p?.blockedIds).map(String)),
     previous: new Set(asList(p?.previousRecipients).map(String)),
+    style: p?.style || null,
+    styleWish: p?.styleWish || null,
   };
 }
 
@@ -171,13 +177,16 @@ function assess(giver, recipient, explain) {
   }
 
   const repeat = giver.previous.has(recipient.id);
+  // Art style: only when the recipient (or the organisers) asked, and both have a style profile
+  const style = styleFit(giver.style, recipient.style, recipient.styleWish);
   const score = Math.max(
     1,
     Math.round(
       BASE_SCORE +
         Math.min(MAX_TYPE_POINTS, EXTRA_TYPE_POINTS * (types.length - 1)) +
         (total ? (CHARACTER_POINTS * drawable) / total : CHARACTER_POINTS) +
-        INTEREST_POINTS * shared.length -
+        INTEREST_POINTS * shared.length +
+        (style ? style.points : 0) -
         (repeat ? REPEAT_PENALTY : 0)
     )
   );
@@ -189,13 +198,15 @@ function assess(giver, recipient, explain) {
     else if (total > 1 && drawable === total) reasons.push(`Can draw all ${total} offered characters`);
     else if (total > 1) reasons.push(`Can draw ${drawable} of ${total} offered characters`);
     if (shared.length) reasons.push(`Shared interest${shared.length > 1 ? 's' : ''}: ${shared.join(', ')}`);
+    if (style) reasons.push(style.reason);
     if (repeat) reasons.push('Heads up: made a gift for them in an earlier exchange');
   }
 
   return { ok: true, score, reasons, blockers: [] };
 }
 
-// Can `giver` make a gift for `recipient`, and how good a fit is it (0-100)?
+// Can `giver` make a gift for `recipient`, and how good a fit is it? Up to 100, plus up to
+// STYLE_POINTS (shared/style.mjs) when the recipient asked for a similar or different art style.
 export function scorePair(giver, recipient) {
   return assess(prepare(giver), prepare(recipient), true);
 }

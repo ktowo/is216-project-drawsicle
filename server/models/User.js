@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const { SITE_ROLES } = require('../../shared/constants.mjs');
 const { permissionsFor } = require('../../shared/permissions.mjs');
 const { artistTagsOf } = require('../../shared/taste.mjs');
+const { cleanLook } = require('../../shared/looks.mjs');
 
 const USERNAME_RE = /^[a-z0-9_]{3,30}$/;
 const SOCIAL_KEYS = ['twitter', 'instagram', 'bluesky', 'discord', 'deviantart', 'toyhouse', 'tumblr'];
@@ -83,6 +84,14 @@ const userSchema = new mongoose.Schema(
 
     // People this person never wants to be matched with, in either direction. Private.
     blockedUsers: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], default: [] },
+    // Pictures of their art, for matching by style (services/vision.js); up to 3
+    styleSamples: { type: [String], default: [] },
+    // Their museum avatar, from the avatar creator (shared/looks.mjs); empty until they make one
+    museumLook: {
+      _id: false,
+      type: { skin: String, hair: String, shirt: String, pants: String, style: String, accessory: String },
+      default: null,
+    },
     // A moderator paused this person's museum chat until then
     chatMutedUntil: { type: Date, default: null },
     chatMuteReason: { type: String, trim: true, default: '', maxlength: 500 },
@@ -142,14 +151,15 @@ userSchema.methods.toPublic = function () {
     providers: { google: Boolean(this.googleId), discord: Boolean(this.discordId) },
     profileComplete: Boolean(this.displayName && this.bio),
     chatMutedUntil: this.chatMutedUntil && this.chatMutedUntil > new Date() ? this.chatMutedUntil : null,
+    look: cleanLook(this.museumLook),
     createdAt: this.createdAt,
   };
 };
 
 // What other users see (no email, no role)
 userSchema.methods.toPublicProfile = function () {
-  const { id, username, displayName, avatarUrl, bio, socials, artistTags } = this.toPublic();
-  return { id, username, displayName, avatarUrl, bio, socials, artistTags };
+  const { id, username, displayName, avatarUrl, bio, socials, artistTags, look } = this.toPublic();
+  return { id, username, displayName, avatarUrl, bio, socials, artistTags, look };
 };
 
 // Smallest shape, used inside events, matches, etc.

@@ -22,24 +22,31 @@ export const FRAME = { width: 1.4, height: 78, bottom: 40 };
 const DOOR_AT = 9.15;
 
 // Furniture: each piece covers some tiles that nobody can walk on. Benches and chairs have
-// seats: click one and your avatar walks over and sits down, facing that way.
+// seats (one per tile): click one and your avatar walks over and sits down, facing that way.
+// Two benches make an L in the middle of the room, one facing each wall of pictures; a pair of
+// chairs sits by the right-hand side looking across the room; the sculpture is the centrepiece.
+//   facing: 'nw' looks at the left wall, 'ne' at the right wall, 'sw' / 'se' towards the viewer
 const FURNITURE = [
-  { kind: 'bench', tiles: [{ x: 4, y: 5 }, { x: 5, y: 5 }], facing: 'sw' },
-  { kind: 'chair', tiles: [{ x: 7, y: 3 }], facing: 'sw' },
-  { kind: 'chair', tiles: [{ x: 2, y: 4 }], facing: 'se' },
+  { kind: 'bench', tiles: [{ x: 3, y: 4 }, { x: 3, y: 5 }, { x: 3, y: 6 }], facing: 'nw' },
+  { kind: 'bench', tiles: [{ x: 4, y: 3 }, { x: 5, y: 3 }, { x: 6, y: 3 }], facing: 'ne' },
+  { kind: 'chair', tiles: [{ x: 8, y: 4 }], facing: 'sw' },
+  { kind: 'chair', tiles: [{ x: 8, y: 6 }], facing: 'sw' },
+  { kind: 'pedestal', tiles: [{ x: 5, y: 5 }] },
   { kind: 'plant', tiles: [{ x: 0, y: 0 }] },
-  { kind: 'plant', tiles: [{ x: 9, y: 6 }] },
-  { kind: 'pedestal', tiles: [{ x: 2, y: 7 }] },
+  { kind: 'plant', tiles: [{ x: 8, y: 5 }] },
+  { kind: 'plant', tiles: [{ x: 9, y: 9 }] },
 ];
-// A rug under the bench (just for looks)
-export const RUG = { x: 3, y: 4, w: 4, h: 3 };
+// A rug in the middle, with the sculpture on it
+export const RUG = { x: 4, y: 4, w: 3, h: 3 };
 
 export const SPAWN = { x: 5, y: 8 };
 
-// Every seat: one per tile of each bench or chair
-export const SEATS = FURNITURE.filter((p) => p.facing).flatMap((p) =>
-  p.tiles.map((t) => ({ x: t.x, y: t.y, facing: p.facing, kind: p.kind }))
-);
+// Every seat: one per tile of each bench or chair. depth is where its piece of furniture sorts
+// among the people (see furniture.js), so someone sitting there is drawn on top of it.
+export const SEATS = FURNITURE.filter((p) => p.facing).flatMap((p) => {
+  const depth = Math.max(...p.tiles.map((t) => t.x + t.y)) + 0.5;
+  return p.tiles.map((t) => ({ x: t.x, y: t.y, facing: p.facing, kind: p.kind, depth }));
+});
 
 // The tile in front of a picture, and which way you face to look at it
 function viewSpot(wall, at) {

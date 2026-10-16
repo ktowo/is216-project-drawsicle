@@ -19,6 +19,7 @@ const {
   signupsOpen,
 } = require('../../shared/constants.mjs');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
+const { STYLE_PREFERENCES } = require('../../shared/style.mjs');
 
 // Mounted at /api/events/:eventId, next to the match and submission routers,
 // so every route lists its own middleware instead of using router.use().
@@ -134,6 +135,7 @@ function readSignupForm(body, event) {
     notes: readText(src.notes, 'Notes for the organisers', LIMITS.formText),
     saveAsDefault: src.saveAsDefault === true || src.saveAsDefault === 'true',
     canBackup: src.canBackup === true || src.canBackup === 'true',
+    stylePreference: STYLE_PREFERENCES.includes(src.stylePreference) ? src.stylePreference : 'any',
   };
 }
 
@@ -200,6 +202,7 @@ router.put('/application', ...applicant, asyncHandler(async (req, res) => {
     cannotDraw: form.cannotDraw,
     notes: form.notes,
     canBackup: form.canBackup,
+    stylePreference: form.stylePreference,
   });
   if (isNew) {
     application.status = joinWaitlist ? 'waitlisted' : event.requireApproval ? 'pending' : 'accepted';

@@ -8,6 +8,7 @@ rem   Start-all.bat               API + client
 rem   Start-all.bat --mock        client only; the API runs inside the browser with demo data
 rem   Start-all.bat --install     reinstall dependencies even if they are already there
 rem   Start-all.bat --no-install  never install (stops if dependencies are missing)
+rem   Start-all.bat --no-ollama   don't start Ollama for art style matching (run-ollama.bat)
 rem
 rem Logs go to .run\. Stop everything with Stop-all.bat
 
@@ -16,6 +17,7 @@ set "ROOT=%~dp0"
 set "RUN_DIR=%~dp0.run"
 set "MOCK=0"
 set "INSTALL=auto"
+set "OLLAMA=1"
 set "CLIENT_PORT=5173"
 set "API_WAIT_SECONDS=300"
 set "CLIENT_WAIT_SECONDS=120"
@@ -30,6 +32,7 @@ if "%~1"=="" goto :args_done
 if /i "%~1"=="--mock" (set "MOCK=1" & goto :next_arg)
 if /i "%~1"=="--install" (set "INSTALL=always" & goto :next_arg)
 if /i "%~1"=="--no-install" (set "INSTALL=never" & goto :next_arg)
+if /i "%~1"=="--no-ollama" (set "OLLAMA=0" & goto :next_arg)
 if /i "%~1"=="--help" goto :usage
 if /i "%~1"=="-h" goto :usage
 if /i "%~1"=="/?" goto :usage
@@ -160,6 +163,11 @@ if errorlevel 1 (
 rem ---------- Client ----------
 
 :start_client
+rem Ollama for art style matching: optional, and models download in the background
+if "%MOCK%"=="0" if "%OLLAMA%"=="1" (
+  where ollama >nul 2>nul && call "%ROOT%run-ollama.bat" --background
+)
+
 set "CLIENT_SCRIPT=dev"
 if "%MOCK%"=="1" set "CLIENT_SCRIPT=dev:mock"
 
@@ -214,11 +222,12 @@ call :print_usage
 exit /b 0
 
 :print_usage
-echo Usage: Start-all.bat [--mock] [--install ^| --no-install] [--help]
+echo Usage: Start-all.bat [--mock] [--install ^| --no-install] [--no-ollama] [--help]
 echo.
 echo   --mock        Start only the client, with the API running in the browser - no server or database
 echo   --install     Install dependencies again, even if node_modules already exists
 echo   --no-install  Don't install anything; stop if dependencies are missing
+echo   --no-ollama   Don't start Ollama, the vision model for art style matching
 echo   --help        Show this help
 echo.
 echo Stop everything with Stop-all.bat

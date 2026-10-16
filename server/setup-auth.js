@@ -26,6 +26,8 @@ function setupAuth(app) {
   app.use(
     '/uploads',
     express.static(LOCAL_UPLOAD_DIR, {
+      // Every upload gets a new random name, so browsers can keep them for a while
+      maxAge: '7d',
       setHeaders(res, filePath) {
         res.setHeader('X-Content-Type-Options', 'nosniff');
         if (path.extname(filePath).toLowerCase() === '.svg') {

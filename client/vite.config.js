@@ -24,6 +24,17 @@ export default defineConfig(({ mode }) => {
         '@shared': fileURLToPath(new URL('../shared', import.meta.url)),
       },
     },
+    build: {
+      rollupOptions: {
+        output: {
+          // Vue changes rarely: its own chunk stays in the browser cache between releases (icons stay
+          // with the pages that use them, so no page downloads every icon)
+          manualChunks(id) {
+            if (/node_modules[\\/](@vue|vue|vue-router)[\\/]/.test(id)) return 'vue';
+          },
+        },
+      },
+    },
     server: {
       port: 5173,
       strictPort: true,

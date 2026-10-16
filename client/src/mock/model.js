@@ -2,6 +2,8 @@
 // event roles, visibility rules and notifications. Shapes follow docs/ARCHITECTURE.md.
 import { newId } from './db.js';
 import { artistTagsOf } from '@shared/taste.mjs';
+import { permissionsFor } from '@shared/permissions.mjs';
+import { cleanLook } from '@shared/looks.mjs';
 
 const SOCIAL_KEYS = ['twitter', 'instagram', 'bluesky', 'discord', 'deviantart', 'toyhouse', 'tumblr'];
 
@@ -15,6 +17,7 @@ export function userPublic(user) {
     email: user.email,
     username: user.username || null,
     role: user.role || 'user',
+    permissions: permissionsFor(user.role || 'user'),
     status: user.status || 'active',
     displayName: user.displayName || user.email.split('@')[0],
     avatarUrl: user.avatarUrl || null,
@@ -41,13 +44,15 @@ export function userPublic(user) {
     },
     providers: { google: false, discord: false },
     profileComplete: Boolean(user.displayName && user.bio),
+    chatMutedUntil: user.chatMutedUntil && new Date(user.chatMutedUntil) > new Date() ? user.chatMutedUntil : null,
+    look: cleanLook(user.museumLook),
     createdAt: user.createdAt,
   };
 }
 
 export function userProfile(user) {
-  const { id, username, displayName, avatarUrl, bio, socials, artistTags } = userPublic(user);
-  return { id, username, displayName, avatarUrl, bio, socials, artistTags };
+  const { id, username, displayName, avatarUrl, bio, socials, artistTags, look } = userPublic(user);
+  return { id, username, displayName, avatarUrl, bio, socials, artistTags, look };
 }
 
 export function userMini(user) {
@@ -216,6 +221,7 @@ export function serializeEvent(state, event, user, ctx = viewerContext(state, ev
           matchingRules: {
             avoidPairs: (event.matchingRules?.avoidPairs || []).map((p) => ({ a: p.a, b: p.b })),
             avoidRepeats: event.matchingRules?.avoidRepeats !== false,
+            style: event.matchingRules?.style || 'off',
           },
           invitedFrom: [...(event.invitedFrom || [])],
         }
@@ -254,6 +260,7 @@ export function applicationJson(state, application) {
     cannotDraw: [...(application.cannotDraw || [])],
     notes: application.notes || '',
     canBackup: Boolean(application.canBackup),
+    stylePreference: application.stylePreference || 'any',
     waitlistedAt: application.waitlistedAt || null,
     reviewedAt: application.reviewedAt || null,
     createdAt: application.createdAt,

@@ -82,7 +82,7 @@ test('public profiles show public events, stats and socials, never private detai
 
   const res = await h.request(app).get('/api/users/Mika_Draws').expect(200);
   const { profile, organizing, stats } = res.body;
-  assert.deepEqual(Object.keys(profile).sort(), ['artistTags', 'avatarUrl', 'bio', 'createdAt', 'displayName', 'id', 'socials', 'username']);
+  assert.deepEqual(Object.keys(profile).sort(), ['artistTags', 'avatarUrl', 'bio', 'createdAt', 'displayName', 'id', 'look', 'socials', 'username']);
   assert.equal(profile.username, 'mika_draws');
   assert.equal(profile.bio, 'Pastel dragons.');
   assert.equal(profile.socials.discord, 'mika.draws');

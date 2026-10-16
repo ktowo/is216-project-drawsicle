@@ -17,6 +17,7 @@ import {
 } from '../model.js';
 import { httpError, invalid, isPlainObject } from '../util.js';
 import { isId, newId } from '../db.js';
+import { cleanLook } from '@shared/looks.mjs';
 
 const USERNAME_RE = /^[a-z0-9_]{3,30}$/;
 const HANDLE_RE = /^[A-Za-z0-9_.-]{0,50}$/;
@@ -43,6 +44,27 @@ function typeList(value, label) {
 }
 
 export function register(router) {
+  // Art style: analysing pictures needs the real server, so the demo only says so
+  router.get('/profile/style', (ctx) => {
+    ctx.requireAuth();
+    return { samples: [], profile: null, vision: { configured: false, reachable: false }, demo: true };
+  });
+  for (const path of ['/profile/style-samples', '/profile/style/analyse']) {
+    router.post(path, (ctx) => {
+      ctx.requireAuth();
+      throw httpError(501, 'Looking at your art style needs the real server, so it is not part of the demo.', 'NOT_IN_DEMO');
+    });
+  }
+
+  // The museum avatar from the avatar creator (profile-router.js)
+  router.put('/profile/look', (ctx) => {
+    const user = ctx.requireAuth();
+    const look = cleanLook(ctx.body);
+    if (!look) throw httpError(400, 'Pick each part of your avatar from the options.', 'VALIDATION');
+    user.museumLook = look;
+    return { user: userPublic(user) };
+  });
+
   router.patch('/profile', (ctx) => {
     const user = ctx.requireAuth();
     const { displayName, bio, username, socials, defaultForm, notificationPrefs, profilePrivacy, artistTags } = ctx.body;

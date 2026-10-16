@@ -1,5 +1,6 @@
 // Following and friends in the demo (server/services/social.js)
 import { findUser, miniOf } from './model.js';
+import { cleanLook } from '@shared/looks.mjs';
 
 const FRESH_MS = 40 * 1000;
 
@@ -31,7 +32,11 @@ export function friendList(state, userId) {
   const inc = state.follows.filter((f) => f.following === userId && active(f.follower));
   const outIds = new Set(out.map((f) => f.following));
   const incIds = new Set(inc.map((f) => f.follower));
-  const entry = (id, since) => ({ user: miniOf(state, id), since, online: whereabouts(state, id) });
+  const entry = (id, since) => ({
+    user: { ...miniOf(state, id), look: cleanLook(findUser(state, id)?.museumLook) },
+    since,
+    online: whereabouts(state, id),
+  });
   const byName = (a, b) =>
     Number(Boolean(b.online)) - Number(Boolean(a.online)) || a.user.displayName.localeCompare(b.user.displayName);
   return {
