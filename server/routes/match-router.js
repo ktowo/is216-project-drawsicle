@@ -14,6 +14,11 @@ const { announceMilestone } = require('../services/discord.js');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
 const { generateMatches, scorePair, skippedAccountsWarning } = require('../../shared/matching.mjs');
 const { LIMITS, PROGRESS_VALUES } = require('../../shared/constants.mjs');
+const StyleProfile = require('../models/StyleProfile.js');
+const Event = require('../models/Event.js');
+const { STYLE_MODES } = require('../../shared/style.mjs');
+const { analyseUser, visionStatus } = require('../services/vision.js');
+const { waitUntil } = require('@vercel/functions');
 
 // Mounted at /api/events/:eventId. Every route names its own middleware, because the
 // application and submission routers share this mount point.
@@ -119,7 +124,10 @@ async function pairRules(event, userIds) {
       for (const row of rows) previous.get(row.giver.toString())?.add(row.recipient.toString());
     }
   }
-  return { personal, blocked, previous };
+  // Art styles, when the organisers or the people themselves asked to match on them
+  const profiles = await StyleProfile.find({ user: { $in: ids } });
+  const styles = new Map(profiles.map((p) => [p.user.toString(), p.forMatching()]));
+  return { personal, blocked, previous, styles, styleMode: event.matchingRules?.style || 'off' };
 }
 
 // The matching algorithm only sees types the event allows, so nobody is matched on
@@ -127,10 +135,14 @@ async function pairRules(event, userIds) {
 function toParticipant(application, allowedTypes, rules = null) {
   const allowed = new Set(allowedTypes);
   const id = (application.user?._id || application.user).toString();
+  const ownWish = application.stylePreference && application.stylePreference !== 'any' ? application.stylePreference : null;
+  const eventWish = rules?.styleMode && rules.styleMode !== 'off' ? rules.styleMode : null;
   return {
     id,
     blockedIds: [...(rules?.blocked.get(id) || [])],
     previousRecipients: [...(rules?.previous.get(id) || [])],
+    style: rules?.styles?.get(id) || null,
+    styleWish: ownWish || eventWish,
     name: application.user ? userMini(application.user).displayName : '',
     canCreate: (application.canCreate || []).filter((t) => allowed.has(t)),
     wantsTypes: (application.wantsTypes || []).filter((t) => allowed.has(t)),
@@ -251,6 +263,10 @@ router.put('/matching-rules', ...organizerOnly, asyncHandler(async (req, res) =>
   if (body.avoidRepeats !== undefined) {
     if (typeof body.avoidRepeats !== 'boolean') throw httpError(400, 'avoidRepeats must be true or false.', 'VALIDATION');
     update['matchingRules.avoidRepeats'] = body.avoidRepeats;
+  }
+  if (body.style !== undefined) {
+    if (!STYLE_MODES.includes(body.style)) throw httpError(400, `style must be one of: ${STYLE_MODES.join(', ')}.`, 'VALIDATION');
+    update['matchingRules.style'] = body.style;
   }
   if (body.avoidPairs !== undefined) {
     if (!Array.isArray(body.avoidPairs)) throw httpError(400, 'avoidPairs must be a list.', 'VALIDATION');
@@ -648,6 +664,57 @@ router.delete('/matches/:matchId/backup', ...organizerOnly, asyncHandler(async (
     }),
   ]);
   res.json({ matches: await adminMatchList(req.event._id) });
+}));
+
+// ---------- Art style scan ----------
+// Works out a style profile for everyone accepted (services/vision.js), in the background. The
+// organisers' page polls GET for progress. Colour analysis always runs; the vision model joins in
+// when it's reachable.
+
+const styleScanJson = async (event) => {
+  const users = await Application.find({ event: event._id, status: 'accepted' }).distinct('user');
+  const withStyle = await StyleProfile.countDocuments({ user: { $in: users }, analysedAt: { $ne: null } });
+  return { scan: event.styleScan || null, profiles: { withStyle, total: users.length }, vision: await visionStatus() };
+};
+
+router.get('/matches/style-scan', ...organizerOnly, asyncHandler(async (req, res) => {
+  res.json(await styleScanJson(req.event));
+}));
+
+router.post('/matches/style-scan', ...organizerOnly, asyncHandler(async (req, res) => {
+  const event = req.event;
+  if (!['open', 'matching'].includes(event.status)) {
+    throw httpError(409, 'Styles can be scanned while sign-ups are open or during matching.', 'WRONG_STATUS');
+  }
+  const scan = event.styleScan;
+  // A scan that has been "running" for over 10 minutes was cut off; start again
+  if (scan?.status === 'running' && Date.now() - new Date(scan.startedAt).getTime() < 10 * 60 * 1000) {
+    return res.status(202).json(await styleScanJson(event));
+  }
+  const users = await Application.find({ event: event._id, status: 'accepted' }).distinct('user');
+  const status = await visionStatus({ fresh: true });
+  const force = req.body?.force === true;
+  await Event.updateOne(
+    { _id: event._id },
+    { $set: { styleScan: { status: 'running', total: users.length, done: 0, failed: 0, withVision: status.vision, startedAt: new Date(), finishedAt: null } } }
+  );
+
+  const work = (async () => {
+    for (const userId of users) {
+      let failed = 0;
+      try {
+        await analyseUser(userId, { force });
+      } catch (err) {
+        failed = 1;
+        console.error('Style scan failed for', String(userId), err.message);
+      }
+      await Event.updateOne({ _id: event._id }, { $inc: { 'styleScan.done': 1, 'styleScan.failed': failed } });
+    }
+    await Event.updateOne({ _id: event._id }, { $set: { 'styleScan.status': 'done', 'styleScan.finishedAt': new Date() } });
+  })().catch((err) => console.error('Style scan stopped:', err.message));
+  waitUntil(work); // on Vercel, keep going after the response
+
+  res.status(202).json(await styleScanJson(await Event.findById(event._id)));
 }));
 
 router.use(apiErrorHandler);

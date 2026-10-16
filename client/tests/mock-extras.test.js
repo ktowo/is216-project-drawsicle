@@ -157,7 +157,7 @@ describe('who gets matched with whom', () => {
       method: 'PUT',
       body: { avoidPairs: [{ a, b }, { a: b, b: a }], avoidRepeats: false },
     });
-    expect(event.matchingRules).toEqual({ avoidPairs: [{ a, b }], avoidRepeats: false });
+    expect(event.matchingRules).toEqual({ avoidPairs: [{ a, b }], avoidRepeats: false, style: 'off' });
     const bad = await fails(`/events/${summer.id}/matching-rules`, { method: 'PUT', body: { avoidPairs: [{ a, b: a }] } });
     expect(bad.code).toBe('VALIDATION');
   });
@@ -352,5 +352,19 @@ describe('museum rooms', () => {
     const watching = await ok(`${room}/sync`);
     expect(watching.people.map((p) => [p.user.displayName, p.sitting])).toEqual([['Mika', true]]);
     expect(watching.messages.map((m) => m.text)).toEqual(['Hello museum']);
+  });
+});
+
+describe('museum avatars', () => {
+  it('saves a look made from the listed options, and shows it to others', async () => {
+    await loginAs('pip');
+    const look = { skin: '#a8714c', hair: '#3fb6b2', shirt: '#9b7be0', pants: '#2f4f4f', style: 'bob', accessory: 'headphones' };
+    expect((await fails('/profile/look', { method: 'PUT', body: { ...look, accessory: 'cape' } })).code).toBe('VALIDATION');
+    const { user } = await ok('/profile/look', { method: 'PUT', body: look });
+    expect(user.look).toEqual(look);
+    expect((await ok('/users/pip')).profile.look).toEqual(look);
+    // Style analysis needs the real server
+    expect((await ok('/profile/style')).demo).toBe(true);
+    expect((await fails('/profile/style/analyse', { method: 'POST' })).code).toBe('NOT_IN_DEMO');
   });
 });

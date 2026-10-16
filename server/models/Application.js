@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { APPLICATION_STATUSES, CREATION_TYPE_VALUES, LIMITS, normalizeTags } = require('../../shared/constants.mjs');
+const { STYLE_PREFERENCES } = require('../../shared/style.mjs');
 
 // One person's sign-up form for one event. Visible only to the applicant
 // and the event's organisers. Accepted applications get the 'participant' role.
@@ -40,6 +41,8 @@ const applicationSchema = new mongoose.Schema(
     notes: { type: String, trim: true, default: '', maxlength: LIMITS.formText }, // for organisers
     // Happy to make an extra gift if someone drops out (a "pinch hitter")
     canBackup: { type: Boolean, default: false },
+    // For their own gift: an artist whose style is like theirs, unlike it, or no preference
+    stylePreference: { type: String, enum: STYLE_PREFERENCES, default: 'any' },
     // When they joined the waitlist, which is first come, first served
     waitlistedAt: { type: Date, default: null },
 
@@ -79,6 +82,7 @@ applicationSchema.methods.toPublic = function ({ user = null, characters = null 
     cannotDraw: [...(this.cannotDraw || [])],
     notes: this.notes || '',
     canBackup: Boolean(this.canBackup),
+    stylePreference: this.stylePreference || 'any',
     waitlistedAt: this.waitlistedAt || null,
     reviewedAt: this.reviewedAt,
     createdAt: this.createdAt,

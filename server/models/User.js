@@ -72,6 +72,8 @@ const userSchema = new mongoose.Schema(
 
     // People this person never wants to be matched with, in either direction. Private.
     blockedUsers: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], default: [] },
+    // Pictures of their art, for matching by style (services/vision.js); up to 3
+    styleSamples: { type: [String], default: [] },
     // Their museum avatar, from the avatar creator (shared/looks.mjs); empty until they make one
     museumLook: {
       _id: false,

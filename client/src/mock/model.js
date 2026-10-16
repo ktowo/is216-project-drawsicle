@@ -218,6 +218,7 @@ export function serializeEvent(state, event, user, ctx = viewerContext(state, ev
           matchingRules: {
             avoidPairs: (event.matchingRules?.avoidPairs || []).map((p) => ({ a: p.a, b: p.b })),
             avoidRepeats: event.matchingRules?.avoidRepeats !== false,
+            style: event.matchingRules?.style || 'off',
           },
           invitedFrom: [...(event.invitedFrom || [])],
         }
@@ -256,6 +257,7 @@ export function applicationJson(state, application) {
     cannotDraw: [...(application.cannotDraw || [])],
     notes: application.notes || '',
     canBackup: Boolean(application.canBackup),
+    stylePreference: application.stylePreference || 'any',
     waitlistedAt: application.waitlistedAt || null,
     reviewedAt: application.reviewedAt || null,
     createdAt: application.createdAt,

@@ -39,6 +39,7 @@ import {
   validateCharacterDraft,
   cleanCharacterDraft,
 } from '@/utils/events';
+import { STYLE_PREFERENCES, STYLE_PREFERENCE_LABELS } from '@shared/style.mjs';
 
 const route = useRoute();
 const router = useRouter();
@@ -60,6 +61,7 @@ const form = reactive({
   cannotDraw: [],
   notes: '',
   canBackup: false,
+  stylePreference: 'any',
   confirmAdult: false,
   saveAsDefault: false,
 });
@@ -145,6 +147,7 @@ function prefill() {
   form.cannotDraw = [...(source.cannotDraw || [])];
   form.notes = application.value?.notes || '';
   form.canBackup = Boolean(application.value?.canBackup);
+  form.stylePreference = application.value?.stylePreference || 'any';
   form.saveAsDefault = false;
   // Only one kind of creation allowed: nothing to choose
   if (allowed.length === 1) {
@@ -385,6 +388,7 @@ async function submit() {
     cannotDraw: [...form.cannotDraw],
     notes: form.notes.trim(),
     canBackup: form.canBackup,
+    stylePreference: form.stylePreference,
     confirmAdult: Boolean(event.value.adultOnly && form.confirmAdult),
     saveAsDefault: form.saveAsDefault,
     // A full event: this sign-up goes onto the waitlist
@@ -677,6 +681,18 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
               </div>
             </FormField>
 
+            <fieldset class="style-pref">
+              <legend class="label">Art style for your gift</legend>
+              <p class="hint">
+                Who would you like to make your gift? Add pictures of your art under
+                <RouterLink to="/profile">Your profile</RouterLink> so the matcher knows your style.
+              </p>
+              <label v-for="p in STYLE_PREFERENCES" :key="p" class="pref" :class="{ on: form.stylePreference === p }">
+                <input v-model="form.stylePreference" type="radio" name="style-pref" :value="p" />
+                <span>{{ STYLE_PREFERENCE_LABELS[p] }}</span>
+              </label>
+            </fieldset>
+
             <label class="check">
               <input v-model="form.canBackup" type="checkbox" />
               <span>
@@ -729,6 +745,7 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
                 <div><dt>Can't draw</dt><dd>{{ form.cannotDraw.join(', ') || 'Nothing listed' }}</dd></div>
                 <div v-if="form.notes.trim()"><dt>Notes for organisers</dt><dd class="pre">{{ form.notes.trim() }}</dd></div>
                 <div><dt>Backup artist</dt><dd>{{ form.canBackup ? 'Yes, happy to help' : 'No' }}</dd></div>
+                <div><dt>Art style</dt><dd>{{ STYLE_PREFERENCE_LABELS[form.stylePreference] }}</dd></div>
               </dl>
             </div>
           </div>
@@ -1069,5 +1086,30 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
   .withdraw {
     margin-left: 0;
   }
+}
+.style-pref {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pref {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.pref.on {
+  border-color: var(--pink);
+  background: var(--pink-soft);
+}
+.pref input {
+  accent-color: var(--pink);
 }
 </style>
