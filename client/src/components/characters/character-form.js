@@ -10,7 +10,7 @@ export function isHttpUrl(value) {
 
 // Blank form value for <CharacterFields v-model="...">
 export function emptyCharacter() {
-  return { name: '', species: '', tags: [], description: '', referenceLinks: [], notesForArtists: '' };
+  return { name: '', species: '', tags: [], description: '', referenceLinks: [], notesForArtists: '', contentWarnings: [] };
 }
 
 // Character from the API -> form value (copies arrays so edits don't touch the original)
@@ -23,6 +23,7 @@ export function characterToForm(character) {
     description: c.description || '',
     referenceLinks: (c.referenceLinks || []).map((l) => ({ label: l.label || '', url: l.url || '' })),
     notesForArtists: c.notesForArtists || '',
+    contentWarnings: [...(c.contentWarnings || [])],
   };
 }
 
@@ -37,6 +38,7 @@ export function characterPayload(form) {
       .map((l) => ({ label: String(l.label || '').trim(), url: String(l.url || '').trim() }))
       .filter((l) => l.url || l.label),
     notesForArtists: String(form.notesForArtists || '').trim(),
+    contentWarnings: [...new Set(form.contentWarnings || [])],
   };
 }
 

@@ -56,6 +56,7 @@ const KINDS = {
   announcement: { icon: Megaphone, group: 'events', tone: 'info' },
   event_invite: { icon: MailPlus, group: 'events', tone: 'pink' },
   report_received: { icon: Flag, group: 'events', tone: 'warning' },
+  report_handled: { icon: Flag, group: 'events', tone: 'success' },
   deadline_reminder: { icon: Clock, group: 'reminders', tone: 'warning' },
   event_status: { icon: CalendarHeart, group: 'events', tone: 'pink' },
   organizer_added: { icon: Users, group: 'events', tone: 'info' },

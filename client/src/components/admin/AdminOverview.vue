@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { RouterLink } from 'vue-router';
-import { Users, Ban, ShieldCheck, CalendarHeart, EyeOff, ClipboardList, Shuffle, Gift } from 'lucide-vue-next';
+import { Users, Ban, ShieldCheck, CalendarHeart, EyeOff, ClipboardList, Shuffle, Gift, Flag } from 'lucide-vue-next';
 import { api } from '@/api';
 import UserAvatar from '@/components/UserAvatar.vue';
 import PersonLink from '@/components/events/PersonLink.vue';
@@ -28,6 +28,7 @@ const tiles = computed(() => {
   const s = stats.value;
   if (!s) return [];
   return [
+    { label: 'Open reports', value: s.openReports ?? 0, icon: Flag, to: '/admin?tab=reports' },
     { label: 'Accounts', value: s.users.total, icon: Users, note: `${s.users.active} active` },
     { label: 'Banned', value: s.users.banned, icon: Ban, note: `${s.users.deactivated} deactivated` },
     { label: 'Site admins', value: s.users.admins, icon: ShieldCheck },
@@ -50,6 +51,7 @@ const tiles = computed(() => {
         <span class="tile-value">{{ t.value }}</span>
         <span class="tile-label">{{ t.label }}</span>
         <span v-if="t.note" class="hint">{{ t.note }}</span>
+        <RouterLink v-if="t.to && t.value" :to="t.to" class="hint">Review them</RouterLink>
       </li>
     </ul>
 

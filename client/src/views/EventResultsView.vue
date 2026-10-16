@@ -12,6 +12,7 @@ import EventBanner from '@/components/events/EventBanner.vue';
 import SubmissionDetails from '@/components/events/SubmissionDetails.vue';
 import SubmissionGallery from '@/components/events/SubmissionGallery.vue';
 import ThanksBox from '@/components/events/ThanksBox.vue';
+import ReportButton from '@/components/ReportButton.vue';
 import { api, qs } from '@/api';
 import { EVENT_STATUS_LABELS, CREATION_TYPES } from '@shared/constants.mjs';
 import { formatDate, pluralize } from '@/utils/format';
@@ -210,6 +211,14 @@ const confetti = Array.from({ length: 30 }, (_, i) => ({
             :name="nameOf(received.giver)"
             mine
             @saved="onThanked"
+          />
+          <ReportButton
+            v-if="received.submission"
+            target-type="submission"
+            :target-id="received.submission.id"
+            what="this gift"
+            look="link"
+            class="report-own-gift"
           />
           <p v-else class="muted">
             {{ nameOf(received.giver) }} didn't submit a gift for you this time. The organisers may be in touch about it.

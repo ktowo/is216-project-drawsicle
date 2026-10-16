@@ -1,5 +1,5 @@
 // Small helpers shared by the mock handlers: errors, input reading, dates.
-import { LIMITS, normalizeTags } from '@shared/constants.mjs';
+import { LIMITS, normalizeTags, CONTENT_WARNING_VALUES } from '@shared/constants.mjs';
 
 // Same default codes as server/utils/helpers.js
 const DEFAULT_CODES = {
@@ -82,6 +82,13 @@ export function readCharacterInput(body) {
   if (body.tags !== undefined) input.tags = normalizeTags(body.tags ?? []);
   if (body.referenceLinks !== undefined) {
     input.referenceLinks = readLinks(body.referenceLinks, { max: LIMITS.referenceLinks, what: 'Reference links' });
+  }
+  if (body.contentWarnings !== undefined) {
+    const list = body.contentWarnings ?? [];
+    if (!Array.isArray(list) || list.some((w) => !CONTENT_WARNING_VALUES.includes(w))) {
+      throw invalid('Pick content warnings from the list.');
+    }
+    input.contentWarnings = [...new Set(list)];
   }
   return input;
 }

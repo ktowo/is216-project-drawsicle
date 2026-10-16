@@ -161,6 +161,9 @@ router.put('/application', ...applicant, asyncHandler(async (req, res) => {
   }
 
   const form = readSignupForm(req.body, event);
+  if (isNew && event.adultOnly && req.body?.confirmAdult !== true) {
+    throw httpError(400, "This event is for adults. Confirm you're 18 or older to sign up.", 'AGE_CONFIRM');
+  }
 
   // Characters picked from the library: mine, and not archived unless they're already on this application
   const picked = form.offeredCharacterIds.length

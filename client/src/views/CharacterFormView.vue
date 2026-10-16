@@ -50,6 +50,7 @@ const preview = computed(() => ({
   description: form.value.description.trim(),
   referenceLinks: (form.value.referenceLinks || []).filter((l) => String(l.url || '').trim()),
   notesForArtists: form.value.notesForArtists.trim(),
+  contentWarnings: form.value.contentWarnings || [],
   archived: Boolean(character.value?.archived),
 }));
 
