@@ -10,6 +10,8 @@ const Character = require('../models/Character.js');
 const Notification = require('../models/Notification.js');
 const AuditLog = require('../models/AuditLog.js');
 const Report = require('../models/Report.js');
+const ChatMessage = require('../models/ChatMessage.js');
+const { MUTE_OPTIONS } = require('../../shared/chat.mjs');
 const { requireAuth, requirePermission } = require('../middleware/auth.js');
 const { withdrawApplications, anonymiseUser } = require('../services/accounts.js');
 const { organizerIds, serializeEvent, serializeEvents, deleteEventCascade } = require('../services/events.js');
@@ -54,6 +56,8 @@ function adminUser(user, extra = {}) {
     bannedAt: user.bannedAt,
     banReason: user.banReason || '',
     deactivatedAt: user.deactivatedAt,
+    chatMutedUntil: user.chatMutedUntil && user.chatMutedUntil > new Date() ? user.chatMutedUntil : null,
+    chatMuteReason: user.chatMuteReason || '',
     createdAt: user.createdAt,
     ...extra,
   };
@@ -450,12 +454,122 @@ router.patch('/reports/:reportId', may('reports.review'), asyncHandler(async (re
   res.json({ report: await reportJson(await populateReport(Report.findById(report._id))) });
 }));
 
+// ---------- Museum chat ----------
+
+const chatRow = (m) => ({
+  id: m._id.toString(),
+  room: m.room,
+  roomLabel: m.roomLabel,
+  link: m.room.startsWith('wing:') ? `/museum/${m.event}` : `/events/${m.event}/museum`,
+  user: m.user ? { ...userMini(m.user), email: m.user.email, role: m.user.role, chatMutedUntil: m.user.chatMutedUntil && m.user.chatMutedUntil > new Date() ? m.user.chatMutedUntil : null } : userMini(null),
+  kind: m.kind,
+  emote: m.emote,
+  text: m.text,
+  createdAt: m.createdAt,
+  hidden: Boolean(m.hiddenAt),
+  hiddenAt: m.hiddenAt,
+  hiddenBy: m.hiddenBy ? userMini(m.hiddenBy) : null,
+});
+
+// Every message said in the museum, newest first. q searches the words; person matches a name,
+// username or email; show = 'hidden' or 'visible'.
+router.get('/chat', may('chat.logs'), asyncHandler(async (req, res) => {
+  const { page, limit, skip } = paging(req);
+  const filter = {};
+  const q = str(req.query.q).slice(0, 100);
+  if (q) filter.text = { $regex: escapeRegex(q), $options: 'i' };
+  const person = str(req.query.person).slice(0, 100);
+  if (person) {
+    const re = { $regex: escapeRegex(person), $options: 'i' };
+    filter.user = { $in: await User.find({ $or: [{ displayName: re }, { username: re }, { email: re }] }).distinct('_id') };
+  }
+  if (req.query.show === 'hidden') filter.hiddenAt = { $ne: null };
+  if (req.query.show === 'visible') filter.hiddenAt = null;
+  const [messages, total] = await Promise.all([
+    ChatMessage.find(filter)
+      .sort({ createdAt: -1, _id: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate('user', 'displayName username avatarUrl email role chatMutedUntil')
+      .populate('hiddenBy', 'displayName username avatarUrl'),
+    ChatMessage.countDocuments(filter),
+  ]);
+  res.json({ messages: messages.map(chatRow), total, page, pages: Math.max(1, Math.ceil(total / limit)) });
+}));
+
+async function findMessage(req) {
+  const { messageId } = req.params;
+  const message = mongoose.isValidObjectId(messageId) ? await ChatMessage.findById(messageId) : null;
+  if (!message) throw httpError(404, 'Message not found.', 'NOT_FOUND');
+  return message;
+}
+
+router.post('/chat/:messageId/hide', may('chat.moderate'), asyncHandler(async (req, res) => {
+  const message = await findMessage(req);
+  if (!message.hiddenAt) {
+    message.hiddenAt = new Date();
+    message.hiddenBy = req.user._id;
+    await message.save();
+    await audit(req, 'chat.hide', 'chat', message._id, message.text.slice(0, 80), readReason(req.body, false));
+  }
+  res.json({ ok: true });
+}));
+
+router.post('/chat/:messageId/unhide', may('chat.moderate'), asyncHandler(async (req, res) => {
+  const message = await findMessage(req);
+  if (message.hiddenAt) {
+    message.hiddenAt = null;
+    message.hiddenBy = null;
+    await message.save();
+    await audit(req, 'chat.unhide', 'chat', message._id, message.text.slice(0, 80));
+  }
+  res.json({ ok: true });
+}));
+
+// Pause someone's museum chat for a while (they can still walk around and look)
+router.post('/users/:userId/mute', may('chat.moderate'), asyncHandler(async (req, res) => {
+  const user = await findUser(req);
+  notSelf(req, user, "You can't mute yourself.");
+  if (user.role !== 'user') throw httpError(400, "Moderators and admins can't be muted.", 'VALIDATION');
+  const minutes = Number(req.body?.minutes);
+  if (!MUTE_OPTIONS.some((o) => o.minutes === minutes)) {
+    throw httpError(400, `Pick how long: ${MUTE_OPTIONS.map((o) => o.label).join(', ')}.`, 'VALIDATION');
+  }
+  const reason = readReason(req.body, true);
+  user.chatMutedUntil = new Date(Date.now() + minutes * 60 * 1000);
+  user.chatMuteReason = reason;
+  await user.save();
+  await audit(req, 'user.mute', 'user', user._id, user.displayName || user.email, `${MUTE_OPTIONS.find((o) => o.minutes === minutes).label}: ${reason}`);
+  try {
+    await notifyMany([user._id], {
+      type: 'chat_muted',
+      title: 'Your museum chat is paused for a while',
+      message: `A moderator paused your chat: ${reason}`.slice(0, 500),
+      link: '/museum',
+    });
+  } catch (err) {
+    console.error('Mute notification failed:', err.message);
+  }
+  res.json({ user: adminUser(user) });
+}));
+
+router.post('/users/:userId/unmute', may('chat.moderate'), asyncHandler(async (req, res) => {
+  const user = await findUser(req);
+  if (user.chatMutedUntil) {
+    user.chatMutedUntil = null;
+    user.chatMuteReason = '';
+    await user.save();
+    await audit(req, 'user.unmute', 'user', user._id, user.displayName || user.email);
+  }
+  res.json({ user: adminUser(user) });
+}));
+
 // ---------- Audit log ----------
 
 router.get('/audit', may('audit.view'), asyncHandler(async (req, res) => {
   const { page, limit, skip } = paging(req);
   const filter = {};
-  if (['user', 'event', 'report'].includes(req.query.targetType)) filter.targetType = req.query.targetType;
+  if (['user', 'event', 'report', 'chat'].includes(req.query.targetType)) filter.targetType = req.query.targetType;
   const [entries, total] = await Promise.all([
     AuditLog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).populate('actor', 'displayName username avatarUrl email'),
     AuditLog.countDocuments(filter),

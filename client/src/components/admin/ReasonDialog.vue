@@ -37,6 +37,8 @@ watch(
     @confirm="emit('confirm', reason.trim())"
     @cancel="emit('cancel')"
   >
+    <!-- Extra choices for this dialog (e.g. how long to mute someone) -->
+    <slot />
     <div class="field">
       <label class="label" for="admin-reason">Reason{{ required ? '' : ' (optional)' }}</label>
       <div class="input-wrap">
