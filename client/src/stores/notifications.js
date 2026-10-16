@@ -60,6 +60,7 @@ const KINDS = {
   report_handled: { icon: Flag, group: 'events', tone: 'success' },
   new_follower: { icon: UserPlus, group: 'events', tone: 'info' },
   new_friend: { icon: Users, group: 'events', tone: 'pink' },
+  chat_muted: { icon: Flag, group: 'events', tone: 'muted' },
   deadline_reminder: { icon: Clock, group: 'reminders', tone: 'warning' },
   event_status: { icon: CalendarHeart, group: 'events', tone: 'pink' },
   organizer_added: { icon: Users, group: 'events', tone: 'info' },
