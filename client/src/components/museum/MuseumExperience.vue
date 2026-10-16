@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { Footprints, LayoutGrid } from 'lucide-vue-next';
 import MuseumRoom from './MuseumRoom.vue';
 import ArtworkViewer from './ArtworkViewer.vue';
@@ -11,10 +12,15 @@ import { PER_ROOM } from '@/museum/layout';
 // items: gallery items ({ submission, giver, recipient, event? }); only those with a gift hang.
 const props = defineProps({
   items: { type: Array, required: true },
+  // { kind: 'wing' | 'gallery', eventId }: makes the rooms shared, with chat
+  place: { type: Object, default: null },
 });
 
+const route = useRoute();
+
 const artworks = computed(() => props.items.filter((i) => i.submission));
-const room = ref(0);
+// ?room=2 (from a friend's Join link) opens that room
+const room = ref(Math.max(0, Number.parseInt(route.query.room, 10) || 0));
 const viewing = ref(-1);
 
 // Walk or list, remembered in this browser only
@@ -87,6 +93,7 @@ watch(viewing, (i) => {
       :artworks="artworks"
       :me="auth.user"
       :visitors="visitors"
+      :place="place"
       @view="view"
     />
     <SubmissionGallery v-else :items="artworks" />

@@ -21,9 +21,12 @@ export const PER_ROOM = SLOTS.length;
 export const FRAME = { width: 1.4, height: 78, bottom: 40 };
 const DOOR_AT = 9.15;
 
-// Furniture: each piece covers some tiles that nobody can walk on
+// Furniture: each piece covers some tiles that nobody can walk on. Benches and chairs have
+// seats: click one and your avatar walks over and sits down, facing that way.
 const FURNITURE = [
-  { kind: 'bench', tiles: [{ x: 4, y: 5 }, { x: 5, y: 5 }] },
+  { kind: 'bench', tiles: [{ x: 4, y: 5 }, { x: 5, y: 5 }], facing: 'sw' },
+  { kind: 'chair', tiles: [{ x: 7, y: 3 }], facing: 'sw' },
+  { kind: 'chair', tiles: [{ x: 2, y: 4 }], facing: 'se' },
   { kind: 'plant', tiles: [{ x: 0, y: 0 }] },
   { kind: 'plant', tiles: [{ x: 9, y: 6 }] },
   { kind: 'pedestal', tiles: [{ x: 2, y: 7 }] },
@@ -32,6 +35,11 @@ const FURNITURE = [
 export const RUG = { x: 3, y: 4, w: 4, h: 3 };
 
 export const SPAWN = { x: 5, y: 8 };
+
+// Every seat: one per tile of each bench or chair
+export const SEATS = FURNITURE.filter((p) => p.facing).flatMap((p) =>
+  p.tiles.map((t) => ({ x: t.x, y: t.y, facing: p.facing, kind: p.kind }))
+);
 
 // The tile in front of a picture, and which way you face to look at it
 function viewSpot(wall, at) {
@@ -70,6 +78,7 @@ export function buildRoom(artworks, room = 0) {
     frames,
     doors,
     furniture: FURNITURE,
+    seats: SEATS,
     blocked,
     isOpen: (x, y) => x >= 0 && y >= 0 && x < ROOM_W && y < ROOM_D && !blocked.has(`${x},${y}`),
   };

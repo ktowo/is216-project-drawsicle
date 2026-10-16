@@ -331,3 +331,26 @@ describe('following and friends', () => {
     expect(after.followers.map((f) => f.user.displayName)).toEqual(['Kit']);
   });
 });
+
+describe('museum rooms', () => {
+  it('shares where you are and what you say, with cooldowns', async () => {
+    const { wings } = await ok('/museum');
+    const room = `/museum/rooms/wing/${wings[0].event.id}/0`;
+    // Guests can watch, but not stand in the room or talk
+    expect((await ok(`${room}/sync`)).people).toEqual([]);
+    expect((await fails(`${room}/chat`, { method: 'POST', body: { text: 'hi' } })).status).toBe(401);
+
+    await loginAs('mika');
+    const synced = await ok(`${room}/sync`, { method: 'POST', body: { x: 4, y: 5, facing: 'sw', sitting: true } });
+    expect(synced.mutedUntil).toBeNull();
+    const { message } = await ok(`${room}/chat`, { method: 'POST', body: { text: 'Hello museum' } });
+    expect(message.kind).toBe('say');
+    expect((await fails(`${room}/chat`, { method: 'POST', body: { text: 'again' } })).code).toBe('SLOW_DOWN');
+    expect((await fails(`${room}/chat`, { method: 'POST', body: { text: '/sit' } })).code).toBe('VALIDATION');
+
+    await mockRequest('/auth/logout', { method: 'POST' });
+    const watching = await ok(`${room}/sync`);
+    expect(watching.people.map((p) => [p.user.displayName, p.sitting])).toEqual([['Mika', true]]);
+    expect(watching.messages.map((m) => m.text)).toEqual(['Hello museum']);
+  });
+});

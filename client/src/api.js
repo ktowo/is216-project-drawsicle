@@ -1,8 +1,10 @@
+// data: the whole error body, for extra details like retryAfterMs
 export class ApiError extends Error {
-  constructor(message, status, code) {
+  constructor(message, status, code, data = null) {
     super(message);
     this.status = status;
     this.code = code;
+    this.data = data;
   }
 }
 
@@ -38,7 +40,7 @@ export async function api(path, { method = 'GET', body, form } = {}) {
     const { mockRequest } = await import('./mock/index.js');
     const { status, data } = await mockRequest(path, { method, body, form });
     if (status >= 400) {
-      throw new ApiError(data?.error || `Something went wrong (${status}).`, status, data?.code);
+      throw new ApiError(data?.error || `Something went wrong (${status}).`, status, data?.code, data);
     }
     return data;
   }
@@ -78,7 +80,8 @@ export async function api(path, { method = 'GET', body, form } = {}) {
     throw new ApiError(
       data.error || STATUS_MESSAGES[res.status] || `Something went wrong (${res.status}).`,
       res.status,
-      data.code
+      data.code,
+      data
     );
   }
   return data;

@@ -100,6 +100,16 @@ describe('room layout', () => {
     expect(buildRoom(art(3), 5).index).toBe(0);
   });
 
+  it('lets you reach a free spot next to every seat', () => {
+    const room = buildRoom(art(3), 0);
+    expect(room.seats.length).toBeGreaterThanOrEqual(4);
+    for (const seat of room.seats) {
+      expect(room.isOpen(seat.x, seat.y)).toBe(false);
+      const beside = [-1, 0, 1].flatMap((dx) => [-1, 0, 1].map((dy) => ({ x: seat.x + dx, y: seat.y + dy })));
+      expect(beside.some((t) => room.isOpen(t.x, t.y) && findPath(SPAWN, t, room.isOpen) !== null)).toBe(true);
+    }
+  });
+
   it('keeps every picture, door and the entrance reachable', () => {
     const room = buildRoom(art(20), 1);
     const targets = [...room.frames.map((f) => f.view), ...room.doors.map((d) => d.tile), arrivalTile(room, 0), arrivalTile(room, 2)];
