@@ -26,7 +26,7 @@ function applyTheme() {
   const theme = preferences.theme || (systemDark?.matches ? 'dark' : 'light');
   preferences.resolvedTheme = theme;
   document.documentElement.dataset.theme = theme;
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#191613' : '#faf7f0');
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#141219' : '#faf7f0');
 }
 
 export function toggleTheme() {

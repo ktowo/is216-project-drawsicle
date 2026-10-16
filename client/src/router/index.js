@@ -29,6 +29,7 @@ const routes = [
   { path: '/events/:id/museum', name: 'event-museum', component: () => import('../views/EventMuseumView.vue'), meta: { requiresAuth: true, title: 'The gallery' } },
   { path: '/find-your-style', name: 'quiz', component: () => import('../views/StyleQuizView.vue'), meta: { title: 'Find your style' } },
   { path: '/discover', name: 'discover', component: () => import('../views/DiscoverView.vue'), meta: { title: 'Discover artists' } },
+  { path: '/avatar', name: 'avatar', component: () => import('../views/AvatarView.vue'), meta: { requiresAuth: true, title: 'Your museum avatar' } },
   { path: '/friends', name: 'friends', component: () => import('../views/FriendsView.vue'), meta: { requiresAuth: true, title: 'Friends' } },
   { path: '/museum', name: 'museum', component: () => import('../views/MuseumView.vue'), meta: { title: 'The museum' } },
   { path: '/museum/:eventId', name: 'museum-wing', component: () => import('../views/MuseumView.vue'), meta: { title: 'The museum' } },

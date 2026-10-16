@@ -7,6 +7,7 @@
 #   ./Start-all.sh --mock        client only; the API runs inside the browser with demo data
 #   ./Start-all.sh --install     reinstall dependencies even if they are already there
 #   ./Start-all.sh --no-install  never install (stops if dependencies are missing)
+#   ./Start-all.sh --no-ollama   don't start Ollama for art style matching (run-ollama.sh)
 #
 # Logs and process ids go to .run/. Stop everything with ./Stop-all.sh
 
@@ -21,6 +22,7 @@ CLIENT_WAIT_SECONDS=120
 
 MOCK=0
 INSTALL=auto
+OLLAMA=1
 
 usage() {
   cat <<'EOF'
@@ -29,6 +31,7 @@ Usage: ./Start-all.sh [--mock] [--install | --no-install] [--help]
   --mock        Start only the client, with the API running in the browser (no server or database)
   --install     Install dependencies again, even if node_modules already exists
   --no-install  Don't install anything; stop if dependencies are missing
+  --no-ollama   Don't start Ollama (the vision model for art style matching)
   --help        Show this help
 
 Stop everything with ./Stop-all.sh
@@ -40,6 +43,7 @@ for arg in "$@"; do
     --mock) MOCK=1 ;;
     --install) INSTALL=always ;;
     --no-install) INSTALL=never ;;
+    --no-ollama) OLLAMA=0 ;;
     -h | --help) usage; exit 0 ;;
     *) echo "Unknown option: $arg" >&2; usage >&2; exit 2 ;;
   esac
@@ -252,6 +256,17 @@ if ((MOCK == 0)); then
     start_bg server "$RUN_DIR/server.log" "$RUN_DIR/server.pid" "${PM[@]}" run dev
     wait_for API "$API_URL/api/health" "$API_WAIT_SECONDS" "$RUN_DIR/server.log" "$RUN_DIR/server.pid" http_ok ||
       fail "The API didn't start. Fix the problem above, then run ./Stop-all.sh and ./Start-all.sh again."
+  fi
+fi
+
+# ---------- Ollama (art style matching) ----------
+
+# Optional: without Ollama the matcher uses colours and texture only. Models download in the
+# background, so this never holds up the start.
+if ((MOCK == 0 && OLLAMA == 1)) && command -v ollama >/dev/null 2>&1; then
+  bash ./run-ollama.sh --background || warn "Ollama didn't start; art style matching uses colours and texture only."
+  if [[ -z "$(env_value OLLAMA_URL '')" ]]; then
+    echo "  Tip: put OLLAMA_URL=http://127.0.0.1:${OLLAMA_PORT:-11434} in server/.env so the API uses it, then restart."
   fi
 fi
 

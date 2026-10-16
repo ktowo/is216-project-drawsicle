@@ -172,8 +172,47 @@ async function openStoredFile(id) {
   };
 }
 
+// ---------- Reading images back ----------
+
+const MAX_READ_BYTES = 15 * 1024 * 1024;
+
+async function streamToBuffer(stream) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of stream) {
+    size += chunk.length;
+    if (size > MAX_READ_BYTES) throw new Error('File too large');
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
+// The bytes of an image this server stored (a URL from saveFile), or null if it isn't one of ours.
+// Only our own storage is read, never an arbitrary address.
+async function readImage(url) {
+  if (typeof url !== 'string') return null;
+  if (url.startsWith('/uploads/')) {
+    const full = path.resolve(LOCAL_UPLOAD_DIR, url.slice('/uploads/'.length));
+    if (!full.startsWith(path.resolve(LOCAL_UPLOAD_DIR) + path.sep)) return null;
+    return fs.readFile(full);
+  }
+  const stored = url.match(/^\/api\/files\/([a-f0-9]{24})\.[a-z0-9]+$/i);
+  if (stored) {
+    const file = await openStoredFile(stored[1]);
+    return file ? streamToBuffer(file.stream) : null;
+  }
+  if (storageMode() === 'azure' && /^https:\/\//.test(url)) {
+    const container = getContainer();
+    if (!url.startsWith(`${container.url}/`)) return null;
+    const name = decodeURIComponent(url.slice(container.url.length + 1).split('?')[0]);
+    return container.getBlockBlobClient(name).downloadToBuffer();
+  }
+  return null;
+}
+
 module.exports = {
   uploadImage,
+  readImage,
   uploadImageWithThumbnail,
   makeThumbnail,
   saveFile,
