@@ -67,7 +67,7 @@ const motifs = computed(() => {
 
 <template>
   <div class="event-banner" :style="{ height: `${height}px` }">
-    <img v-if="src" :src="src" alt="" class="banner-img" loading="lazy" @error="failed = true" />
+    <img v-if="src" :src="src" alt="" class="banner-img" loading="lazy" decoding="async" @error="failed = true" />
     <div v-else class="banner-placeholder" :style="placeholderStyle" aria-hidden="true">
       <component
         :is="theme.icon"
