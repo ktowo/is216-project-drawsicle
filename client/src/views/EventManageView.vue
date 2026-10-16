@@ -1,6 +1,6 @@
 <script setup>
 import ModerationNotice from '@/components/events/ModerationNotice.vue';
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, defineAsyncComponent } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
 import { ArrowLeft, CalendarSearch, ExternalLink, Pencil, Lock, Globe, Users, Copy } from 'lucide-vue-next';
 import EventBanner from '@/components/events/EventBanner.vue';
@@ -11,10 +11,12 @@ import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingBlock from '@/components/ui/LoadingBlock.vue';
 import ErrorBlock from '@/components/ui/ErrorBlock.vue';
 import OverviewPanel from '@/components/events/manage/OverviewPanel.vue';
-import ParticipantsPanel from '@/components/events/manage/ParticipantsPanel.vue';
-import MatchingPanel from '@/components/events/manage/MatchingPanel.vue';
-import SubmissionsPanel from '@/components/events/manage/SubmissionsPanel.vue';
-import SettingsPanel from '@/components/events/manage/SettingsPanel.vue';
+// The other tabs load when they're first opened, so the page itself stays small
+const tabPanel = (loader) => defineAsyncComponent({ loader, loadingComponent: LoadingBlock, delay: 150 });
+const ParticipantsPanel = tabPanel(() => import('@/components/events/manage/ParticipantsPanel.vue'));
+const MatchingPanel = tabPanel(() => import('@/components/events/manage/MatchingPanel.vue'));
+const SubmissionsPanel = tabPanel(() => import('@/components/events/manage/SubmissionsPanel.vue'));
+const SettingsPanel = tabPanel(() => import('@/components/events/manage/SettingsPanel.vue'));
 import DuplicateEventModal from '@/components/events/manage/DuplicateEventModal.vue';
 import { MANAGE_TABS } from '@/components/events/manage/helpers';
 import { api } from '@/api';
