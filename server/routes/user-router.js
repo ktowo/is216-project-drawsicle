@@ -6,9 +6,11 @@ const Event = require('../models/Event.js');
 const EventMember = require('../models/EventMember.js');
 const Application = require('../models/Application.js');
 const Submission = require('../models/Submission.js');
+const Match = require('../models/Match.js');
 const { optionalAuth } = require('../middleware/auth.js');
 const { serializeEvents } = require('../services/events.js');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
+const { earnedBadges } = require('../../shared/badges.mjs');
 
 // Public artist profiles: /api/users/:username
 const router = Router();
@@ -53,11 +55,31 @@ async function publicGiftsFilter(user) {
   return { giver: user._id, event: { $in: finished }, recipient: { $in: agreed } };
 }
 
+// Gifts they made in finished public events, as the facts shared/badges.mjs needs
+async function badgeGifts(user) {
+  const subs = await Submission.find({ giver: user._id })
+    .select('event match late type thanks')
+    .populate('event', 'status publicity disabledAt');
+  const done = subs.filter(
+    (s) => s.event && s.event.status === 'completed' && s.event.publicity === 'public' && !s.event.disabledAt
+  );
+  const matches = await Match.find({ _id: { $in: done.map((s) => s.match) } }).select('giver');
+  const giverOf = new Map(matches.map((m) => [m._id.toString(), m.giver.toString()]));
+  return done.map((s) => ({
+    event: s.event._id.toString(),
+    late: Boolean(s.late),
+    type: s.type,
+    thanked: Boolean(s.thanks?.at),
+    asBackup: giverOf.get(s.match.toString()) !== user._id.toString(),
+  }));
+}
+
 // What the gallery shows of a gift: never the private note to the recipient or the organisers' checks
 function giftItem(submission, giver) {
-  const { id, title, type, images, links, submittedAt } = submission.toPublic();
+  const { id, title, type, images, thumbnails, imageDescriptions, contentWarnings, links, submittedAt } =
+    submission.toPublic();
   return {
-    submission: { id, title, type, images, links, submittedAt },
+    submission: { id, title, type, images, thumbnails, imageDescriptions, contentWarnings, links, submittedAt },
     event: { id: submission.event._id.toString(), name: submission.event.name },
     giver: giver.toMini(),
     recipient: userMini(submission.recipient),
@@ -68,18 +90,23 @@ router.get('/:username', optionalAuth, asyncHandler(async (req, res) => {
   const user = await visibleProfileUser(req.params.username);
 
   const organizedIds = await EventMember.distinct('event', { user: user._id, roles: 'organizer' });
-  const [events, eventsOrganized] = await Promise.all([
+  const showExchanges = user.profilePrivacy?.showExchanges !== false;
+  const [events, eventsOrganized, eventsRun, madeGifts] = await Promise.all([
     Event.find({ _id: { $in: organizedIds }, ...LISTED }).sort({ createdAt: -1, _id: -1 }).limit(PROFILE_EVENTS_MAX),
     Event.countDocuments({ _id: { $in: organizedIds }, ...LISTED }),
+    Event.countDocuments({ _id: { $in: organizedIds }, ...FINISHED }),
+    // Hidden exchanges stay hidden: no badges that would hint at them
+    showExchanges ? badgeGifts(user) : null,
   ]);
   const body = {
     profile: { ...user.toPublicProfile(), createdAt: user.createdAt },
     organizing: await serializeEvents(events, req.user),
     stats: { eventsOrganized },
+    badges: earnedBadges({ eventsRun, gifts: madeGifts }),
   };
 
   // Exchanges they took part in, unless they chose to keep that to themselves
-  if (user.profilePrivacy?.showExchanges !== false) {
+  if (showExchanges) {
     const joinedIds = await Application.distinct('event', { user: user._id, status: 'accepted' });
     const joined = { _id: { $in: joinedIds }, ...FINISHED };
     const [exchanges, exchangesCompleted] = await Promise.all([

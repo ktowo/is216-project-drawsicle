@@ -22,6 +22,7 @@ const brokenImages = ref(new Set());
 const images = computed(() =>
   (props.submission.images || []).map((url, i) => ({
     url,
+    thumb: props.submission.thumbnails?.[i] || url,
     title: props.submission.title || 'Untitled gift',
     caption: props.caption,
     alt: props.submission.imageDescriptions?.[i] || '',
@@ -60,7 +61,7 @@ function markBroken(i) {
           <ImageOff :size="22" aria-hidden="true" />
           <span>Image unavailable</span>
         </span>
-        <img v-else :src="assetUrl(img.url)" :alt="img.alt" loading="lazy" @error="markBroken(i)" />
+        <img v-else :src="assetUrl(images.length > 1 ? img.thumb : img.url)" :alt="img.alt" loading="lazy" @error="markBroken(i)" />
       </button>
     </div>
     </ContentWarningGate>

@@ -15,6 +15,7 @@ import {
 } from 'lucide-vue-next';
 import ProfileHeader from '@/components/profile/ProfileHeader.vue';
 import ProfileStats from '@/components/profile/ProfileStats.vue';
+import ProfileBadges from '@/components/profile/ProfileBadges.vue';
 import EventCard from '@/components/events/EventCard.vue';
 import SubmissionGallery from '@/components/events/SubmissionGallery.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
@@ -39,6 +40,7 @@ const giftsHasMore = ref(false);
 const giftsLoading = ref(false);
 const giftsError = ref('');
 const stats = ref({ eventsOrganized: 0 });
+const badges = ref([]);
 // What the logged-in viewer has set about this person (just "blocked" for now)
 const viewerFlags = ref(null);
 const blocking = ref(false);
@@ -91,6 +93,7 @@ async function load() {
     organizing.value = data.organizing || [];
     exchanges.value = data.exchanges || [];
     stats.value = { eventsOrganized: 0, ...(data.stats || {}) };
+    badges.value = data.badges || [];
     viewerFlags.value = data.viewer || null;
     gifts.value = [];
     giftsHasMore.value = false;
@@ -266,6 +269,7 @@ function goToLookup() {
       </p>
 
       <ProfileStats :stats="stats" class="stats-gap" />
+      <ProfileBadges :badges="badges" class="stats-gap" />
 
       <section class="events" aria-labelledby="events-heading">
         <header class="events-head">

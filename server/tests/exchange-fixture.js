@@ -25,7 +25,7 @@ function use(theApp) {
 // Files saved locally by upload tests; cleanUploads() removes them
 const savedUploads = new Set();
 function remember(submission) {
-  for (const url of submission?.images || []) savedUploads.add(url);
+  for (const url of [...(submission?.images || []), ...(submission?.thumbnails || [])]) savedUploads.add(url);
   return submission;
 }
 async function cleanUploads() {

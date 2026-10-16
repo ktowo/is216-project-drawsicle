@@ -8,7 +8,7 @@ const { userMini } = require('../models/User.js');
 const { requireAuth, loadEvent, requireEventRole } = require('../middleware/auth.js');
 const { organizerIds, serializeEvent, viewerContext, canViewEvent } = require('../services/events.js');
 const { notify, notifyMany } = require('../services/notify.js');
-const { uploadImage, looksLikeImage, IMAGE_TYPES } = require('../services/storage.js');
+const { uploadImageWithThumbnail, looksLikeImage, IMAGE_TYPES } = require('../services/storage.js');
 const {
   loadMatchRows,
   requireParticipant,
@@ -223,7 +223,8 @@ async function saveGift(req, res) {
     throw invalid('Add at least one image or link so your recipient can see your gift.');
   }
 
-  const uploaded = await Promise.all(files.map((file) => uploadImage('submissions', file)));
+  const stored = await Promise.all(files.map((file) => uploadImageWithThumbnail('submissions', file)));
+  const uploaded = stored.map((s) => s.src);
 
   const now = new Date();
   const submission =
@@ -247,6 +248,11 @@ async function saveGift(req, res) {
     }),
     contentWarnings,
     links,
+    // Keep the small copies of images that stayed, and add the new ones
+    thumbnails: [
+      ...(existing?.thumbnails || []).filter((t) => images.includes(t.src)).map((t) => ({ src: t.src, thumb: t.thumb })),
+      ...stored.filter((s) => s.thumb).map((s) => ({ src: s.src, thumb: s.thumb })),
+    ],
     late: now > event.submissionDeadline,
   });
 

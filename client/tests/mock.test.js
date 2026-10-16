@@ -531,7 +531,17 @@ describe('build-out additions', () => {
     // Demo: Mika, Sol and Kit allow it; Remy and Noor don't
     const mika = await ok('/users/mika/gifts');
     expect(mika.items.map((i) => [i.giver.username, i.recipient.username])).toEqual([['mika', 'sol']]);
-    expect(Object.keys(mika.items[0].submission).sort()).toEqual(['id', 'images', 'links', 'submittedAt', 'title', 'type']);
+    expect(Object.keys(mika.items[0].submission).sort()).toEqual([
+      'contentWarnings',
+      'id',
+      'imageDescriptions',
+      'images',
+      'links',
+      'submittedAt',
+      'thumbnails',
+      'title',
+      'type',
+    ]);
     expect(mika.items[0].event.name).toBe('Spring Bloom Exchange');
     expect(JSON.stringify(mika)).not.toMatch(/Happy spring, Sol/);
     expect((await ok('/users/mika')).hasGifts).toBe(true);
