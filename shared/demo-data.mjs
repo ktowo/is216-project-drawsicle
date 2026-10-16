@@ -143,6 +143,63 @@ export function buildDemoData(now = new Date()) {
         cannotDraw: ['humanoid'],
       },
     },
+    // The Museum Club: six artists whose finished exchanges hang in the sample museum wings,
+    // one for each room design. All of them are happy to show their gifts publicly.
+    ...[
+      {
+        key: 'pia',
+        displayName: 'Pia',
+        bio: 'Pastel florals and cherry blossom everything. I host the Petal Post Swap, our cosiest postcard exchange.',
+        socials: { instagram: 'pia.petals', discord: 'pia.petals' },
+        likes: 'Flowers, picnics, soft pinks.',
+      },
+      {
+        key: 'luna',
+        displayName: 'Luna',
+        bio: 'Watercolour moons, sleepy owls and quiet night skies. I run the Midnight Lantern Gallery and never say no to stargazing.',
+        socials: { instagram: 'luna.moonwash', bluesky: 'luna-moon' },
+        likes: 'Night skies, lanterns, owls.',
+      },
+      {
+        key: 'otto',
+        displayName: 'Otto',
+        bio: 'Greenhouse gremlin. I paint plants, frogs and tiny ceramic pots, and organise the Greenhouse Doodle Swap.',
+        socials: { tumblr: 'otto-greens', discord: 'otto.greens' },
+        likes: 'Plants, frogs, rainy windows.',
+      },
+      {
+        key: 'bea',
+        displayName: 'Bea',
+        bio: 'Letters, lavender and lettering. I mix calligraphy into my illustrations and host the Lavender Letters Exchange.',
+        socials: { instagram: 'bea.letters', deviantart: 'bea-letters' },
+        likes: 'Handwritten notes, lavender, old stamps.',
+      },
+      {
+        key: 'rio',
+        displayName: 'Rio',
+        bio: 'Golden-hour landscapes and beach cats. Usually painting outside, always chasing the warm evening light.',
+        socials: { twitter: 'rio_sunsets', bluesky: 'rio-sun' },
+        likes: 'Sunsets, the seaside, warm colours.',
+      },
+      {
+        key: 'vera',
+        displayName: 'Vera',
+        bio: 'Minimal ink drawings and a proper gallery nerd. I curate the White Cube Mini Show: bold shapes and lots of space.',
+        socials: { instagram: 'vera.ink', tumblr: 'vera-ink' },
+        likes: 'Bold shapes, black and red, clean lines.',
+      },
+    ].map(({ likes, ...u }) => ({
+      ...u,
+      profilePrivacy: { showExchanges: true, showGifts: true },
+      defaultForm: {
+        communityUsername: u.key,
+        canCreate: ['art'],
+        wantsTypes: ['art'],
+        likes,
+        avoid: 'Nothing in particular.',
+        cannotDraw: [],
+      },
+    })),
     {
       // Site admin for trying the admin tools; not part of any event
       key: 'ada',
@@ -242,6 +299,32 @@ export function buildDemoData(now = new Date()) {
       'A wind-up toy robot that plays chiptune when you turn its key.',
       'Mint green body, pink key on the back.',
       [ref('pip', 'tin')]),
+
+    // The Museum Club's characters
+    character('pia', 'petal', 'Petal', 'Rabbit', ['fluffy', 'pastel', 'feral'],
+      'A lop-eared rabbit who delivers the spring post on a tiny bicycle.',
+      'Pink ears, a satchel full of postcards.',
+      [ref('pia', 'petal')]),
+    character('luna', 'hoot', 'Hoot', 'Owl', ['feathered', 'feral'],
+      'A sleepy barn owl who only wakes up for lanterns and meteor showers.',
+      'Cream face, one feather always sticking up.',
+      [ref('luna', 'hoot')]),
+    character('otto', 'sprout', 'Sprout', 'Frog', ['feral', 'pastel'],
+      'A tree frog who lives in a teacup on the greenhouse shelf.',
+      'Bright green, wears a leaf as a hat.',
+      [ref('otto', 'sprout')]),
+    character('bea', 'quill', 'Quill', 'Hedgehog', ['fluffy', 'feral'],
+      'A hedgehog postmaster with ink on every paw.',
+      'Lavender scarf, tiny round glasses.',
+      [ref('bea', 'quill')]),
+    character('rio', 'mango', 'Mango', 'Cat', ['fluffy', 'feral'],
+      'An orange beach cat who naps on the warmest rock at sunset.',
+      'Ginger tabby, white socks, very round.',
+      [ref('rio', 'mango')]),
+    character('vera', 'dot', 'Dot', 'Penguin', ['feathered', 'feral'],
+      'A small penguin who only ever wears black, white and one red scarf.',
+      'Keep the palette to black, white and red if you can.',
+      [ref('vera', 'dot')]),
   ];
 
   const ALL_TYPES = ['art', 'adoptable', 'writing'];
@@ -428,6 +511,12 @@ export function buildDemoData(now = new Date()) {
     noor: { communityUsername: 'noor.writes', likes: 'Birds and golden-hour light.', avoid: 'Romance.', cannotDraw: [] },
     kit: { communityUsername: 'kit.lantern', likes: 'Lanterns and fireflies.', avoid: 'Nothing in particular.', cannotDraw: ['mecha', 'robot'] },
     pip: { communityUsername: 'pipsqueak', likes: 'Tiny animals and snacks.', avoid: 'Spiders.', cannotDraw: ['humanoid'] },
+    pia: { communityUsername: 'pia', likes: 'Flowers and picnics.', avoid: 'Nothing in particular.', cannotDraw: [] },
+    luna: { communityUsername: 'luna', likes: 'Night skies and owls.', avoid: 'Nothing in particular.', cannotDraw: [] },
+    otto: { communityUsername: 'otto', likes: 'Plants and frogs.', avoid: 'Nothing in particular.', cannotDraw: [] },
+    bea: { communityUsername: 'bea', likes: 'Letters and lavender.', avoid: 'Nothing in particular.', cannotDraw: [] },
+    rio: { communityUsername: 'rio', likes: 'Sunsets and the seaside.', avoid: 'Nothing in particular.', cannotDraw: [] },
+    vera: { communityUsername: 'vera', likes: 'Bold shapes and clean lines.', avoid: 'Nothing in particular.', cannotDraw: [] },
   };
   const application = (eventKey, user, canCreate, wantsTypes, offeredCharacters, extra = {}) => ({
     event: eventKey,
@@ -587,6 +676,116 @@ export function buildDemoData(now = new Date()) {
       verified: true,
     }),
   ];
+
+  // ---------- Sample museum wings ----------
+  // One finished exchange for each room design (shared/museum-themes.mjs), made by the Museum
+  // Club, so every design can be seen in the museum. Five of the six take part each time (a
+  // different one sits out), and each makes a gift for the next.
+  const CLUB = ['pia', 'luna', 'otto', 'bea', 'rio', 'vera'];
+  const CLUB_CHARACTERS = { pia: 'Petal', luna: 'Hoot', otto: 'Sprout', bea: 'Quill', rio: 'Mango', vera: 'Dot' };
+  const SAMPLE_WINGS = [
+    {
+      key: 'petal-post',
+      design: 'blossom',
+      organiser: 'pia',
+      name: 'Petal Post Swap',
+      theme: 'Postcards from spring',
+      season: 'spring',
+      scenes: ['under the cherry tree', 'with a bouquet', 'at the flower stall', 'on a petal swing', 'having a picnic', 'in the spring rain'],
+    },
+    {
+      key: 'midnight-lanterns',
+      design: 'midnight',
+      organiser: 'luna',
+      name: 'Midnight Lantern Gallery',
+      theme: 'Lights in the dark',
+      season: 'halloween',
+      scenes: ['by lantern light', 'stargazing', 'on the night train', 'at the moon festival', 'reading by candlelight', 'chasing fireflies'],
+    },
+    {
+      key: 'greenhouse',
+      design: 'mint',
+      organiser: 'otto',
+      name: 'Greenhouse Doodle Swap',
+      theme: 'Things that grow',
+      season: 'spring',
+      scenes: ['in the greenhouse', 'repotting a fern', 'among the succulents', 'with a watering can', 'in the herb garden', 'under a monstera'],
+    },
+    {
+      key: 'lavender-letters',
+      design: 'lavender',
+      organiser: 'bea',
+      name: 'Lavender Letters Exchange',
+      theme: 'Letters to a friend',
+      season: 'valentine',
+      scenes: ['writing a letter', 'with a lavender bundle', 'sealing an envelope', 'at the post office', 'with a pressed flower', 'reading old postcards'],
+    },
+    {
+      key: 'golden-hour',
+      design: 'golden',
+      organiser: 'rio',
+      name: 'Golden Hour Sketch Trade',
+      theme: 'The last light of the day',
+      season: 'other',
+      scenes: ['at sunset', 'on the pier', 'with an ice lolly', 'by the beach hut', 'flying a kite', 'watching the tide'],
+    },
+    {
+      key: 'white-cube',
+      design: 'gallery',
+      organiser: 'vera',
+      name: 'White Cube Mini Show',
+      theme: 'Less is more',
+      season: 'other',
+      scenes: ['in three shapes', 'as a bold silhouette', 'in black and red', 'as an ink study', 'on a white plinth', 'in one line'],
+    },
+  ];
+  SAMPLE_WINGS.forEach((w, i) => {
+    // Finished before Spring Bloom, a few days apart
+    const finished = 12 + i * 3;
+    events.push(
+      event({
+        key: w.key,
+        status: 'completed',
+        createdBy: w.organiser,
+        name: w.name,
+        description: `A finished Museum Club exchange. Its gifts hang in the museum in the "${w.design}" room design.`,
+        theme: w.theme,
+        season: w.season,
+        rules: 'One finished piece each. Be kind!',
+        tags: ['museum club'],
+        platform: 'discord',
+        platformName: 'Museum Club Discord',
+        platformLink: 'https://example.com/communities/museum-club',
+        signupDeadline: deadline(-finished - 40),
+        submissionDeadline: deadline(-finished - 5),
+        minParticipants: 3,
+        maxParticipants: 12,
+        allowedTypes: ['art'],
+        inviteCode: `club-${w.key}`,
+        banner: { seed: `club-${w.key}`, title: w.name },
+        publishedAt: ago(finished + 35),
+        completedAt: ago(finished),
+        museumTheme: w.design,
+      })
+    );
+    // The gifts go round in a ring that starts somewhere new each time
+    const ring = CLUB.map((_, n) => CLUB[(n + i) % CLUB.length]).slice(0, 5);
+    ring.forEach((giver, n) => {
+      const recipient = ring[(n + 1) % ring.length];
+      const title = `${CLUB_CHARACTERS[recipient]} ${w.scenes[n % w.scenes.length]}`;
+      applications.push(application(w.key, giver, ['art'], ['art'], [CLUB_CHARACTERS[giver].toLowerCase()]));
+      matches.push(match(w.key, giver, recipient, 65, [ART, ONE], 'submitted'));
+      submissions.push(
+        submission(w.key, giver, recipient, {
+          title,
+          message: `For you, ${CLUB_CHARACTERS[recipient]}! Thanks for a lovely exchange.`,
+          art: [{ seed: `club-${w.key}-${giver}-${recipient}`, title }],
+          submittedAt: ago(finished + 6, n),
+          verified: true,
+        })
+      );
+    });
+  });
 
   const note = (user, type, title, message, eventKey, path, read, createdAt) => ({
     user,

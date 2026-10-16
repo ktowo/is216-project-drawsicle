@@ -231,6 +231,7 @@ async function seed({ reset = false, now = new Date(), artDir = DEMO_UPLOAD_DIR 
       statusHistory,
       publishedAt: e.publishedAt || null,
       completedAt: e.completedAt || null,
+      museumTheme: e.museumTheme || 'auto',
       createdAt: statusHistory[0].at,
     });
   }
