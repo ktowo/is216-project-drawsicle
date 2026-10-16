@@ -2,6 +2,7 @@
 import { isId } from '../db.js';
 import { findUser, miniOf, serializeEvent, submissionPublic, userMini, userProfile } from '../model.js';
 import { httpError } from '../util.js';
+import { earnedBadges } from '@shared/badges.mjs';
 
 const USERNAME_RE = /^[a-z0-9_]{3,30}$/;
 const PROFILE_EVENTS_MAX = 12;
@@ -49,12 +50,28 @@ function publicGifts(state, user) {
     .sort((a, b) => String(b.submittedAt).localeCompare(String(a.submittedAt)) || b.id.localeCompare(a.id));
 }
 
+// Gifts they made in finished public events, as the facts shared/badges.mjs needs
+function badgeGifts(state, user) {
+  return state.submissions
+    .filter((s) => s.giver === user.id)
+    .map((s) => ({ s, event: state.events.find((e) => e.id === s.event) }))
+    .filter(({ event }) => event && isFinished(event))
+    .map(({ s, event }) => ({
+      event: event.id,
+      late: Boolean(s.late),
+      type: s.type,
+      thanked: Boolean(s.thanks?.at),
+      asBackup: state.matches.find((m) => m.id === s.match)?.giver !== user.id,
+    }));
+}
+
 // What the gallery shows of a gift: never the private note to the recipient or the organisers' checks
 function giftItem(state, submission, giver) {
-  const { id, title, type, images, links, submittedAt } = submissionPublic(submission);
+  const { id, title, type, images, thumbnails, imageDescriptions, contentWarnings, links, submittedAt } =
+    submissionPublic(submission);
   const event = state.events.find((e) => e.id === submission.event);
   return {
-    submission: { id, title, type, images, links, submittedAt },
+    submission: { id, title, type, images, thumbnails, imageDescriptions, contentWarnings, links, submittedAt },
     event: { id: event.id, name: event.name },
     giver: userMini(giver),
     recipient: miniOf(state, submission.recipient),
@@ -88,14 +105,19 @@ export function register(router) {
       (a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || b.id.localeCompare(a.id)
     );
 
+    const showExchanges = user.profilePrivacy?.showExchanges !== false;
     const body = {
       profile: { ...userProfile(user), createdAt: user.createdAt },
       organizing: newestFirst.slice(0, PROFILE_EVENTS_MAX).map((event) => serializeEvent(state, event, viewer)),
       stats: { eventsOrganized: listed.length },
+      badges: earnedBadges({
+        eventsRun: listed.filter(isFinished).length,
+        gifts: showExchanges ? badgeGifts(state, user) : null,
+      }),
     };
 
     // Exchanges they took part in, unless they chose to keep that to themselves
-    if (user.profilePrivacy?.showExchanges !== false) {
+    if (showExchanges) {
       const joinedIds = new Set(
         state.applications.filter((a) => a.user === user.id && a.status === 'accepted').map((a) => a.event)
       );

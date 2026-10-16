@@ -1,9 +1,10 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, nextTick } from 'vue';
 import { RouterLink } from 'vue-router';
 import { ArrowRight, ExternalLink, FileText, Palette, Gift, Images } from 'lucide-vue-next';
 import ImageLightbox from './ImageLightbox.vue';
 import ContentWarningGate from './ContentWarningGate.vue';
+import WrappedPresent from './WrappedPresent.vue';
 import PersonLink from './PersonLink.vue';
 import ReportButton from '@/components/ReportButton.vue';
 import { auth } from '@/stores/auth';
@@ -13,9 +14,15 @@ import { REACTIONS } from '@shared/constants.mjs';
 
 // Every pair's gift after the reveal. items: [{ giver, recipient, submission | null, event? }]
 // With event ({ id, name }) each tile also says which exchange it was for (artist profiles).
+// wrapped: submission ids still shown as a wrapped present (the reveal page); unwrapping emits `unwrap`.
 const props = defineProps({
   items: { type: Array, default: () => [] },
+  wrapped: { type: Set, default: null },
 });
+const emit = defineEmits(['unwrap']);
+const root = ref(null);
+
+const isWrapped = (item) => Boolean(props.wrapped && item.submission && props.wrapped.has(item.submission.id));
 
 const TYPE_ICONS = { writing: FileText, art: Palette, adoptable: Gift };
 
@@ -32,6 +39,8 @@ const sorted = computed(() => [...props.items].sort((a, b) => Number(!a.submissi
 const allImages = computed(() => {
   const list = [];
   for (const item of sorted.value) {
+    // Pictures of gifts still wrapped stay out, so the arrow keys can't spoil them
+    if (isWrapped(item)) continue;
     (item.submission?.images || []).forEach((url, i) => {
       list.push({
         url,
@@ -47,11 +56,15 @@ const allImages = computed(() => {
 const tiles = computed(() => {
   let offset = 0;
   return sorted.value.map((item, i) => {
-    const images = item.submission?.images || [];
+    const wrapped = isWrapped(item);
+    const images = wrapped ? [] : item.submission?.images || [];
     const tile = {
+      wrapped,
+      tone: i,
       key: item.submission?.id || `${item.giver?.id || 'g'}-${item.recipient?.id || 'r'}-${i}`,
       item,
-      cover: images[0] || null,
+      // The small copy for the tile; the lightbox opens the full image
+      cover: item.submission?.thumbnails?.[0] || images[0] || null,
       imageCount: images.length,
       firstIndex: offset,
       links: (item.submission?.links || []).map((l) => ({ ...l, href: safeUrl(l.url) })).filter((l) => l.href),
@@ -62,6 +75,14 @@ const tiles = computed(() => {
   });
 });
 
+async function unwrap(tile) {
+  emit('unwrap', tile.item.submission.id);
+  // The present's button is gone now: put focus on what was inside
+  await nextTick();
+  const el = root.value?.querySelector(`[data-tile="${tile.key}"]`);
+  (el?.querySelector('button.cover, a, button') || el)?.focus();
+}
+
 function open(tile) {
   if (!tile.imageCount) return;
   lightboxIndex.value = tile.firstIndex;
@@ -70,71 +91,87 @@ function open(tile) {
 </script>
 
 <template>
-  <div>
+  <div ref="root">
     <ul class="gallery">
-      <li v-for="tile in tiles" :key="tile.key" class="tile card" :class="{ missing: !tile.item.submission }">
-        <ContentWarningGate v-if="tile.cover" :warnings="tile.item.submission.contentWarnings || []" compact>
-          <button
-            type="button"
-            class="cover"
-            :aria-label="`View ${tile.item.submission.title || 'gift'} from ${nameOf(tile.item.giver)} full size`"
-            @click="open(tile)"
+      <li
+        v-for="tile in tiles"
+        :key="tile.key"
+        class="tile card"
+        :class="{ missing: !tile.item.submission, wrapped: tile.wrapped }"
+        :data-tile="tile.key"
+        tabindex="-1"
+      >
+        <WrappedPresent
+          v-if="tile.wrapped"
+          :tone="tile.tone"
+          :label="`Unwrap the gift for ${nameOf(tile.item.recipient)}`"
+          :caption="`For ${nameOf(tile.item.recipient)}`"
+          @opened="unwrap(tile)"
+        />
+        <template v-else>
+          <ContentWarningGate v-if="tile.cover" :warnings="tile.item.submission.contentWarnings || []" compact>
+            <button
+              type="button"
+              class="cover"
+              :aria-label="`View ${tile.item.submission.title || 'gift'} from ${nameOf(tile.item.giver)} full size`"
+              @click="open(tile)"
+            >
+              <img :src="assetUrl(tile.cover)" alt="" loading="lazy" />
+              <span v-if="tile.imageCount > 1" class="more">
+                <Images :size="14" aria-hidden="true" /> {{ tile.imageCount }}
+              </span>
+            </button>
+          </ContentWarningGate>
+          <div v-else class="cover placeholder" aria-hidden="true">
+            <component :is="tile.item.submission ? tile.icon : Gift" :size="34" :stroke-width="1.6" />
+          </div>
+          <span
+            v-if="reactionOf(tile.item.submission)"
+            class="reaction"
+            :title="`${nameOf(tile.item.recipient)}: ${reactionOf(tile.item.submission).label}`"
           >
-            <img :src="assetUrl(tile.cover)" alt="" loading="lazy" />
-            <span v-if="tile.imageCount > 1" class="more">
-              <Images :size="14" aria-hidden="true" /> {{ tile.imageCount }}
-            </span>
-          </button>
-        </ContentWarningGate>
-        <span
-          v-if="reactionOf(tile.item.submission)"
-          class="reaction"
-          :title="`${nameOf(tile.item.recipient)}: ${reactionOf(tile.item.submission).label}`"
-        >
-          <span aria-hidden="true">{{ reactionOf(tile.item.submission).emoji }}</span>
-          <span class="sr-only">{{ nameOf(tile.item.recipient) }} reacted: {{ reactionOf(tile.item.submission).label }}</span>
-        </span>
-        <div v-else class="cover placeholder" aria-hidden="true">
-          <component :is="tile.item.submission ? tile.icon : Gift" :size="34" :stroke-width="1.6" />
-        </div>
+            <span aria-hidden="true">{{ reactionOf(tile.item.submission).emoji }}</span>
+            <span class="sr-only">{{ nameOf(tile.item.recipient) }} reacted: {{ reactionOf(tile.item.submission).label }}</span>
+          </span>
 
-        <div class="tile-body">
-          <template v-if="tile.item.submission">
-            <p class="tile-title">{{ tile.item.submission.title || 'Untitled gift' }}</p>
-            <span class="type">{{ typeLabel(tile.item.submission.type) }}</span>
-          </template>
-          <p v-else class="tile-title muted">No gift submitted</p>
+          <div class="tile-body">
+            <template v-if="tile.item.submission">
+              <p class="tile-title">{{ tile.item.submission.title || 'Untitled gift' }}</p>
+              <span class="type">{{ typeLabel(tile.item.submission.type) }}</span>
+            </template>
+            <p v-else class="tile-title muted">No gift submitted</p>
 
-          <p class="pair">
-            <PersonLink :user="tile.item.giver" :size="22" class="person" />
-            <ArrowRight :size="14" class="arrow" aria-hidden="true" />
-            <span class="sr-only">made a gift for</span>
-            <PersonLink :user="tile.item.recipient" :size="22" class="person" />
-          </p>
+            <p class="pair">
+              <PersonLink :user="tile.item.giver" :size="22" class="person" />
+              <ArrowRight :size="14" class="arrow" aria-hidden="true" />
+              <span class="sr-only">made a gift for</span>
+              <PersonLink :user="tile.item.recipient" :size="22" class="person" />
+            </p>
 
-          <p v-if="tile.item.event" class="for-event">
-            For <RouterLink :to="`/events/${tile.item.event.id}`">{{ tile.item.event.name }}</RouterLink>
-          </p>
+            <p v-if="tile.item.event" class="for-event">
+              For <RouterLink :to="`/events/${tile.item.event.id}`">{{ tile.item.event.name }}</RouterLink>
+            </p>
 
-          <ul v-if="tile.links.length" class="links">
-            <li v-for="link in tile.links" :key="link.href">
-              <a :href="link.href" target="_blank" rel="noopener noreferrer">
-                <ExternalLink :size="13" aria-hidden="true" />
-                {{ link.label || linkHost(link.href) }}
-              </a>
-            </li>
-          </ul>
+            <ul v-if="tile.links.length" class="links">
+              <li v-for="link in tile.links" :key="link.href">
+                <a :href="link.href" target="_blank" rel="noopener noreferrer">
+                  <ExternalLink :size="13" aria-hidden="true" />
+                  {{ link.label || linkHost(link.href) }}
+                </a>
+              </li>
+            </ul>
 
-          <ReportButton
-            v-if="tile.item.submission"
-            target-type="submission"
-            :target-id="tile.item.submission.id"
-            :what="`the gift from ${tile.item.giver?.displayName || 'this artist'}`"
-            :own="Boolean(auth.user && tile.item.giver?.id === auth.user.id)"
-            look="link"
-            class="tile-report"
-          />
-        </div>
+            <ReportButton
+              v-if="tile.item.submission"
+              target-type="submission"
+              :target-id="tile.item.submission.id"
+              :what="`the gift from ${tile.item.giver?.displayName || 'this artist'}`"
+              :own="Boolean(auth.user && tile.item.giver?.id === auth.user.id)"
+              look="link"
+              class="tile-report"
+            />
+          </div>
+        </template>
       </li>
     </ul>
 
@@ -143,6 +180,16 @@ function open(tile) {
 </template>
 
 <style scoped>
+.tile.wrapped {
+  border-style: dashed;
+  overflow: hidden;
+}
+.tile:focus {
+  outline: none;
+}
+.tile:focus-visible {
+  outline: 3px solid var(--pink);
+}
 .gallery {
   list-style: none;
   margin: 0;

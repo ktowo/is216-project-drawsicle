@@ -18,6 +18,11 @@ const submissionSchema = new mongoose.Schema(
       default: [],
       validate: [(v) => v.length <= LIMITS.submissionImages, `Up to ${LIMITS.submissionImages} images.`],
     },
+    // Small copies for galleries: { src: an entry in images, thumb: its thumbnail URL }
+    thumbnails: {
+      type: [{ _id: false, src: { type: String, required: true }, thumb: { type: String, required: true } }],
+      default: [],
+    },
     // Alt text for each image, same order as images (empty when the artist didn't write one)
     imageDescriptions: { type: [{ type: String, maxlength: LIMITS.imageDescription }], default: [] },
     // Shown before the pictures, which stay blurred until someone chooses to look
@@ -61,6 +66,8 @@ submissionSchema.methods.toPublic = function () {
     message: this.message || '',
     type: this.type,
     images: [...(this.images || [])],
+    // Same order as images; the full image when there's no smaller copy
+    thumbnails: (this.images || []).map((src) => this.thumbnails?.find((t) => t.src === src)?.thumb || src),
     imageDescriptions: (this.images || []).map((_, i) => this.imageDescriptions?.[i] || ''),
     contentWarnings: [...(this.contentWarnings || [])],
     links: (this.links || []).map((l) => ({ label: l.label || '', url: l.url })),
