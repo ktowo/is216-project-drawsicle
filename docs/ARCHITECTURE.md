@@ -80,7 +80,8 @@ MatchAdmin    { id, giver: UserMini, recipient: UserMini, score, reasons[], stat
 Submission    { id, eventId, matchId, title, message, type, images: url[], links: [{label,url}],
                 submittedAt, late, verified, verifiedAt, updatedAt }
 Notification  { id, type, title, message, link, read, createdAt }
-ArtistProfile { id, username, displayName, avatarUrl, bio, socials{...}, createdAt }   // no email
+ArtistProfile { id, username, displayName, avatarUrl, bio, socials{...}, artistTags, createdAt }   // no email
+ArtistTags { makes[], themes[] (max 5), activity: '' | 'casual' | 'seasonal', cardColor: '' | palette value }   // shared/taste.mjs
 ```
 
 Models carry `toPublic()` / `toMini()` methods producing these (see `server/models`).
@@ -119,7 +120,7 @@ All routes are under `/api`. (auth) = must be logged in, (org) = event organiser
 | POST | /auth/change-password | (auth) `{ currentPassword, newPassword }` → `{ user }`, logs out other devices |
 | GET | /auth/google, /auth/google/callback | optional (GOOGLE_CLIENT_ID/SECRET) |
 | GET | /auth/discord, /auth/discord/callback | optional (DISCORD_CLIENT_ID/SECRET), scope `identify email` |
-| PATCH | /profile | (auth) any of `{ displayName, bio, username, socials{...}, defaultForm{...}, notificationPrefs{...}, profilePrivacy{...} }` → `{ user }`; 409 `USERNAME_TAKEN` |
+| PATCH | /profile | (auth) any of `{ displayName, bio, username, socials{...}, defaultForm{...}, notificationPrefs{...}, profilePrivacy{...}, artistTags{...} }` → `{ user }`; 409 `USERNAME_TAKEN`. `artistTags` may be partial; unknown makes/themes/activity/colour or more than 5 themes → 400 `VALIDATION` |
 | POST/DELETE | /profile/avatar | (auth) multipart `avatar` |
 | POST | /profile/deactivate | (auth) `{ password? }` → `{ ok }`; sets status `deactivated`, logs out, withdraws sign-ups (see below). Anonymised after 30 days |
 | GET | /profile/export | (auth) → `{ exportedAt, user, characters, applications: [Application + eventName], submissions: [Submission + eventName], notifications }`, for a "download my data" button |
@@ -141,7 +142,7 @@ Rejected applications are left alone, and logging back in does not restore withd
 `user` (from `User.toPublic()`): `{ id, email, username, role, status, displayName, avatarUrl, bio,
 socials{twitter,instagram,bluesky,discord,deviantart,toyhouse,tumblr}, defaultForm{communityUsername, canCreate[],
 wantsTypes[], likes, avoid, cannotDraw[]}, notificationPrefs{emailReminders, emailMatches, emailEventUpdates},
-profilePrivacy{showExchanges (default true), showGifts (default false)}, providers{google,discord}, profileComplete,
+profilePrivacy{showExchanges (default true), showGifts (default false)}, artistTags (public, see ArtistTags), providers{google,discord}, profileComplete,
 createdAt }`. `profilePrivacy` only ever appears in the owner's own `user`, never in `ArtistProfile`.
 
 ### Characters: `routes/character-router.js` (auth, owner only; other people's characters are 404)

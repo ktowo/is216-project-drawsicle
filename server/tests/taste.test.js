@@ -80,3 +80,19 @@ test('rank orders by score, then tie-breaks, then id, and never changes between 
   const [top] = rank(artists, (a) => scoreArtist(me, a));
   assert.deepEqual(top.reasons, ['You both like fantasy']);
 });
+
+test('artist tag updates: partial, strict, and themes capped at five', () => {
+  const { artistTagsUpdate, artistTagsOf } = require('../../shared/taste.mjs');
+  assert.deepEqual(artistTagsUpdate({ themes: ['fantasy', 'fantasy'], cardColor: 'mint' }), {
+    changes: { themes: ['fantasy'], cardColor: 'mint' },
+  });
+  assert.deepEqual(artistTagsUpdate({ activity: null, cardColor: '' }), { changes: { activity: '', cardColor: '' } });
+  for (const bad of [null, [], 'art', { makes: 'art' }, { makes: ['sculpture'] }, { themes: ['nope'] },
+    { activity: 'daily' }, { cardColor: '#ff0000' }, { themes: ['fantasy', 'cosy', 'spooky', 'cute', 'food', 'ocean'] }]) {
+    assert.ok(artistTagsUpdate(bad).error, `should reject ${JSON.stringify(bad)}`);
+  }
+  assert.deepEqual(artistTagsOf(undefined), { makes: [], themes: [], activity: '', cardColor: '' });
+  assert.deepEqual(artistTagsOf({ makes: ['art', 'x'], cardColor: 'nope', activity: 'casual' }), {
+    makes: ['art'], themes: [], activity: 'casual', cardColor: '',
+  });
+});

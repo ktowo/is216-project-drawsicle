@@ -8,6 +8,8 @@ import ChoiceChips from '@/components/ui/ChoiceChips.vue';
 import TagInput from '@/components/ui/TagInput.vue';
 import UserAvatar from '@/components/UserAvatar.vue';
 import ProfileHeader from '@/components/profile/ProfileHeader.vue';
+import ArtistTagsEditor from '@/components/profile/ArtistTagsEditor.vue';
+import { artistTagsOf } from '@shared/taste.mjs';
 import { auth, setUser } from '@/stores/auth';
 import { toast } from '@/stores/toast';
 import { api } from '@/api';
@@ -41,6 +43,7 @@ function profileFromUser(user) {
     username: user?.username || '',
     bio: user?.bio || '',
     socials: Object.fromEntries(SOCIALS.map((s) => [s.key, user?.socials?.[s.key] || ''])),
+    artistTags: artistTagsOf(user?.artistTags),
     privacy: {
       showExchanges: user?.profilePrivacy?.showExchanges !== false,
       showGifts: Boolean(user?.profilePrivacy?.showGifts),
@@ -114,6 +117,7 @@ async function saveProfile() {
     bio: profile.bio.trim(),
     socials: Object.fromEntries(SOCIALS.map((s) => [s.key, cleanHandle(profile.socials[s.key])])),
     profilePrivacy: { ...profile.privacy },
+    artistTags: { ...profile.artistTags },
   };
   const handle = profile.username.trim().toLowerCase();
   if (handle) body.username = handle;
@@ -271,6 +275,7 @@ const preview = computed(() => ({
   socials: Object.fromEntries(SOCIALS.map((s) => [s.key, cleanHandle(profile.socials[s.key])])),
   avatarUrl: auth.user?.avatarUrl || null,
   createdAt: auth.user?.createdAt,
+  artistTags: profile.artistTags,
 }));
 const publicLink = computed(() => (auth.user?.username ? `/users/${auth.user.username}` : ''));
 
@@ -448,6 +453,14 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
             </template>
           </FormField>
         </div>
+      </fieldset>
+
+      <fieldset class="artist-tags">
+        <legend class="label">Your artist tags</legend>
+        <p class="hint tags-hint">
+          Shown on your profile and on Discover so people who like the same things can find you.
+        </p>
+        <ArtistTagsEditor v-model="profile.artistTags" />
       </fieldset>
 
       <fieldset class="privacy">
@@ -724,6 +737,15 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
   flex-wrap: wrap;
   gap: 14px;
   margin-top: 28px;
+}
+.artist-tags {
+  border: 0;
+  margin: 26px 0 0;
+  padding: 0;
+  min-width: 0;
+}
+.tags-hint {
+  margin: 0 0 14px;
 }
 .privacy {
   border: 0;

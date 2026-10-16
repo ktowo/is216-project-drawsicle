@@ -1,5 +1,6 @@
 // /profile and /memberships (server/routes/profile-router.js, membership-router.js)
 import { CREATION_TYPE_VALUES, EVENT_ROLES, LIMITS, normalizeTags } from '@shared/constants.mjs';
+import { artistTagsOf, artistTagsUpdate } from '@shared/taste.mjs';
 import { checkImage, filesFrom, imageToDataUrl, looksLikeImage } from '../files.js';
 import { withdrawApplications } from '../accounts.js';
 import {
@@ -44,7 +45,7 @@ function typeList(value, label) {
 export function register(router) {
   router.patch('/profile', (ctx) => {
     const user = ctx.requireAuth();
-    const { displayName, bio, username, socials, defaultForm, notificationPrefs, profilePrivacy } = ctx.body;
+    const { displayName, bio, username, socials, defaultForm, notificationPrefs, profilePrivacy, artistTags } = ctx.body;
     // Work on a copy so a bad field halfway through leaves the account as it was
     const next = {
       displayName: user.displayName,
@@ -54,6 +55,7 @@ export function register(router) {
       defaultForm: { ...user.defaultForm },
       notificationPrefs: { ...user.notificationPrefs },
       profilePrivacy: { ...user.profilePrivacy },
+      artistTags: artistTagsOf(user.artistTags),
     };
 
     if (displayName !== undefined) {
@@ -108,6 +110,12 @@ export function register(router) {
         if (typeof notificationPrefs[key] !== 'boolean') throw invalid(`${key} must be true or false.`);
         next.notificationPrefs[key] = notificationPrefs[key];
       }
+    }
+
+    if (artistTags !== undefined) {
+      const { changes, error } = artistTagsUpdate(artistTags);
+      if (error) throw invalid(error);
+      Object.assign(next.artistTags, changes);
     }
 
     if (profilePrivacy !== undefined) {

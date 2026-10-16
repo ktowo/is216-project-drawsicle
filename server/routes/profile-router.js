@@ -14,6 +14,7 @@ const { withdrawApplications } = require('../services/accounts.js');
 const { endSession } = require('../utils/session.js');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
 const { CREATION_TYPE_VALUES, LIMITS, normalizeTags } = require('../../shared/constants.mjs');
+const { artistTagsUpdate } = require('../../shared/taste.mjs');
 
 const router = Router();
 
@@ -58,7 +59,7 @@ function typeList(value, label) {
 
 // Update my profile. Only the fields below can be changed here; anything else in the body is ignored.
 router.patch('/', requireAuth, asyncHandler(async (req, res) => {
-  const { displayName, bio, username, socials, defaultForm, notificationPrefs, profilePrivacy } = req.body || {};
+  const { displayName, bio, username, socials, defaultForm, notificationPrefs, profilePrivacy, artistTags } = req.body || {};
   const user = req.user;
 
   if (displayName !== undefined) {
@@ -119,6 +120,12 @@ router.patch('/', requireAuth, asyncHandler(async (req, res) => {
       if (typeof notificationPrefs[key] !== 'boolean') throw invalid(`${key} must be true or false.`);
       user.notificationPrefs[key] = notificationPrefs[key];
     }
+  }
+
+  if (artistTags !== undefined) {
+    const { changes, error } = artistTagsUpdate(artistTags);
+    if (error) throw invalid(error);
+    Object.assign(user.artistTags, changes);
   }
 
   if (profilePrivacy !== undefined) {

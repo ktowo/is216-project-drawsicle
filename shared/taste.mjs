@@ -165,3 +165,53 @@ export function rank(items, scoreOf, tieBreaks = []) {
       return String(a.item.id).localeCompare(String(b.item.id));
     });
 }
+
+// ---------- Artist tags (stored on the user, shown publicly) ----------
+
+export const emptyArtistTags = () => ({ makes: [], themes: [], activity: '', cardColor: '' });
+
+// Stored tags in their public shape, whatever is (or isn't) saved
+export function artistTagsOf(source) {
+  const tags = source || {};
+  return {
+    makes: known(tags.makes, CREATION_TYPE_VALUES),
+    themes: known(tags.themes, THEME_VALUES).slice(0, THEMES_MAX),
+    activity: ACTIVITY_VALUES.includes(tags.activity) ? tags.activity : '',
+    cardColor: CARD_COLOR_VALUES.includes(tags.cardColor) ? tags.cardColor : '',
+  };
+}
+
+// Checks a (partial) artist tags update from a profile PATCH. Fields left out stay as they are.
+// Returns { changes } or { error } with a message to show; never both.
+export function artistTagsUpdate(input) {
+  if (input === null || typeof input !== 'object' || Array.isArray(input)) {
+    return { error: 'artistTags must be an object.' };
+  }
+  const changes = {};
+  const listOf = (key, allowed, what) => {
+    if (input[key] === undefined) return null;
+    const value = input[key];
+    if (!Array.isArray(value) || value.some((v) => !allowed.includes(v))) {
+      return `${what} must be a list using: ${allowed.join(', ')}.`;
+    }
+    changes[key] = [...new Set(value)];
+    return null;
+  };
+  const oneOf = (key, allowed, what) => {
+    if (input[key] === undefined) return null;
+    const value = input[key];
+    if (value !== '' && value !== null && !allowed.includes(value)) {
+      return `${what} must be one of: ${allowed.join(', ')}.`;
+    }
+    changes[key] = value || '';
+    return null;
+  };
+  const error =
+    listOf('makes', CREATION_TYPE_VALUES, 'What you make') ||
+    listOf('themes', THEME_VALUES, 'Themes') ||
+    oneOf('activity', ACTIVITY_VALUES, 'How often you join') ||
+    oneOf('cardColor', CARD_COLOR_VALUES, 'Card colour');
+  if (error) return { error };
+  if (changes.themes && changes.themes.length > THEMES_MAX) return { error: `Pick up to ${THEMES_MAX} themes.` };
+  return { changes };
+}
