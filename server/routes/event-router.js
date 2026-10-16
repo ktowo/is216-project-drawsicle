@@ -22,6 +22,7 @@ const { notify, notifyMany } = require('../services/notify.js');
 const { uploadImage, looksLikeImage, IMAGE_TYPES } = require('../services/storage.js');
 const { REMINDER_KEYS } = require('../services/reminders.js');
 const { announceMilestone } = require('../services/discord.js');
+const { promoteFromWaitlist } = require('../services/waitlist.js');
 const {
   EVENT_STATUSES,
   EVENT_TRANSITIONS,
@@ -513,6 +514,9 @@ router.patch('/:eventId', ...organizerOnly, rejectIfCompleted, asyncHandler(asyn
       })
     );
   }
+
+  // A higher limit lets people in from the waitlist
+  if (input.maxParticipants !== undefined) await promoteFromWaitlist(event);
 
   res.json({ event: await serializeEvent(event, req.user, { ctx: req.viewer }) });
 }));

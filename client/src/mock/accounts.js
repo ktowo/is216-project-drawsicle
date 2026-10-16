@@ -2,6 +2,7 @@
 // Sign-ups that haven't been matched yet are withdrawn, so organisers aren't left matching
 // someone who is gone. Published matches stay: those gifts are already being made.
 import { notifyMany, organizerIds, revokeRole, userMini } from './model.js';
+import { promoteFromWaitlist } from './waitlist.js';
 
 const WITHDRAW_IN = ['draft', 'open', 'matching'];
 
@@ -11,7 +12,7 @@ export function withdrawApplications(state, user, now) {
   let withdrawn = 0;
 
   for (const application of state.applications) {
-    if (application.user !== user.id || !['pending', 'accepted'].includes(application.status)) continue;
+    if (application.user !== user.id || !['pending', 'accepted', 'waitlisted'].includes(application.status)) continue;
     const event = state.events.find((e) => e.id === application.event);
     if (!event || !WITHDRAW_IN.includes(event.status)) continue;
     const wasAccepted = application.status === 'accepted';
@@ -20,6 +21,7 @@ export function withdrawApplications(state, user, now) {
     application.updatedAt = now.toISOString();
     revokeRole(state, user.id, event.id, 'participant');
     withdrawn += 1;
+    if (wasAccepted && event.status === 'open') promoteFromWaitlist(state, event, now);
 
     if (event.status !== 'matching' || !wasAccepted) continue;
     // Draft matches were made with this person in them

@@ -29,6 +29,7 @@ import {
 } from '../model.js';
 import { escapeRegex, formatDate, httpError, invalid, queryParam, readBoolean, toMs, URL_RE } from '../util.js';
 import { organizerEvent, visibleEvent } from './common.js';
+import { promoteFromWaitlist } from '../waitlist.js';
 
 // ---------- Reading event fields from a request ----------
 
@@ -471,6 +472,8 @@ export function register(router) {
     const updated = { ...event, ...storable(input) };
     validateEvent(updated);
     Object.assign(event, updated, { updatedAt: ctx.now.toISOString() });
+    // A higher limit lets people in from the waitlist
+    if (input.maxParticipants !== undefined) promoteFromWaitlist(state, event, ctx.now);
     // A moved deadline gets its automatic reminders again, counted from the new date
     const resetKeys = changedDeadlines.flatMap((key) => DEADLINE_REMINDERS[key]);
     if (resetKeys.length) event.remindersSent = (event.remindersSent || []).filter((k) => !resetKeys.includes(k));

@@ -2,18 +2,20 @@
 // Sign-ups that haven't been matched yet are withdrawn, so organisers aren't left matching
 // someone who is gone. Published matches stay: those gifts are already being made.
 const Application = require('../models/Application.js');
+const Event = require('../models/Event.js');
 const EventMember = require('../models/EventMember.js');
 const Match = require('../models/Match.js');
 const User = require('../models/User.js');
 const { userMini } = User;
 const { organizerIds } = require('./events.js');
 const { notifyMany } = require('./notify.js');
+const { promoteFromWaitlist } = require('./waitlist.js');
 
 const WITHDRAW_IN = ['draft', 'open', 'matching'];
 
 // Returns how many applications were withdrawn
 async function withdrawApplications(user) {
-  const applications = await Application.find({ user: user._id, status: { $in: ['pending', 'accepted'] } })
+  const applications = await Application.find({ user: user._id, status: { $in: ['pending', 'accepted', 'waitlisted'] } })
     .populate('event', 'name status');
   const name = userMini(user).displayName;
   let withdrawn = 0;
@@ -27,6 +29,8 @@ async function withdrawApplications(user) {
     await Application.updateOne({ _id: application._id }, { $set: { status: 'withdrawn' } });
     await EventMember.revoke(user._id, event._id, 'participant');
     withdrawn += 1;
+    // Their place goes to whoever has waited longest
+    if (wasAccepted && event.status === 'open') await promoteFromWaitlist(await Event.findById(event._id));
 
     if (event.status !== 'matching' || !wasAccepted) continue;
     // Draft matches were made with this person in them

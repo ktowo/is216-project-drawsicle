@@ -71,6 +71,23 @@ const confirmDelete = ref(false);
 const deleting = ref(false);
 
 const invite = computed(() => inviteFrom(route));
+// ?backup=<matchId>: making a gift you took over as a backup artist
+const backupId = computed(() => {
+  const value = route.query.backup;
+  return typeof value === 'string' && /^[a-f0-9]{24}$/.test(value) ? value : '';
+});
+const matchUrl = computed(() =>
+  backupId.value ? `/events/${route.params.id}/backups/${backupId.value}` : `/events/${route.params.id}/my-match`
+);
+const submissionUrl = computed(() =>
+  backupId.value
+    ? `/events/${route.params.id}/backups/${backupId.value}/submission`
+    : `/events/${route.params.id}/submission`
+);
+const matchesLink = computed(() =>
+  backupId.value ? { path: eventLink(route.params.id, '/matches'), query: { backup: backupId.value } } : eventLink(route.params.id, '/matches')
+);
+
 const backTo = computed(() =>
   invite.value ? { path: eventLink(route.params.id), query: { invite: invite.value } } : eventLink(route.params.id)
 );
@@ -135,8 +152,8 @@ async function load() {
 
   const [eventRes, matchRes, subRes] = await Promise.allSettled([
     api(`/events/${eventId}${qs({ invite: invite.value })}`),
-    api(`/events/${eventId}/my-match`),
-    api(`/events/${eventId}/submission`),
+    api(matchUrl.value),
+    api(submissionUrl.value),
   ]);
   if (id !== requestId) return;
 
@@ -151,7 +168,7 @@ async function load() {
   }
 
   event.value = eventRes.value.event;
-  document.title = `Submit your gift: ${event.value.name} · Drawsicle`;
+  document.title = `${backupId.value ? 'Your backup gift' : 'Submit your gift'}: ${event.value.name} · Drawsicle`;
 
   if (matchRes.status === 'rejected') {
     const reason = matchRes.reason;
@@ -161,6 +178,14 @@ async function load() {
     return;
   }
   match.value = matchRes.value.match;
+  if (match.value?.handedOver) {
+    unavailable.value = {
+      title: 'This gift went to a backup artist',
+      message: "The organisers asked someone else to make it, so there's nothing for you to submit here. Thanks for letting them know!",
+    };
+    loading.value = false;
+    return;
+  }
 
   if (subRes.status === 'fulfilled') {
     submission.value = subRes.value.submission ?? null;
@@ -298,7 +323,7 @@ async function submit() {
 
   saving.value = true;
   try {
-    const res = await api(`/events/${route.params.id}/submission`, { method: 'PUT', form: data });
+    const res = await api(submissionUrl.value, { method: 'PUT', form: data });
     submission.value = res.submission;
     if (match.value) match.value = { ...match.value, status: 'submitted', submission: res.submission };
     fillForm();
@@ -317,7 +342,7 @@ async function submit() {
 async function removeSubmission() {
   deleting.value = true;
   try {
-    await api(`/events/${route.params.id}/submission`, { method: 'DELETE' });
+    await api(submissionUrl.value, { method: 'DELETE' });
     submission.value = null;
     if (match.value) match.value = { ...match.value, status: 'assigned', submission: null };
     confirmDelete.value = false;
@@ -375,13 +400,13 @@ const counter = (value, max) => `${value.trim().length} / ${max}`;
     </EmptyState>
 
     <template v-else-if="loadError">
-      <PageHeader title="Submit your gift" :back="backTo" back-label="Back to event" />
+      <PageHeader :title="backupId ? 'Your backup gift' : 'Submit your gift'" :back="backTo" back-label="Back to event" />
       <ErrorBlock :message="loadError" @retry="load" />
     </template>
 
     <template v-else-if="event">
       <PageHeader
-        :title="isActive ? (submission ? 'Edit your gift' : 'Submit your gift') : 'Your gift'"
+        :title="`${isActive ? (submission ? 'Edit your' : 'Submit your') : 'Your'} ${backupId ? 'backup gift' : 'gift'}`"
         :subtitle="event.name"
         :back="backTo"
         back-label="Back to event"
@@ -426,7 +451,7 @@ const counter = (value, max) => `${value.trim().length} / ${max}`;
             <p class="muted small">You're making a gift for</p>
             <p class="recipient-name"><PersonLink :user="recipient" :size="0" fallback="your recipient" /></p>
           </div>
-          <RouterLink :to="eventLink(event, '/matches')" class="btn btn-ghost btn-sm">
+          <RouterLink :to="matchesLink" class="btn btn-ghost btn-sm">
             <Gift :size="16" aria-hidden="true" /> Their wishes
           </RouterLink>
         </section>

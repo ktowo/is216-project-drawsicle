@@ -59,6 +59,7 @@ const form = reactive({
   avoid: '',
   cannotDraw: [],
   notes: '',
+  canBackup: false,
   saveAsDefault: false,
 });
 const selectedIds = ref([]);
@@ -94,7 +95,9 @@ const backTo = computed(() =>
   invite.value ? { path: eventLink(route.params.id), query: { invite: invite.value } } : eventLink(route.params.id)
 );
 
-const existing = computed(() => application.value && ['pending', 'accepted'].includes(application.value.status));
+const existing = computed(
+  () => application.value && ['pending', 'accepted', 'waitlisted'].includes(application.value.status)
+);
 const typeChoices = computed(() => typeOptions(event.value?.allowedTypes));
 const communityName = computed(() => {
   if (!event.value) return '';
@@ -140,6 +143,7 @@ function prefill() {
   form.avoid = source.avoid || '';
   form.cannotDraw = [...(source.cannotDraw || [])];
   form.notes = application.value?.notes || '';
+  form.canBackup = Boolean(application.value?.canBackup);
   form.saveAsDefault = false;
   // Only one kind of creation allowed: nothing to choose
   if (allowed.length === 1) {
@@ -376,7 +380,10 @@ async function submit() {
     avoid: form.avoid.trim(),
     cannotDraw: [...form.cannotDraw],
     notes: form.notes.trim(),
+    canBackup: form.canBackup,
     saveAsDefault: form.saveAsDefault,
+    // A full event: this sign-up goes onto the waitlist
+    waitlist: Boolean(fullWarning.value),
   };
 
   try {
@@ -392,7 +399,8 @@ async function submit() {
       refreshUser();
     }
     const status = data.application?.status;
-    if (status === 'pending') toast.success('Sign-up sent! The organisers will review it soon.');
+    if (status === 'waitlisted' && !wasExisting) toast.success("You're on the waitlist. If a place opens up, you'll move in automatically.");
+    else if (status === 'pending') toast.success('Sign-up sent! The organisers will review it soon.');
     else if (wasExisting) toast.success('Your sign-up has been updated.');
     else toast.success("You're signed up! We'll let you know when matches are out.");
     const created = data.createdCharacters?.length || 0;
@@ -488,7 +496,8 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
       <form v-else class="apply-form" novalidate @submit.prevent="submit">
         <p v-if="fullWarning" class="alert alert-warning">
           <TriangleAlert :size="18" aria-hidden="true" />
-          This event is full right now, so a new sign-up won't go through unless someone withdraws first.
+          This event is full right now, so you'll join the waitlist. If someone drops out before sign-ups close, the
+          next person in line moves in and gets a notification.
         </p>
         <p v-if="event.requireApproval && !existing" class="intro muted">
           The organisers review each sign-up for this event. You'll get a notification once they've decided.
@@ -662,6 +671,16 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
                 <textarea id="apply-notes" v-model="form.notes" class="textarea short" :maxlength="LIMITS.formText" />
               </div>
             </FormField>
+
+            <label class="check">
+              <input v-model="form.canBackup" type="checkbox" />
+              <span>
+                <strong>I can be a backup artist</strong>
+                <span class="hint block">
+                  If someone can't finish their gift, the organisers may ask you to make an extra one. You can say no.
+                </span>
+              </span>
+            </label>
           </section>
         </div>
 
@@ -704,6 +723,7 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
                 <div><dt>Please avoid</dt><dd class="pre">{{ form.avoid.trim() || 'Nothing in particular' }}</dd></div>
                 <div><dt>Can't draw</dt><dd>{{ form.cannotDraw.join(', ') || 'Nothing listed' }}</dd></div>
                 <div v-if="form.notes.trim()"><dt>Notes for organisers</dt><dd class="pre">{{ form.notes.trim() }}</dd></div>
+                <div><dt>Backup artist</dt><dd>{{ form.canBackup ? 'Yes, happy to help' : 'No' }}</dd></div>
               </dl>
             </div>
           </div>
@@ -727,7 +747,7 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
           <button v-else type="submit" class="btn btn-primary submit" :disabled="saving">
             <LoaderCircle v-if="saving" :size="18" class="spin" aria-hidden="true" />
             <Send v-else :size="18" aria-hidden="true" />
-            {{ existing ? 'Save changes' : 'Send sign-up' }}
+            {{ existing ? 'Save changes' : fullWarning ? 'Join the waitlist' : 'Send sign-up' }}
           </button>
           <RouterLink :to="backTo" class="btn btn-ghost">Cancel</RouterLink>
           <button

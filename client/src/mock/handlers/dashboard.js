@@ -41,10 +41,11 @@ export function register(router) {
       state.members.filter((m) => m.user === user.id && m.roles.includes('organizer')).map((m) => m.event)
     );
     const applications = state.applications.filter(
-      (a) => a.user === user.id && ['pending', 'accepted'].includes(a.status)
+      (a) => a.user === user.id && ['pending', 'accepted', 'waitlisted'].includes(a.status)
     );
     const applicationByEvent = new Map(applications.map((a) => [a.event, a]));
-    const myMatches = state.matches.filter((m) => m.giver === user.id && m.published);
+    // Gifts I make: my own matches, plus any I took over as a backup
+    const myMatches = state.matches.filter((m) => (m.giver === user.id || m.backupGiver === user.id) && m.published);
     const unreadNotifications = state.notifications.filter((n) => n.user === user.id && !n.readAt).length;
     const allIds = new Set([...organizingIds, ...applicationByEvent.keys(), ...myMatches.map((m) => m.event)]);
 
@@ -71,13 +72,14 @@ export function register(router) {
     // My gifts to make: published matches in active events.
     // late: handed in after the deadline, or not handed in and the deadline has passed
     const assignments = myMatches
-      .filter((m) => eventById.get(m.event)?.status === 'active')
+      .filter((m) => eventById.get(m.event)?.status === 'active' && !(m.giver === user.id && m.backupGiver))
       .map((m) => {
         const event = eventById.get(m.event);
         const submission = state.submissions.find((s) => s.match === m.id);
         return {
           event: eventMini(event),
           recipientName: miniOf(state, m.recipient).displayName,
+          backupMatchId: m.giver === user.id ? null : m.id,
           submitted: Boolean(submission),
           late: submission ? Boolean(submission.late) : now.getTime() > toMs(event.submissionDeadline),
         };

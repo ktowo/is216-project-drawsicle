@@ -1,6 +1,6 @@
 // /events/:eventId/matches and /my-match (server/routes/match-router.js)
 import { generateMatches, scorePair, skippedAccountsWarning } from '@shared/matching.mjs';
-import { LIMITS } from '@shared/constants.mjs';
+import { LIMITS, PROGRESS_VALUES } from '@shared/constants.mjs';
 import { newId } from '../db.js';
 import {
   characterPublic,
@@ -92,6 +92,15 @@ function randomSeed() {
 }
 
 const organizerOnly = (ctx) => roleEvent(ctx, 'organizer');
+
+// A match the viewer is the backup for
+export function backupMatch(ctx, event, user) {
+  const match = ctx.state.matches.find(
+    (m) => m.id === ctx.params.matchId && m.event === event.id && m.backupGiver === user.id && m.published
+  );
+  if (!match) throw httpError(404, "You aren't making a backup gift for that match.", 'NO_MATCH');
+  return match;
+}
 
 export function register(router) {
   router.post('/events/:eventId/matches/generate', (ctx) => {
@@ -323,10 +332,8 @@ export function register(router) {
 
   // The giver's view of their match: who they're making a gift for and what that person
   // asked for. Never says who is making the viewer's own gift.
-  router.get('/events/:eventId/my-match', (ctx) => {
-    const { user, event } = participantEvent(ctx);
-    const { state } = ctx;
-    const match = myMatch(ctx, event, user);
+  // What the person making a gift sees (their own match, or one they took over as a backup)
+  function myMatchJson(state, event, match, { asBackup = false } = {}) {
     const recipientApplication =
       state.applications.find((a) => a.id === match.recipientApplication) ||
       state.applications.find((a) => a.event === event.id && a.user === match.recipient) ||
@@ -335,26 +342,169 @@ export function register(router) {
     const submission = submissionForMatch(state, match.id);
 
     return {
-      match: {
-        id: match.id,
-        status: match.status,
-        submissionDeadline: event.submissionDeadline,
-        recipient: {
-          displayName: mini.displayName,
-          username: mini.username,
-          avatarUrl: mini.avatarUrl,
-          communityUsername: recipientApplication?.communityUsername || '',
-          wantsTypes: [...(recipientApplication?.wantsTypes || [])],
-          likes: recipientApplication?.likes || '',
-          avoid: recipientApplication?.avoid || '',
-          // Archived characters stay visible: they were offered for this event
-          characters: (recipientApplication?.offeredCharacters || [])
-            .map((id) => state.characters.find((c) => c.id === id))
-            .filter(Boolean)
-            .map((c) => characterPublic(c)),
-        },
-        submission: submission ? submissionPublic(submission) : null,
+      id: match.id,
+      status: match.status,
+      asBackup,
+      handedOver: !asBackup && Boolean(match.backupGiver),
+      progress: match.progress?.stage ? { stage: match.progress.stage, note: match.progress.note || '', at: match.progress.at } : null,
+      submissionDeadline: event.submissionDeadline,
+      recipient: {
+        displayName: mini.displayName,
+        username: mini.username,
+        avatarUrl: mini.avatarUrl,
+        communityUsername: recipientApplication?.communityUsername || '',
+        wantsTypes: [...(recipientApplication?.wantsTypes || [])],
+        likes: recipientApplication?.likes || '',
+        avoid: recipientApplication?.avoid || '',
+        // Archived characters stay visible: they were offered for this event
+        characters: (recipientApplication?.offeredCharacters || [])
+          .map((id) => state.characters.find((c) => c.id === id))
+          .filter(Boolean)
+          .map((c) => characterPublic(c)),
       },
+      submission: submission && (asBackup || !match.backupGiver) ? submissionPublic(submission) : null,
     };
+  }
+
+  router.get('/events/:eventId/my-match', (ctx) => {
+    const { user, event } = participantEvent(ctx);
+    return { match: myMatchJson(ctx.state, event, myMatch(ctx, event, user)) };
+  });
+
+  // ---------- Progress check-ins ----------
+
+  function saveProgress(ctx, event, match) {
+    if (event.status !== 'active') throw httpError(409, 'Progress can only be shared while gifts are being made.', 'WRONG_STATUS');
+    const stage = String(ctx.body.stage ?? '');
+    if (!PROGRESS_VALUES.includes(stage)) throw invalid('Pick how far along you are.');
+    const note = typeof ctx.body.note === 'string' ? ctx.body.note.trim() : '';
+    if (note.length > LIMITS.progressNote) throw invalid(`Keep the note under ${LIMITS.progressNote} characters.`);
+    match.progress = { stage, note, at: ctx.now.toISOString() };
+    return { progress: { ...match.progress } };
+  }
+
+  router.put('/events/:eventId/my-match/progress', (ctx) => {
+    const { user, event } = participantEvent(ctx);
+    const match = myMatch(ctx, event, user);
+    if (match.backupGiver) {
+      throw httpError(409, 'This gift was handed to a backup artist, so you no longer need to make it.', 'HANDED_OVER');
+    }
+    return saveProgress(ctx, event, match);
+  });
+
+  // ---------- Backup artists ----------
+
+  router.get('/events/:eventId/backups/mine', (ctx) => {
+    const { user, event } = participantEvent(ctx);
+    const { state } = ctx;
+    const matches = state.matches.filter((m) => m.event === event.id && m.backupGiver === user.id && m.published);
+    return { backups: matches.map((m) => myMatchJson(state, event, m, { asBackup: true })) };
+  });
+
+  router.get('/events/:eventId/backups/volunteers/:matchId', (ctx) => {
+    const { event } = organizerOnly(ctx);
+    const { state } = ctx;
+    const match = state.matches.find((m) => m.id === ctx.params.matchId && m.event === event.id);
+    if (!match) throw httpError(404, 'Match not found.', 'NOT_FOUND');
+    const volunteers = state.applications.filter(
+      (a) =>
+        a.event === event.id &&
+        a.status === 'accepted' &&
+        a.canBackup &&
+        a.user !== match.giver &&
+        a.user !== match.recipient &&
+        (findUser(state, a.user)?.status || 'active') === 'active'
+    );
+    return {
+      volunteers: volunteers.map((a) => {
+        const own = state.matches.find((m) => m.event === event.id && m.giver === a.user && m.published);
+        return {
+          user: miniOf(state, a.user),
+          submittedOwn: Boolean(own && submissionForMatch(state, own.id)),
+          backingUp: state.matches.filter((m) => m.event === event.id && m.backupGiver === a.user).length,
+        };
+      }),
+    };
+  });
+
+  router.get('/events/:eventId/backups/:matchId', (ctx) => {
+    const { user, event } = participantEvent(ctx);
+    const match = backupMatch(ctx, event, user);
+    return { match: myMatchJson(ctx.state, event, match, { asBackup: true }) };
+  });
+
+  router.put('/events/:eventId/backups/:matchId/progress', (ctx) => {
+    const { user, event } = participantEvent(ctx);
+    return saveProgress(ctx, event, backupMatch(ctx, event, user));
+  });
+
+  function publishedMatchForBackup(ctx, event) {
+    const { state } = ctx;
+    const match = state.matches.find((m) => m.id === ctx.params.matchId && m.event === event.id && m.published);
+    if (!match) throw httpError(404, 'Match not found.', 'NOT_FOUND');
+    if (event.status !== 'active') throw httpError(409, 'Backups can only be arranged while gifts are being made.', 'WRONG_STATUS');
+    if (submissionForMatch(state, match.id)) throw httpError(409, 'This gift has already been submitted.', 'ALREADY_SUBMITTED');
+    return match;
+  }
+
+  router.put('/events/:eventId/matches/:matchId/backup', (ctx) => {
+    const { event } = organizerOnly(ctx);
+    const { state } = ctx;
+    const match = publishedMatchForBackup(ctx, event);
+    const userId = String(ctx.body.userId ?? '');
+    if (match.giver === userId || match.recipient === userId) throw invalid("That person can't make this gift.");
+    const volunteer = state.applications.find(
+      (a) => a.event === event.id && a.user === userId && a.status === 'accepted' && a.canBackup
+    );
+    if (!volunteer) throw invalid("That person didn't volunteer as a backup in this event.");
+    const previous = match.backupGiver;
+    match.backupGiver = userId;
+    match.backupAssignedAt = ctx.now.toISOString();
+    match.progress = null;
+    const recipientName = miniOf(state, match.recipient).displayName;
+    notify(state, userId, {
+      type: 'backup_assigned',
+      title: `Thank you! You're making a backup gift in ${event.name}`,
+      message: `You're making a gift for ${recipientName}. It's a secret, just like your own. Gifts are due ${formatDay(event.submissionDeadline)}.`,
+      link: `/events/${event.id}/matches?backup=${match.id}`,
+    });
+    if (!previous) {
+      notify(state, match.giver, {
+        type: 'event_status',
+        title: `Your gift for ${event.name} was handed to a backup artist`,
+        message: "The organisers found someone else to make it, so you don't need to any more. If that's a mistake, ask them.",
+        link: `/events/${event.id}/matches`,
+      });
+    } else if (previous !== userId) {
+      notify(state, previous, {
+        type: 'event_status',
+        title: `You're no longer making a backup gift in ${event.name}`,
+        message: 'The organisers asked someone else. Thanks for offering!',
+        link: `/events/${event.id}`,
+      });
+    }
+    return { matches: adminList(state, event.id) };
+  });
+
+  router.delete('/events/:eventId/matches/:matchId/backup', (ctx) => {
+    const { event } = organizerOnly(ctx);
+    const { state } = ctx;
+    const match = publishedMatchForBackup(ctx, event);
+    if (!match.backupGiver) throw httpError(404, 'This gift has no backup artist.', 'NOT_FOUND');
+    notify(state, match.backupGiver, {
+      type: 'event_status',
+      title: `You're no longer making a backup gift in ${event.name}`,
+      message: 'The original artist is making it after all. Thanks for offering!',
+      link: `/events/${event.id}`,
+    });
+    notify(state, match.giver, {
+      type: 'event_status',
+      title: `Your gift for ${event.name} is yours again`,
+      message: 'The organisers handed it back to you.',
+      link: `/events/${event.id}/matches`,
+    });
+    match.backupGiver = null;
+    match.backupAssignedAt = null;
+    return { matches: adminList(state, event.id) };
   });
 }

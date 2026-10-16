@@ -78,9 +78,10 @@ router.get('/', requireAuth, asyncHandler(async (req, res) => {
 
   const [organizerRows, applications, myMatches, unreadNotifications] = await Promise.all([
     EventMember.find({ user: user._id, roles: 'organizer' }).select('event'),
-    Application.find({ user: user._id, status: { $in: ['pending', 'accepted'] } }).select('event status'),
-    Match.find({ giver: user._id, published: true })
-      .select('event recipient status')
+    Application.find({ user: user._id, status: { $in: ['pending', 'accepted', 'waitlisted'] } }).select('event status'),
+    // Gifts I make: my own matches, plus any I took over as a backup
+    Match.find({ $or: [{ giver: user._id }, { backupGiver: user._id }], published: true })
+      .select('event recipient status giver backupGiver')
       .populate('recipient', 'displayName username avatarUrl email'),
     Notification.countDocuments({ user: user._id, readAt: null }),
   ]);
@@ -117,7 +118,11 @@ router.get('/', requireAuth, asyncHandler(async (req, res) => {
     });
 
   // My gifts to make: published matches in active events
-  const assignmentMatches = myMatches.filter((m) => eventById.get(m.event.toString())?.status === 'active');
+  // ...except my own matches that went to a backup: nothing left for me to do
+  const handedOver = (m) => m.giver.equals(user._id) && Boolean(m.backupGiver);
+  const assignmentMatches = myMatches.filter(
+    (m) => eventById.get(m.event.toString())?.status === 'active' && !handedOver(m)
+  );
   const [stats, mySubmissions] = await Promise.all([
     organizerStats(organizing, now),
     assignmentMatches.length
@@ -134,6 +139,8 @@ router.get('/', requireAuth, asyncHandler(async (req, res) => {
       return {
         event: event.toMini(),
         recipientName: userMini(m.recipient).displayName,
+        // Making it as a backup: links go to /events/:id/matches?backup=<matchId>
+        backupMatchId: m.giver.equals(user._id) ? null : m._id.toString(),
         submitted: Boolean(submission),
         late: submission ? Boolean(submission.late) : now > event.submissionDeadline,
       };

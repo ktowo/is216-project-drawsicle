@@ -21,7 +21,7 @@ import {
 } from '../model.js';
 import { formatDay, httpError, invalid } from '../util.js';
 import { loadEvent, myMatch, participantEvent, roleEvent } from './common.js';
-import { adminMatches } from './matches.js';
+import { adminMatches, backupMatch } from './matches.js';
 
 const IMAGE_MB = Number((LIMITS.imageBytes / (1024 * 1024)).toFixed(1));
 const LINK_LABEL_MAX = 60;
@@ -156,7 +156,11 @@ function requireActive(event) {
 
 function giver(ctx) {
   const { user, event } = participantEvent(ctx);
-  return { user, event, match: myMatch(ctx, event, user) };
+  const match = ctx.params.matchId ? backupMatch(ctx, event, user) : myMatch(ctx, event, user);
+  if (!ctx.params.matchId && match.backupGiver) {
+    throw httpError(409, 'This gift was handed to a backup artist, so you no longer need to make it.', 'HANDED_OVER');
+  }
+  return { user, event, match };
 }
 
 // ---------- Reminder text ----------
@@ -184,13 +188,15 @@ function deadlineLine(event, now) {
 }
 
 export function register(router) {
-  router.get('/events/:eventId/submission', (ctx) => {
+  function getGift(ctx) {
     const { match } = giver(ctx);
     const submission = submissionForMatch(ctx.state, match.id);
     return { submission: submission ? submissionPublic(submission) : null };
-  });
+  }
+  router.get('/events/:eventId/submission', getGift);
+  router.get('/events/:eventId/backups/:matchId/submission', getGift);
 
-  router.put('/events/:eventId/submission', async (ctx) => {
+  async function saveGift(ctx) {
     const { user, event, match } = giver(ctx);
     const { state } = ctx;
     requireActive(event);
@@ -226,7 +232,7 @@ export function register(router) {
       id: newId(),
       event: event.id,
       match: match.id,
-      giver: match.giver,
+      giver: user.id,
       recipient: match.recipient,
       submittedAt: at,
       verified: false,
@@ -268,9 +274,11 @@ export function register(router) {
 
     ctx.status = existing ? 200 : 201;
     return { submission: submissionPublic(submission) };
-  });
+  }
+  router.put('/events/:eventId/submission', saveGift);
+  router.put('/events/:eventId/backups/:matchId/submission', saveGift);
 
-  router.delete('/events/:eventId/submission', (ctx) => {
+  function deleteGift(ctx) {
     const { event, match } = giver(ctx);
     requireActive(event);
     const submission = submissionForMatch(ctx.state, match.id);
@@ -279,7 +287,9 @@ export function register(router) {
     match.status = 'assigned';
     match.updatedAt = ctx.now.toISOString();
     return { ok: true };
-  });
+  }
+  router.delete('/events/:eventId/submission', deleteGift);
+  router.delete('/events/:eventId/backups/:matchId/submission', deleteGift);
 
   // ---------- Organisers ----------
 
@@ -420,20 +430,29 @@ export function register(router) {
       ...row,
       submission: submissionForMatch(state, row.match.id),
     }));
+    // Who actually made each gift: the backup when one took it over
+    const madeBy = (r) => (r.submission && r.submission.giver !== r.match.giver && r.admin.backupGiver ? r.admin.backupGiver : r.admin.giver);
     const received = rows.find((r) => r.match.recipient === user.id);
     const given = rows.find((r) => r.match.giver === user.id);
+    const handedOver = Boolean(given?.match.backupGiver);
+    const backups = rows.filter((r) => r.submission && r.submission.giver === user.id && r.match.giver !== user.id);
 
     return {
       event: serializeEvent(state, event, user, viewer),
       received: received
-        ? { giver: received.admin.giver, submission: received.submission ? submissionPublic(received.submission) : null }
+        ? { giver: madeBy(received), submission: received.submission ? submissionPublic(received.submission) : null }
         : null,
       given: given
-        ? { recipient: given.admin.recipient, submission: given.submission ? submissionPublic(given.submission) : null }
+        ? {
+            recipient: given.admin.recipient,
+            handedOver,
+            submission: given.submission && !handedOver ? submissionPublic(given.submission) : null,
+          }
         : null,
+      backups: backups.map((r) => ({ recipient: r.admin.recipient, submission: submissionPublic(r.submission) })),
       gallery: rows
         .filter((r) => r.submission)
-        .map((r) => ({ giver: r.admin.giver, recipient: r.admin.recipient, submission: submissionPublic(r.submission) })),
+        .map((r) => ({ giver: madeBy(r), recipient: r.admin.recipient, submission: submissionPublic(r.submission) })),
     };
   });
 }

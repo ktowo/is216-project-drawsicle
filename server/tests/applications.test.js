@@ -368,7 +368,7 @@ test('with approval on, organisers accept or reject each sign-up', async () => {
   const list = await org.agent.get(listUrl).expect(200);
   assert.deepEqual(list.body.applications.map((a) => a.user.displayName), ['Pip', 'Sol']);
   assert.equal(list.body.applications[0].offeredCharacters[0].name, 'Pip');
-  assert.deepEqual(list.body.counts, { pending: 2, accepted: 0, rejected: 0, withdrawn: 0 });
+  assert.deepEqual(list.body.counts, { pending: 2, accepted: 0, waitlisted: 0, rejected: 0, withdrawn: 0 });
   await org.agent.get(`${listUrl}?status=banana`).expect(400);
 
   const review = (id, status, agent = org.agent) =>

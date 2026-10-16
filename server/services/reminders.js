@@ -71,7 +71,7 @@ async function eachEvent(events, label, fn) {
 // Published matches in an event whose giver hasn't submitted anything yet
 async function matchesWithoutSubmission(eventId) {
   const [matches, submitted] = await Promise.all([
-    Match.find({ event: eventId, published: true }).select('giver'),
+    Match.find({ event: eventId, published: true }).select('giver backupGiver'),
     Submission.find({ event: eventId }).distinct('match'),
   ]);
   const done = new Set(submitted.map(String));
@@ -179,7 +179,8 @@ async function remindGivers(now, summary) {
     if (!pending.length) return;
 
     const created = await notifyMany(
-      pending.map((m) => m.giver),
+      // A backup artist took over some gifts; they get the reminder instead
+      pending.map((m) => m.backupGiver || m.giver),
       {
         type: 'deadline_reminder',
         title: `Your gift for ${event.name} is due ${timeLeft(event.submissionDeadline, now)}`,
