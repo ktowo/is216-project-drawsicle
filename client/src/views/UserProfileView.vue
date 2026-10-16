@@ -57,6 +57,10 @@ const isMe = computed(() => {
   return Boolean(me.username) && me.username.toLowerCase() === String(profile.value.username || '').toLowerCase();
 });
 
+const hasTags = computed(() => {
+  const t = profile.value?.artistTags;
+  return Boolean(t && (t.makes?.length || t.themes?.length));
+});
 const hiddenExchanges = computed(() => Math.max(0, (stats.value.exchangesCompleted || 0) - exchanges.value.length));
 const hiddenEvents = computed(() => Math.max(0, (stats.value.eventsOrganized || 0) - organizing.value.length));
 
@@ -277,6 +281,10 @@ function goToLookup() {
         />
       </ProfileHeader>
 
+      <p v-if="isMe && !hasTags" class="alert alert-info own-note">
+        Add artist tags so people who love the same things can find you.
+        <RouterLink to="/find-your-style">Find your style</RouterLink> takes about a minute.
+      </p>
       <p v-if="isMe" class="alert alert-info own-note">
         This is how other people see you. Your email, characters and sign-ups are never shown here.
         <RouterLink to="/privacy#visibility">What's public?</RouterLink>

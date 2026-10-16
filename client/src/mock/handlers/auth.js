@@ -64,6 +64,7 @@ export function register(router) {
       avatarUrl: null,
       bio: '',
       socials: emptySocials(),
+      artistTags: { makes: [], themes: [], activity: '', cardColor: '' },
       defaultForm: { communityUsername: '', canCreate: [], wantsTypes: [], likes: '', avoid: '', cannotDraw: [] },
       notificationPrefs: { emailReminders: true, emailMatches: true, emailEventUpdates: false },
       createdAt: now,

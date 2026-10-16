@@ -1,6 +1,6 @@
 // /users/:username: public artist profiles (server/routes/user-router.js)
 import { isId, newId } from '../db.js';
-import { findUser, miniOf, notify, serializeEvent, submissionPublic, userMini, userProfile } from '../model.js';
+import { findUser, miniOf, notify, serializeEvent, submissionPublic, userMini, userProfile, userPublic } from '../model.js';
 import { httpError } from '../util.js';
 import { earnedBadges } from '@shared/badges.mjs';
 import { LIMITS } from '@shared/constants.mjs';
@@ -24,12 +24,12 @@ function findProfileUser(state, handle) {
 
 const isListed = (event) => event.publicity === 'public' && event.status !== 'draft';
 // Exchanges and gifts only ever come from finished public events
-const isFinished = (event) => event.publicity === 'public' && event.status === 'completed' && !event.disabledAt;
+export const isFinished = (event) => event.publicity === 'public' && event.status === 'completed' && !event.disabledAt;
 const newestCompletedFirst = (a, b) =>
   String(b.completedAt || '').localeCompare(String(a.completedAt || '')) || b.id.localeCompare(a.id);
 
 // Deactivated and banned accounts have no public profile
-function visibleProfileUser(state, handle) {
+export function visibleProfileUser(state, handle) {
   const user = findProfileUser(state, handle);
   if (!user || (user.status || 'active') !== 'active') throw notFound();
   return user;
@@ -37,7 +37,7 @@ function visibleProfileUser(state, handle) {
 
 // Gifts this artist made that both they and the recipient agreed to show publicly,
 // from finished public events, newest first
-function publicGifts(state, user) {
+export function publicGifts(state, user) {
   if (!user.profilePrivacy?.showGifts) return [];
   const agreed = (id) => {
     const recipient = findUser(state, id);
@@ -53,7 +53,7 @@ function publicGifts(state, user) {
 }
 
 // Gifts they made in finished public events, as the facts shared/badges.mjs needs
-function badgeGifts(state, user) {
+export function badgeGifts(state, user) {
   return state.submissions
     .filter((s) => s.giver === user.id)
     .map((s) => ({ s, event: state.events.find((e) => e.id === s.event) }))
@@ -65,6 +65,46 @@ function badgeGifts(state, user) {
       thanked: Boolean(s.thanks?.at),
       asBackup: state.matches.find((m) => m.id === s.match)?.giver !== user.id,
     }));
+}
+
+// Badges for a public profile or card. Hidden exchanges stay hidden: no badges that hint at them.
+export function profileBadges(state, user) {
+  const organized = new Set(
+    state.members.filter((m) => m.user === user.id && m.roles.includes('organizer')).map((m) => m.event)
+  );
+  const eventsRun = state.events.filter((e) => organized.has(e.id) && isFinished(e)).length;
+  const showExchanges = user.profilePrivacy?.showExchanges !== false;
+  return earnedBadges({ eventsRun, gifts: showExchanges ? badgeGifts(state, user) : null });
+}
+
+// The compact card used by Discover and hover cards (server/services/artists.js). viewer may be null.
+export function artistCard(state, user, viewer) {
+  const showExchanges = user.profilePrivacy?.showExchanges !== false;
+  const card = {
+    user: userMini(user),
+    artistTags: userPublic(user).artistTags,
+    badges: profileBadges(state, user),
+    gifts: publicGifts(state, user)
+      .slice(0, 3)
+      .map((s) => {
+        const { id, title, images, thumbnails, imageDescriptions, contentWarnings } = submissionPublic(s);
+        return {
+          id,
+          title,
+          image: thumbnails?.[0] || images[0] || null,
+          alt: imageDescriptions?.[0] || '',
+          contentWarnings: contentWarnings || [],
+        };
+      }),
+  };
+  if (showExchanges) {
+    const joined = new Set(
+      state.applications.filter((a) => a.user === user.id && a.status === 'accepted').map((a) => a.event)
+    );
+    card.exchangesCompleted = state.events.filter((e) => joined.has(e.id) && isFinished(e)).length;
+  }
+  if (viewer) card.following = viewer.id !== user.id && Boolean(relation(state, viewer.id, user.id)?.following);
+  return card;
 }
 
 // What the gallery shows of a gift: never the private note to the recipient or the organisers' checks
@@ -110,6 +150,12 @@ export function register(router) {
 
   // ---------- The friend list (friends-router.js) ----------
   router.get('/friends', (ctx) => friendList(ctx.state, ctx.requireAuth().id));
+
+  // The small card shown when you hover or focus someone's name (and on Discover)
+  router.get('/users/:username/card', (ctx) => {
+    const user = visibleProfileUser(ctx.state, ctx.params.username);
+    return { card: artistCard(ctx.state, user, ctx.currentUser()) };
+  });
 
   router.get('/users/:username/gifts', (ctx) => {
     const { state } = ctx;
