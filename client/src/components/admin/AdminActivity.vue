@@ -20,6 +20,9 @@ const ACTIONS = {
   'event.cancel': 'cancelled',
   'event.restore': 'restored',
   'event.delete': 'deleted',
+  'report.resolve': 'took action on a report about',
+  'report.dismiss': 'closed with no action a report about',
+  'report.reopen': 'reopened a report about',
 };
 
 const targetType = ref('');
@@ -48,6 +51,7 @@ onMounted(load);
         <option value="">Everything</option>
         <option value="user">Account actions</option>
         <option value="event">Event actions</option>
+        <option value="report">Reports</option>
       </select>
     </div>
 

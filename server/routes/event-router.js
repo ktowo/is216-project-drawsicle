@@ -178,6 +178,7 @@ function readEventInput(body) {
   }
   if (src.allowedTypes !== undefined) input.allowedTypes = readTypes(src.allowedTypes);
   if (src.requireApproval !== undefined) input.requireApproval = readBoolean(src.requireApproval, 'Require approval');
+  if (src.adultOnly !== undefined) input.adultOnly = readBoolean(src.adultOnly, 'Adults only');
   if (src.timeZone !== undefined && src.timeZone !== null && src.timeZone !== '') {
     if (!isTimeZone(src.timeZone)) throw invalid("That time zone isn't one we recognise.");
     input.timeZone = src.timeZone;
@@ -436,6 +437,7 @@ router.get('/:eventId', optionalAuth, loadEvent, requireVisible, asyncHandler(as
 const OPEN_ONLY_FIELDS = {
   allowedTypes: 'Allowed creation types',
   requireApproval: 'Approval setting',
+  adultOnly: 'Adults-only setting',
   minParticipants: 'Minimum participants',
   maxParticipants: 'Maximum participants',
   publicity: 'Publicity',
@@ -619,7 +621,7 @@ router.post('/:eventId/invite/regenerate', ...organizerOnly, asyncHandler(async 
 // Settings copied into a new draft. People, matches, gifts and the invite code are not.
 const COPIED_FIELDS = [
   'description', 'theme', 'season', 'rules', 'tags', 'platform', 'platformName', 'platformLink', 'timeZone', 'discordWebhookUrl',
-  'minParticipants', 'maxParticipants', 'allowedTypes', 'publicity', 'requireApproval', 'bannerUrl',
+  'minParticipants', 'maxParticipants', 'allowedTypes', 'publicity', 'requireApproval', 'adultOnly', 'bannerUrl',
 ];
 const DUPLICATE_SIGNUP_DAYS = 14;
 

@@ -91,6 +91,9 @@ export function register(router) {
     }
 
     const form = readSignupForm(ctx.body, event);
+    if (isNew && event.adultOnly && ctx.body?.confirmAdult !== true) {
+      throw httpError(400, "This event is for adults. Confirm you're 18 or older to sign up.", 'AGE_CONFIRM');
+    }
 
     // Characters from the library: mine, and not archived unless they're already on this application
     const picked = form.offeredCharacterIds.map((id) => state.characters.find((c) => c.id === id && c.owner === user.id));

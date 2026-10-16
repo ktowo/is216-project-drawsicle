@@ -20,6 +20,7 @@ import SubmissionGallery from '@/components/events/SubmissionGallery.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import ErrorBlock from '@/components/ui/ErrorBlock.vue';
 import { auth } from '@/stores/auth';
+import ReportButton from '@/components/ReportButton.vue';
 import { toast } from '@/stores/toast';
 import { api } from '@/api';
 
@@ -251,6 +252,12 @@ function goToLookup() {
           <UserX :size="16" aria-hidden="true" />
           {{ viewerFlags.blocked ? 'Allow matching with them again' : "Don't match me with them" }}
         </button>
+        <ReportButton
+          v-if="!isMe && profile.id"
+          target-type="user"
+          :target-id="profile.id"
+          :what="`${profile.displayName || 'this artist'}'s profile`"
+        />
       </ProfileHeader>
 
       <p v-if="isMe" class="alert alert-info own-note">

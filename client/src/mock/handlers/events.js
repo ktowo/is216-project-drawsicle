@@ -62,6 +62,7 @@ const COUNT_FIELDS = {
 const OPEN_ONLY_FIELDS = {
   allowedTypes: 'Allowed creation types',
   requireApproval: 'Approval setting',
+  adultOnly: 'Adults-only setting',
   minParticipants: 'Minimum participants',
   maxParticipants: 'Maximum participants',
   publicity: 'Publicity',
@@ -132,6 +133,7 @@ function readEventInput(body) {
   }
   if (src.allowedTypes !== undefined) input.allowedTypes = readTypes(src.allowedTypes);
   if (src.requireApproval !== undefined) input.requireApproval = readBoolean(src.requireApproval, 'Require approval');
+  if (src.adultOnly !== undefined) input.adultOnly = readBoolean(src.adultOnly, 'Adults only');
   if (src.timeZone !== undefined && src.timeZone !== null && src.timeZone !== '') {
     if (!isTimeZone(src.timeZone)) throw invalid("That time zone isn't one we recognise.");
     input.timeZone = src.timeZone;
@@ -185,7 +187,7 @@ function rejectIfCompleted(event) {
 
 const COPIED_FIELDS = [
   'description', 'theme', 'season', 'rules', 'tags', 'platform', 'platformName', 'platformLink', 'timeZone', 'discordWebhookUrl',
-  'minParticipants', 'maxParticipants', 'allowedTypes', 'publicity', 'requireApproval', 'bannerUrl',
+  'minParticipants', 'maxParticipants', 'allowedTypes', 'publicity', 'requireApproval', 'adultOnly', 'bannerUrl',
 ];
 const DUPLICATE_SIGNUP_DAYS = 14;
 
@@ -359,6 +361,7 @@ export function register(router) {
       allowedTypes: [...CREATION_TYPE_VALUES],
       publicity: 'public',
       requireApproval: false,
+      adultOnly: false,
       ...storable(input),
       status: 'draft',
       inviteCode: randomCode(),

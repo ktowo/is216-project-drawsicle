@@ -1,9 +1,10 @@
 <script setup>
 import { computed, watch, nextTick, useId } from 'vue';
 import { Plus, Trash2, Link as LinkIcon } from 'lucide-vue-next';
-import { LIMITS } from '@shared/constants.mjs';
+import { LIMITS, CONTENT_WARNINGS } from '@shared/constants.mjs';
 import FormField from '@/components/ui/FormField.vue';
 import TagInput from '@/components/ui/TagInput.vue';
+import ChoiceChips from '@/components/ui/ChoiceChips.vue';
 
 // Every character input. v-model is { name, species, tags, description, referenceLinks, notesForArtists }
 // (see emptyCharacter() in ./character-form.js). Each change emits a new object.
@@ -256,6 +257,17 @@ const count = (value) => String(value || '').length;
         </div>
       </template>
     </FormField>
+
+    <fieldset class="warnings">
+      <legend :id="fid('cw')" class="label">Content warnings <span class="hint">(optional)</span></legend>
+      <p class="hint warnings-hint">If the reference art shows any of these, say so. Artists see it before they open the links.</p>
+      <ChoiceChips
+        :model-value="form.contentWarnings || []"
+        :options="CONTENT_WARNINGS"
+        :aria-labelledby="fid('cw')"
+        @update:model-value="update('contentWarnings', $event)"
+      />
+    </fieldset>
   </div>
 </template>
 
@@ -267,6 +279,15 @@ const count = (value) => String(value || '').length;
 }
 .character-fields > .field + .field {
   margin-top: 0;
+}
+.warnings {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.warnings-hint {
+  margin: 2px 0 10px;
 }
 .two-col {
   display: grid;

@@ -42,6 +42,7 @@ const capacity = computed(() => {
       <div class="badges">
         <StatusBadge :status="event.status" />
         <span v-if="event.disabled" class="badge badge-disabled">Disabled by admin</span>
+        <span v-if="event.adultOnly" class="adult-tag" title="Adults only">18+</span>
         <span v-if="event.publicity === 'private'" class="private-tag">
           <Lock :size="13" aria-hidden="true" /> Private
         </span>
@@ -107,6 +108,14 @@ const capacity = computed(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+.adult-tag {
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1.5px solid var(--danger);
+  color: var(--danger);
+  font-size: 0.75rem;
+  font-weight: 800;
 }
 .private-tag {
   display: inline-flex;

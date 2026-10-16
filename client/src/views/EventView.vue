@@ -48,6 +48,7 @@ import {
 } from '@/utils/events';
 import { eventCalendarEntries, downloadIcs } from '@/utils/calendar';
 import AnnouncementsPanel from '@/components/events/AnnouncementsPanel.vue';
+import ReportButton from '@/components/ReportButton.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -245,6 +246,9 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
               <component :is="isPrivate ? Lock : Globe" :size="14" aria-hidden="true" />
               {{ isPrivate ? 'Private, invite only' : 'Public' }}
             </span>
+            <span v-if="event.adultOnly" class="pill adult" title="Everyone who signs up confirms they are 18 or older">
+              18+ Adults only
+            </span>
           </div>
           <h1 class="title">{{ event.name }}</h1>
           <p v-if="seasonQuery || event.theme" class="meta">
@@ -348,6 +352,13 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
               <p v-else-if="isPrivate" class="muted small share-note">
                 <Lock :size="14" aria-hidden="true" /> Private event: only organisers can share the invite link.
               </p>
+              <ReportButton
+                v-if="!event.viewer?.isOrganizer"
+                target-type="event"
+                :target-id="event.id"
+                :what="event.name"
+                look="link"
+              />
             </div>
           </section>
 
@@ -496,6 +507,11 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+.pill.adult {
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-weight: 800;
 }
 .pill {
   display: inline-flex;
@@ -682,7 +698,10 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
 }
 .share-row {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
+  gap: 4px 14px;
   margin-top: -6px;
 }
 .share-row:empty {

@@ -1,6 +1,9 @@
 <script setup>
 import { computed } from 'vue';
-import { ExternalLink, Check, Archive, StickyNote } from 'lucide-vue-next';
+import { ExternalLink, Check, Archive, StickyNote, TriangleAlert } from 'lucide-vue-next';
+import { CONTENT_WARNINGS } from '@shared/constants.mjs';
+
+const WARNING_LABELS = Object.fromEntries(CONTENT_WARNINGS.map((w) => [w.value, w.label]));
 
 // One character from someone's library. With `selectable` the whole card toggles
 // (click, Space or Enter) for picking characters in the event sign-up form.
@@ -41,6 +44,8 @@ function linkText(link) {
     return link.url;
   }
 }
+
+const warnings = computed(() => (props.character.contentWarnings || []).map((w) => WARNING_LABELS[w] || w));
 
 const interactive = computed(() => props.selectable && !props.disabled);
 
@@ -99,6 +104,11 @@ function onKeydown(e) {
       <li v-if="compact && character.tags.length > 5" class="tag more">+{{ character.tags.length - 5 }}</li>
     </ul>
 
+    <p v-if="warnings.length" class="cw">
+      <TriangleAlert :size="15" aria-hidden="true" />
+      <span><span class="cw-label">{{ compact ? 'Warnings:' : 'Heads up, the references show:' }}</span> {{ warnings.join(', ') }}</span>
+    </p>
+
     <ul v-if="showLinks && links.length" class="links" aria-label="Reference links">
       <li v-for="(link, i) in links" :key="`${i}-${link.url}`">
         <a :href="link.url" target="_blank" rel="noopener noreferrer" class="ref-link" @click.stop>
@@ -125,6 +135,24 @@ function onKeydown(e) {
 </template>
 
 <style scoped>
+.cw {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 0.85rem;
+}
+.cw svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.cw-label {
+  font-weight: 700;
+}
 .character-card {
   display: flex;
   flex-direction: column;

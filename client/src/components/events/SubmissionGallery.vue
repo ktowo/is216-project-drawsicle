@@ -5,6 +5,8 @@ import { ArrowRight, ExternalLink, FileText, Palette, Gift, Images } from 'lucid
 import ImageLightbox from './ImageLightbox.vue';
 import ContentWarningGate from './ContentWarningGate.vue';
 import PersonLink from './PersonLink.vue';
+import ReportButton from '@/components/ReportButton.vue';
+import { auth } from '@/stores/auth';
 import { assetUrl } from '@/api';
 import { safeUrl, linkHost, typeLabel } from '@/utils/events';
 import { REACTIONS } from '@shared/constants.mjs';
@@ -122,6 +124,16 @@ function open(tile) {
               </a>
             </li>
           </ul>
+
+          <ReportButton
+            v-if="tile.item.submission"
+            target-type="submission"
+            :target-id="tile.item.submission.id"
+            :what="`the gift from ${tile.item.giver?.displayName || 'this artist'}`"
+            :own="Boolean(auth.user && tile.item.giver?.id === auth.user.id)"
+            look="link"
+            class="tile-report"
+          />
         </div>
       </li>
     </ul>

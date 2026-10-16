@@ -18,6 +18,7 @@ export function buildCharacter(input, ownerId, now) {
     tags: input.tags || [],
     referenceLinks: input.referenceLinks || [],
     notesForArtists: input.notesForArtists || '',
+    contentWarnings: input.contentWarnings || [],
     archivedAt: null,
     createdAt: at,
     updatedAt: at,

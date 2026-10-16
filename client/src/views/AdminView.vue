@@ -9,17 +9,25 @@ import AdminOverview from '@/components/admin/AdminOverview.vue';
 import AdminUsers from '@/components/admin/AdminUsers.vue';
 import AdminEvents from '@/components/admin/AdminEvents.vue';
 import AdminActivity from '@/components/admin/AdminActivity.vue';
+import AdminReports from '@/components/admin/AdminReports.vue';
 
 const route = useRoute();
 const router = useRouter();
 
 const TABS = [
   { key: 'overview', label: 'Overview' },
+  { key: 'reports', label: 'Reports' },
   { key: 'users', label: 'Accounts' },
   { key: 'events', label: 'Events' },
   { key: 'activity', label: 'Audit log' },
 ];
-const PANELS = { overview: AdminOverview, users: AdminUsers, events: AdminEvents, activity: AdminActivity };
+const PANELS = {
+  overview: AdminOverview,
+  reports: AdminReports,
+  users: AdminUsers,
+  events: AdminEvents,
+  activity: AdminActivity,
+};
 
 const tab = computed({
   get: () => (PANELS[route.query.tab] ? route.query.tab : 'overview'),
@@ -29,7 +37,7 @@ const tab = computed({
 
 <template>
   <main id="main" class="page" tabindex="-1">
-    <PageHeader title="Site admin" subtitle="Moderate events, manage accounts and see what other admins have done.">
+    <PageHeader title="Site admin" subtitle="Review reports, moderate events, manage accounts and see what other admins have done.">
       <span class="badge badge-admin inline-flex items-center gap-1"><ShieldCheck :size="14" aria-hidden="true" /> Admin only</span>
     </PageHeader>
 

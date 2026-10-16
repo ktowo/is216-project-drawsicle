@@ -238,3 +238,42 @@ describe('waitlists, backups and progress', () => {
     expect((await fails(`${base}/submission`, { method: 'PUT', body: { links: [{ url: 'https://x.com' }] } })).code).toBe('HANDED_OVER');
   });
 });
+
+describe('safety', () => {
+  it('sends reports to the admins, once per thing', async () => {
+    await loginAs('mika');
+    const { characters } = await ok('/characters');
+    // Mika's own character can't be reported by Mika
+    const own = { targetType: 'character', targetId: characters[0].id, reason: 'spam' };
+    expect((await fails('/reports', { method: 'POST', body: own })).code).toBe('VALIDATION');
+
+    await loginAs('sol');
+    expect((await fails('/reports', { method: 'POST', body: { ...own, reason: 'other' } })).code).toBe('VALIDATION');
+    const { report } = await ok('/reports', { method: 'POST', body: { ...own, details: 'Looks like an ad.' } });
+    expect(report.status).toBe('open');
+    expect((await fails('/reports', { method: 'POST', body: own })).code).toBe('ALREADY_REPORTED');
+
+    await loginAs('ada');
+    const { items } = await ok('/notifications');
+    expect(items.some((n) => n.type === 'report_received')).toBe(true);
+  });
+
+  it('asks for an 18+ confirmation on adults-only events', async () => {
+    await loginAs('mika');
+    const winter = await eventByName('Winter Secret Santa 2026');
+    await ok(`/events/${winter.id}`, { method: 'PATCH', body: { adultOnly: true } });
+
+    await loginAs('kit');
+    const { characters } = await ok('/characters');
+    const form = {
+      communityUsername: 'kit#0001',
+      canCreate: ['art'],
+      wantsTypes: ['art'],
+      offeredCharacterIds: [characters[0].id],
+    };
+    const url = `/events/${winter.id}/application`;
+    expect((await fails(url, { method: 'PUT', body: form })).code).toBe('AGE_CONFIRM');
+    const { application } = await ok(url, { method: 'PUT', body: { ...form, confirmAdult: true } });
+    expect(application.status).toBeTruthy();
+  });
+});

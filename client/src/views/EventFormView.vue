@@ -50,7 +50,7 @@ const TAG_SUGGESTIONS = ['sfw', 'oc friendly', 'fanart', 'furry', 'anthro', 'hum
 const ALL_TYPES = CREATION_TYPES.map((t) => t.value);
 
 // Fields the server only accepts changes to while sign-ups are open (FIELD_LOCKED otherwise)
-const OPEN_ONLY = ['allowedTypes', 'requireApproval', 'minParticipants', 'maxParticipants', 'publicity'];
+const OPEN_ONLY = ['allowedTypes', 'requireApproval', 'adultOnly', 'minParticipants', 'maxParticipants', 'publicity'];
 
 // ---- Defaults ----
 function defaultDates() {
@@ -81,6 +81,7 @@ function blankForm() {
     maxParticipants: 50,
     allowedTypes: [...ALL_TYPES],
     requireApproval: false,
+    adultOnly: false,
     publicity: 'public',
   };
 }
@@ -103,6 +104,7 @@ function formFromEvent(ev) {
     maxParticipants: ev.maxParticipants,
     allowedTypes: [...(ev.allowedTypes || [])],
     requireApproval: Boolean(ev.requireApproval),
+    adultOnly: Boolean(ev.adultOnly),
     publicity: ev.publicity || 'public',
   };
 }
@@ -128,6 +130,7 @@ function bodyFrom(f) {
     maxParticipants: toCount(f.maxParticipants),
     allowedTypes: order(f.allowedTypes),
     requireApproval: Boolean(f.requireApproval),
+    adultOnly: Boolean(f.adultOnly),
     publicity: f.publicity,
   };
 }
@@ -465,6 +468,7 @@ const FIELD_PATTERNS = [
   [/^Maximum participants|the maximum/i, 'maxParticipants'],
   [/creation/i, 'allowedTypes'],
   [/^Approval|Require approval/i, 'requireApproval'],
+  [/^Adults/i, 'adultOnly'],
   [/^Publicity/i, 'publicity'],
 ];
 
@@ -489,6 +493,7 @@ const FIELD_IDS = {
   maxParticipants: 'ev-max',
   allowedTypes: 'ev-types',
   requireApproval: 'ev-approval',
+  adultOnly: 'ev-adult',
   publicity: 'ev-publicity-public',
 };
 
@@ -509,6 +514,7 @@ const FIELD_NAMES = {
   maxParticipants: 'Maximum participants',
   allowedTypes: 'What people can make',
   requireApproval: 'Approval',
+  adultOnly: 'Adults only',
   publicity: 'Who can see it',
 };
 
@@ -671,7 +677,7 @@ const sections = computed(() => [
   {
     id: 'part-people',
     label: 'Participants',
-    fields: ['minParticipants', 'maxParticipants', 'allowedTypes', 'requireApproval'],
+    fields: ['minParticipants', 'maxParticipants', 'allowedTypes', 'requireApproval', 'adultOnly'],
   },
   { id: 'part-visibility', label: 'Visibility', fields: ['publicity'] },
   ...(isEdit.value && event.value ? [{ id: 'part-banner', label: 'Banner', fields: [] }] : []),
@@ -745,6 +751,7 @@ const previewFacts = computed(() =>
   [
     { label: 'People can make', value: typeList(ALL_TYPES.filter((t) => form.allowedTypes.includes(t))) || 'Nothing yet' },
     { label: 'Sign-ups', value: form.requireApproval ? 'Reviewed by you' : 'Accepted straight away' },
+    ...(form.adultOnly ? [{ label: 'Who can join', value: 'Adults only (18+)' }] : []),
     { label: 'Gifts due', value: formatDateTime(submissionDate.value) || 'Not set' },
   ]
 );
@@ -1323,6 +1330,26 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
                   </template>
                 </p>
                 <p v-if="errors.requireApproval" class="field-error m-0" role="alert">{{ errors.requireApproval }}</p>
+              </div>
+
+              <div class="toggle-row">
+                <label class="switch" for="ev-adult">
+                  <input
+                    id="ev-adult"
+                    v-model="form.adultOnly"
+                    type="checkbox"
+                    role="switch"
+                    :disabled="openOnlyLocked"
+                    aria-describedby="ev-adult-hint"
+                  />
+                  <span class="track" aria-hidden="true"><span class="thumb" /></span>
+                  <span class="font-semibold">Adults only (18+)</span>
+                </label>
+                <p id="ev-adult-hint" class="hint m-0">
+                  For exchanges where gifts may include mature themes. The event is marked 18+ everywhere, and everyone
+                  confirms they are 18 or older when they sign up. Artists should still add content warnings.
+                </p>
+                <p v-if="errors.adultOnly" class="field-error m-0" role="alert">{{ errors.adultOnly }}</p>
               </div>
             </section>
 

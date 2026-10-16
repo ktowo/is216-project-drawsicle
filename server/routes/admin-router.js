@@ -9,12 +9,14 @@ const Submission = require('../models/Submission.js');
 const Character = require('../models/Character.js');
 const Notification = require('../models/Notification.js');
 const AuditLog = require('../models/AuditLog.js');
+const Report = require('../models/Report.js');
 const { requireAuth, requireAdmin } = require('../middleware/auth.js');
 const { withdrawApplications, anonymiseUser } = require('../services/accounts.js');
 const { organizerIds, serializeEvent, serializeEvents, deleteEventCascade } = require('../services/events.js');
-const { notifyMany } = require('../services/notify.js');
+const { notify, notifyMany } = require('../services/notify.js');
+const { describeTarget } = require('../services/reports.js');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
-const { ALL_EVENT_STATUSES, USER_STATUSES, SITE_ROLES } = require('../../shared/constants.mjs');
+const { ALL_EVENT_STATUSES, USER_STATUSES, SITE_ROLES, REPORT_STATUSES } = require('../../shared/constants.mjs');
 
 const { userMini } = User;
 
@@ -89,7 +91,7 @@ const quietly = (promise) => promise.catch((err) => console.error('Admin notific
 // ---------- Overview ----------
 
 router.get('/stats', asyncHandler(async (req, res) => {
-  const [userRows, admins, eventRows, disabled, applications, matches, submissions, newestUsers, newestEvents] =
+  const [userRows, admins, eventRows, disabled, applications, matches, submissions, newestUsers, newestEvents, openReports] =
     await Promise.all([
       User.aggregate([{ $group: { _id: '$status', n: { $sum: 1 } } }]),
       User.countDocuments({ role: 'admin' }),
@@ -100,6 +102,7 @@ router.get('/stats', asyncHandler(async (req, res) => {
       Submission.countDocuments(),
       User.find().sort({ createdAt: -1 }).limit(5),
       Event.find().sort({ createdAt: -1 }).limit(5),
+      Report.countDocuments({ status: 'open' }),
     ]);
 
   const users = Object.fromEntries(USER_STATUSES.map((s) => [s, 0]));
@@ -113,6 +116,7 @@ router.get('/stats', asyncHandler(async (req, res) => {
     applications,
     matches,
     submissions,
+    openReports,
     recent: {
       users: newestUsers.map((u) => adminUser(u)),
       events: newestEvents.map((e) => e.toMini()),
@@ -346,12 +350,106 @@ router.delete('/events/:eventId', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// ---------- Reports ----------
+
+async function reportJson(report) {
+  const target = await describeTarget(report.targetType, report.targetId);
+  return {
+    id: report._id.toString(),
+    targetType: report.targetType,
+    targetId: report.targetId.toString(),
+    targetLabel: target?.label || report.targetLabel,
+    targetGone: !target,
+    link: target?.link || '',
+    preview: target?.preview || null,
+    owner: report.targetOwner ? userMini(report.targetOwner) : null,
+    event: report.event ? { id: report.event._id.toString(), name: report.event.name } : null,
+    reason: report.reason,
+    details: report.details,
+    status: report.status,
+    reporter: userMini(report.reporter),
+    handledBy: report.handledBy ? userMini(report.handledBy) : null,
+    handledAt: report.handledAt,
+    resolution: report.resolution,
+    createdAt: report.createdAt,
+  };
+}
+
+const REPORT_POPULATE = [
+  ['reporter', 'displayName username avatarUrl'],
+  ['targetOwner', 'displayName username avatarUrl status'],
+  ['handledBy', 'displayName username avatarUrl'],
+  ['event', 'name'],
+];
+const populateReport = (query) => REPORT_POPULATE.reduce((q, [path, select]) => q.populate(path, select), query);
+
+router.get('/reports', asyncHandler(async (req, res) => {
+  const { page, limit, skip } = paging(req);
+  const status = REPORT_STATUSES.includes(req.query.status) ? req.query.status : 'open';
+  const filter = { status };
+  const [reports, total, countRows] = await Promise.all([
+    // Open reports oldest first, so nothing waits forever; handled ones newest first
+    populateReport(Report.find(filter).sort({ createdAt: status === 'open' ? 1 : -1 }).skip(skip).limit(limit)),
+    Report.countDocuments(filter),
+    Report.aggregate([{ $group: { _id: '$status', n: { $sum: 1 } } }]),
+  ]);
+  const counts = Object.fromEntries(REPORT_STATUSES.map((s) => [s, 0]));
+  for (const row of countRows) counts[row._id] = row.n;
+  res.json({
+    reports: await Promise.all(reports.map(reportJson)),
+    counts,
+    total,
+    page,
+    pages: Math.max(1, Math.ceil(total / limit)),
+  });
+}));
+
+const REPORT_DONE_MESSAGES = {
+  resolved: 'An admin looked into it and took action. Thanks for helping keep Drawsicle friendly.',
+  dismissed: "An admin looked into it and found it doesn't break the community guidelines. Thanks for letting us know.",
+};
+
+router.patch('/reports/:reportId', asyncHandler(async (req, res) => {
+  const { reportId } = req.params;
+  const report = mongoose.isValidObjectId(reportId) ? await Report.findById(reportId) : null;
+  if (!report) throw httpError(404, 'Report not found.', 'NOT_FOUND');
+  const status = req.body?.status;
+  if (!REPORT_STATUSES.includes(status)) throw httpError(400, 'Pick open, resolved or dismissed.', 'VALIDATION');
+  const resolution = str(req.body?.resolution).slice(0, 500);
+  const was = report.status;
+
+  report.status = status;
+  report.resolution = status === 'open' ? '' : resolution;
+  report.handledBy = status === 'open' ? null : req.user._id;
+  report.handledAt = status === 'open' ? null : new Date();
+  await report.save();
+
+  const action = { open: 'report.reopen', resolved: 'report.resolve', dismissed: 'report.dismiss' }[status];
+  await audit(req, action, 'report', report._id, report.targetLabel, resolution);
+
+  // Let the reporter know it was looked at (once, when it first leaves the queue)
+  if (was === 'open' && status !== 'open') {
+    try {
+      await notify(report.reporter, {
+        type: 'report_handled',
+        title: `Your report about ${report.targetLabel} was reviewed`.slice(0, 120),
+        message: REPORT_DONE_MESSAGES[status],
+        link: '',
+      });
+    } catch (err) {
+      console.error('Report notification failed:', err.message);
+    }
+  }
+
+  res.json({ report: await reportJson(await populateReport(Report.findById(report._id))) });
+}));
+
 // ---------- Audit log ----------
 
 router.get('/audit', asyncHandler(async (req, res) => {
   const { page, limit, skip } = paging(req);
   const filter = {};
-  if (['user', 'event'].includes(req.query.targetType)) filter.targetType = req.query.targetType;
+  if (['user', 'event', 'report'].includes(req.query.targetType)) filter.targetType = req.query.targetType;
   const [entries, total] = await Promise.all([
     AuditLog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).populate('actor', 'displayName username avatarUrl email'),
     AuditLog.countDocuments(filter),

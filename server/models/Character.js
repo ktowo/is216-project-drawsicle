@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { LIMITS, normalizeTags } = require('../../shared/constants.mjs');
+const { LIMITS, normalizeTags, CONTENT_WARNING_VALUES } = require('../../shared/constants.mjs');
 
 // A character in someone's private library. Reused across events.
 // Characters that were offered in an event can't be deleted, only archived.
@@ -35,6 +35,8 @@ const characterSchema = new mongoose.Schema(
       validate: [(v) => v.length <= LIMITS.referenceLinks, `Up to ${LIMITS.referenceLinks} reference links.`],
     },
     notesForArtists: { type: String, trim: true, default: '', maxlength: LIMITS.notesForArtists },
+    // What the reference art shows, so an artist knows before opening the links
+    contentWarnings: { type: [{ type: String, enum: CONTENT_WARNING_VALUES }], default: [] },
     archivedAt: { type: Date, default: null },
   },
   { timestamps: true }
@@ -57,6 +59,7 @@ characterSchema.methods.toPublic = function (extra = {}) {
     tags: [...(this.tags || [])],
     referenceLinks: (this.referenceLinks || []).map((l) => ({ label: l.label || '', url: l.url })),
     notesForArtists: this.notesForArtists || '',
+    contentWarnings: [...(this.contentWarnings || [])],
     archived: Boolean(this.archivedAt),
     archivedAt: this.archivedAt,
     createdAt: this.createdAt,

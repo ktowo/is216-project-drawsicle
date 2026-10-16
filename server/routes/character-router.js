@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const Character = require('../models/Character.js');
 const Application = require('../models/Application.js');
 const { requireAuth } = require('../middleware/auth.js');
-const { LIMITS, normalizeTags } = require('../../shared/constants.mjs');
+const { LIMITS, normalizeTags, CONTENT_WARNING_VALUES } = require('../../shared/constants.mjs');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
 
 const router = Router();
@@ -68,6 +68,13 @@ function readCharacterInput(body = {}) {
   // normalizeTags splits "fox, feral" strings, which a plain [String] cast wouldn't
   if (body.tags !== undefined) input.tags = normalizeTags(body.tags ?? []);
   if (body.referenceLinks !== undefined) input.referenceLinks = readLinks(body.referenceLinks);
+  if (body.contentWarnings !== undefined) {
+    const list = body.contentWarnings ?? [];
+    if (!Array.isArray(list) || list.some((w) => !CONTENT_WARNING_VALUES.includes(w))) {
+      throw httpError(400, 'Pick content warnings from the list.', 'VALIDATION');
+    }
+    input.contentWarnings = [...new Set(list)];
+  }
   return input;
 }
 
