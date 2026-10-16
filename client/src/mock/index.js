@@ -18,10 +18,24 @@ import * as matches from './handlers/matches.js';
 import * as submissions from './handlers/submissions.js';
 import * as dashboard from './handlers/dashboard.js';
 import * as outreach from './handlers/outreach.js';
+import * as reports from './handlers/reports.js';
 
 const router = createRouter();
 // Order matters where paths overlap: events.js adds /events/mine before /events/:eventId
-for (const feature of [auth, profile, users, notifications, characters, events, applications, matches, submissions, outreach, dashboard]) {
+for (const feature of [
+  auth,
+  profile,
+  users,
+  notifications,
+  characters,
+  events,
+  applications,
+  matches,
+  submissions,
+  outreach,
+  reports,
+  dashboard,
+]) {
   feature.register(router);
 }
 

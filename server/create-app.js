@@ -13,6 +13,7 @@ const outreachRouter = require('./routes/outreach-router.js');
 const dashboardRouter = require('./routes/dashboard-router.js');
 const userRouter = require('./routes/user-router.js');
 const adminRouter = require('./routes/admin-router.js');
+const reportRouter = require('./routes/report-router.js');
 const fileRouter = require('./routes/file-router.js');
 const cronRouter = require('./routes/cron-router.js');
 const baseRouter = require('./routes/base-router.js');
@@ -67,6 +68,7 @@ function createApp({ ready } = {}) {
   server.use('/api/dashboard', dashboardRouter);
   server.use('/api/users', userRouter);
   server.use('/api/admin', adminRouter);
+  server.use('/api/reports', reportRouter);
   server.use('/api/files', fileRouter);
   server.use('/api/cron', cronRouter);
 

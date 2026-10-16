@@ -60,6 +60,7 @@ const form = reactive({
   cannotDraw: [],
   notes: '',
   canBackup: false,
+  confirmAdult: false,
   saveAsDefault: false,
 });
 const selectedIds = ref([]);
@@ -276,6 +277,9 @@ function validate() {
     if (form[key].trim().length > LIMITS.formText) e[key] = `Keep this under ${LIMITS.formText} characters.`;
   }
   if (form.cannotDraw.length > LIMITS.tags) e.cannotDraw = `Up to ${LIMITS.tags} tags.`;
+  if (event.value.adultOnly && !existing.value && !form.confirmAdult) {
+    e.confirmAdult = "This event is for adults. Confirm you're 18 or older to sign up.";
+  }
 
   errors.value = e;
   return Object.keys(e).length === 0;
@@ -381,6 +385,7 @@ async function submit() {
     cannotDraw: [...form.cannotDraw],
     notes: form.notes.trim(),
     canBackup: form.canBackup,
+    confirmAdult: Boolean(event.value.adultOnly && form.confirmAdult),
     saveAsDefault: form.saveAsDefault,
     // A full event: this sign-up goes onto the waitlist
     waitlist: Boolean(fullWarning.value),
@@ -726,6 +731,19 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
                 <div><dt>Backup artist</dt><dd>{{ form.canBackup ? 'Yes, happy to help' : 'No' }}</dd></div>
               </dl>
             </div>
+          </div>
+
+          <div v-if="event.adultOnly && !existing" class="adult-confirm">
+            <label class="check">
+              <input v-model="form.confirmAdult" type="checkbox" aria-describedby="apply-adult-error" />
+              <span>
+                <strong>I'm 18 or older</strong>
+                <span class="hint block">This event is for adults only, and gifts may include mature themes.</span>
+              </span>
+            </label>
+            <p v-if="errors.confirmAdult" id="apply-adult-error" class="field-error m-0" role="alert">
+              {{ errors.confirmAdult }}
+            </p>
           </div>
 
           <label class="check">

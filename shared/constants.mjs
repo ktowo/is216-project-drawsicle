@@ -104,6 +104,7 @@ export const NOTIFICATION_TYPES = [
   'backup_needed',
   'backup_assigned',
   'report_received',
+  'report_handled',
   'role_changed',
   'test',
 ];
@@ -149,6 +150,7 @@ export const REPORT_REASONS = [
 export const REPORT_REASON_VALUES = REPORT_REASONS.map((r) => r.value);
 export const REPORT_TARGETS = ['submission', 'user', 'character', 'event'];
 export const REPORT_STATUSES = ['open', 'resolved', 'dismissed'];
+export const REPORT_STATUS_LABELS = { open: 'Open', resolved: 'Action taken', dismissed: 'No action needed' };
 
 // ---------- Limits ----------
 
@@ -183,6 +185,7 @@ export const LIMITS = {
   avoidPairs: 50,
   reportDetails: 1000,
   progressNote: 200,
+  reportsPerDay: 20,
   deactivationGraceDays: 30,
 };
 

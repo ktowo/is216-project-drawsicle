@@ -58,6 +58,8 @@ const eventSchema = new mongoose.Schema(
     inviteCode: { type: String, default: newInviteCode, index: true },
     // false: applications are accepted straight away
     requireApproval: { type: Boolean, default: false },
+    // For adults only: everyone signing up confirms they are 18 or older
+    adultOnly: { type: Boolean, default: false },
     bannerUrl: { type: String, default: '' },
     // The organiser's time zone (IANA name, e.g. "Europe/London"), so deadlines can be shown in theirs too
     timeZone: { type: String, trim: true, default: '', maxlength: 64 },
@@ -178,6 +180,7 @@ eventSchema.methods.toPublic = function ({
     status: this.status,
     publicity: this.publicity,
     requireApproval: Boolean(this.requireApproval),
+    adultOnly: Boolean(this.adultOnly),
     bannerUrl: this.bannerUrl || null,
     timeZone: this.timeZone || '',
     publishedAt: this.publishedAt,

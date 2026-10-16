@@ -36,6 +36,7 @@ import { toast } from '@/stores/toast';
 import { formatDateTime } from '@/utils/format';
 import { eventCalendarEntries, downloadIcs } from '@/utils/calendar';
 import ProgressPicker from '@/components/events/ProgressPicker.vue';
+import ReportButton from '@/components/ReportButton.vue';
 import {
   eventLink,
   inviteFrom,
@@ -292,7 +293,9 @@ async function copyUsername() {
               <h2 id="chars-heading" class="panel-title">Their characters</h2>
               <p class="muted intro">Make something featuring one or more of these. Check the reference links and notes before you start.</p>
               <div v-if="characters.length" class="characters">
-                <CharacterCard v-for="c in characters" :key="c.id" :character="c" show-links />
+                <CharacterCard v-for="c in characters" :key="c.id" :character="c" show-links>
+                  <ReportButton target-type="character" :target-id="c.id" :what="c.name" look="link" />
+                </CharacterCard>
               </div>
               <EmptyState
                 v-else
