@@ -513,16 +513,27 @@ describe('build-out additions', () => {
     expect((await fails('/users/mika')).code).toBe('USER_NOT_FOUND');
   });
 
+  it('saves artist tags in parts, checks them, and shows them publicly', async () => {
+    await loginAs('pip');
+    const { user } = await ok('/profile', { method: 'PATCH', body: { artistTags: { themes: ['cute', 'food'], cardColor: 'butter' } } });
+    expect(user.artistTags).toMatchObject({ themes: ['cute', 'food'], cardColor: 'butter' });
+    for (const artistTags of [{ makes: ['sculpture'] }, { themes: ['fantasy', 'cosy', 'spooky', 'cute', 'food', 'ocean'] }, { cardColor: 'red' }]) {
+      expect((await fails('/profile', { method: 'PATCH', body: { artistTags } })).code).toBe('VALIDATION');
+    }
+    expect((await ok('/users/pip')).profile.artistTags).toMatchObject({ themes: ['cute', 'food'], cardColor: 'butter' });
+    expect((await ok('/profile/export')).user.artistTags.cardColor).toBe('butter');
+  });
+
   it('saves profile privacy settings and keeps them off the public profile', async () => {
     await loginAs('pip');
-    expect((await ok('/auth/me')).user.profilePrivacy).toEqual({ showExchanges: true, showGifts: false });
+    expect((await ok('/auth/me')).user.profilePrivacy).toEqual({ showExchanges: true, showGifts: false, listInDiscover: true });
 
     const { user } = await ok('/profile', { method: 'PATCH', body: { profilePrivacy: { showGifts: true } } });
-    expect(user.profilePrivacy).toEqual({ showExchanges: true, showGifts: true });
+    expect(user.profilePrivacy).toEqual({ showExchanges: true, showGifts: true, listInDiscover: true });
     expect((await fails('/profile', { method: 'PATCH', body: { profilePrivacy: { showExchanges: 'no' } } })).code).toBe(
       'VALIDATION'
     );
-    expect((await ok('/profile/export')).user.profilePrivacy).toEqual({ showExchanges: true, showGifts: true });
+    expect((await ok('/profile/export')).user.profilePrivacy).toEqual({ showExchanges: true, showGifts: true, listInDiscover: true });
     expect((await ok('/users/pip')).profile).not.toHaveProperty('profilePrivacy');
   });
 

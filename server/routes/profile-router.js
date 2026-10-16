@@ -14,6 +14,7 @@ const { withdrawApplications } = require('../services/accounts.js');
 const { endSession } = require('../utils/session.js');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
 const { CREATION_TYPE_VALUES, LIMITS, normalizeTags } = require('../../shared/constants.mjs');
+const { artistTagsUpdate } = require('../../shared/taste.mjs');
 const { cleanLook } = require('../../shared/looks.mjs');
 const StyleProfile = require('../models/StyleProfile.js');
 const { analyseUser, visionStatus } = require('../services/vision.js');
@@ -62,7 +63,7 @@ function typeList(value, label) {
 
 // Update my profile. Only the fields below can be changed here; anything else in the body is ignored.
 router.patch('/', requireAuth, asyncHandler(async (req, res) => {
-  const { displayName, bio, username, socials, defaultForm, notificationPrefs, profilePrivacy } = req.body || {};
+  const { displayName, bio, username, socials, defaultForm, notificationPrefs, profilePrivacy, artistTags } = req.body || {};
   const user = req.user;
 
   if (displayName !== undefined) {
@@ -125,9 +126,15 @@ router.patch('/', requireAuth, asyncHandler(async (req, res) => {
     }
   }
 
+  if (artistTags !== undefined) {
+    const { changes, error } = artistTagsUpdate(artistTags);
+    if (error) throw invalid(error);
+    Object.assign(user.artistTags, changes);
+  }
+
   if (profilePrivacy !== undefined) {
     if (!isPlainObject(profilePrivacy)) throw invalid('profilePrivacy must be an object.');
-    for (const key of ['showExchanges', 'showGifts']) {
+    for (const key of ['showExchanges', 'showGifts', 'listInDiscover']) {
       if (profilePrivacy[key] === undefined) continue;
       if (typeof profilePrivacy[key] !== 'boolean') throw invalid(`${key} must be true or false.`);
       user.profilePrivacy[key] = profilePrivacy[key];

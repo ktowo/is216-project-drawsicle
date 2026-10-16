@@ -82,7 +82,7 @@ test('public profiles show public events, stats and socials, never private detai
 
   const res = await h.request(app).get('/api/users/Mika_Draws').expect(200);
   const { profile, organizing, stats } = res.body;
-  assert.deepEqual(Object.keys(profile).sort(), ['avatarUrl', 'bio', 'createdAt', 'displayName', 'id', 'look', 'socials', 'username']);
+  assert.deepEqual(Object.keys(profile).sort(), ['artistTags', 'avatarUrl', 'bio', 'createdAt', 'displayName', 'id', 'look', 'socials', 'username']);
   assert.equal(profile.username, 'mika_draws');
   assert.equal(profile.bio, 'Pastel dragons.');
   assert.equal(profile.socials.discord, 'mika.draws');
@@ -123,19 +123,19 @@ test('banned artists have no public profile until they are unbanned', async () =
 test('profile privacy settings default sensibly, save, validate and stay private', async () => {
   const mika = await signUpAs('Mika', { username: 'mika_draws' });
   const me = (await mika.agent.get('/api/auth/me').expect(200)).body.user;
-  assert.deepEqual(me.profilePrivacy, { showExchanges: true, showGifts: false });
+  assert.deepEqual(me.profilePrivacy, { showExchanges: true, showGifts: false, listInDiscover: true });
 
   const saved = await mika.agent
     .patch('/api/profile')
     .send({ profilePrivacy: { showGifts: true } })
     .expect(200);
-  assert.deepEqual(saved.body.user.profilePrivacy, { showExchanges: true, showGifts: true });
+  assert.deepEqual(saved.body.user.profilePrivacy, { showExchanges: true, showGifts: true, listInDiscover: true });
 
   const both = await mika.agent
     .patch('/api/profile')
     .send({ profilePrivacy: { showExchanges: false } })
     .expect(200);
-  assert.deepEqual(both.body.user.profilePrivacy, { showExchanges: false, showGifts: true });
+  assert.deepEqual(both.body.user.profilePrivacy, { showExchanges: false, showGifts: true, listInDiscover: true });
 
   for (const profilePrivacy of [{ showGifts: 'yes' }, { showExchanges: 1 }, 'on', ['showGifts']]) {
     const res = await mika.agent.patch('/api/profile').send({ profilePrivacy }).expect(400);
@@ -143,16 +143,66 @@ test('profile privacy settings default sensibly, save, validate and stay private
   }
   // A rejected change leaves what was saved alone
   const after = (await mika.agent.get('/api/auth/me').expect(200)).body.user;
-  assert.deepEqual(after.profilePrivacy, { showExchanges: false, showGifts: true });
+  assert.deepEqual(after.profilePrivacy, { showExchanges: false, showGifts: true, listInDiscover: true });
 
   const exported = (await mika.agent.get('/api/profile/export').expect(200)).body;
-  assert.deepEqual(exported.user.profilePrivacy, { showExchanges: false, showGifts: true });
+  assert.deepEqual(exported.user.profilePrivacy, { showExchanges: false, showGifts: true, listInDiscover: true });
 
   // Other people never see the settings themselves
   const publicView = (await h.request(app).get('/api/users/mika_draws').expect(200)).body;
   assert.equal(publicView.profile.profilePrivacy, undefined);
   const byId = (await h.request(app).get(`/api/profile/${mika.id}`).expect(200)).body;
   assert.equal(byId.profile.profilePrivacy, undefined);
+});
+
+test('artist tags: empty by default, saved in parts, strictly checked, public but never the private defaults', async () => {
+  const mika = await signUpAs('Mika', { username: 'mika_draws' });
+  const me = (await mika.agent.get('/api/auth/me').expect(200)).body.user;
+  assert.deepEqual(me.artistTags, { makes: [], themes: [], activity: '', cardColor: '' });
+
+  await mika.agent
+    .patch('/api/profile')
+    .send({ artistTags: { makes: ['art', 'writing'], themes: ['fantasy', 'cosy'] }, defaultForm: { likes: 'Secret likes' } })
+    .expect(200);
+  const saved = await mika.agent.patch('/api/profile').send({ artistTags: { cardColor: 'mint', activity: 'seasonal' } }).expect(200);
+  const tags = { makes: ['art', 'writing'], themes: ['fantasy', 'cosy'], activity: 'seasonal', cardColor: 'mint' };
+  assert.deepEqual(saved.body.user.artistTags, tags);
+
+  for (const artistTags of [
+    'art',
+    { makes: ['sculpture'] },
+    { themes: ['fantasy', 'cosy', 'spooky', 'cute', 'food', 'ocean'] },
+    { activity: 'daily' },
+    { cardColor: '#00ff00' },
+  ]) {
+    const res = await mika.agent.patch('/api/profile').send({ artistTags, displayName: 'Changed' }).expect(400);
+    assert.equal(res.body.code, 'VALIDATION');
+  }
+  const after = (await mika.agent.get('/api/auth/me').expect(200)).body.user;
+  assert.deepEqual(after.artistTags, tags);
+  assert.equal(after.displayName, 'Mika');
+
+  const exported = (await mika.agent.get('/api/profile/export').expect(200)).body;
+  assert.deepEqual(exported.user.artistTags, tags);
+
+  const publicView = (await h.request(app).get('/api/users/mika_draws').expect(200)).body;
+  assert.deepEqual(publicView.profile.artistTags, tags);
+  assert.ok(!JSON.stringify(publicView).includes('Secret likes'));
+  assert.deepEqual((await h.request(app).get(`/api/profile/${mika.id}`).expect(200)).body.profile.artistTags, tags);
+
+  // Clearing single values
+  const cleared = await mika.agent.patch('/api/profile').send({ artistTags: { activity: '', themes: [] } }).expect(200);
+  assert.deepEqual(cleared.body.user.artistTags, { ...tags, activity: '', themes: [] });
+});
+
+test('deleting an account clears its artist tags', async () => {
+  const mika = await signUpAs('Mika', {
+    username: 'mika_draws',
+    artistTags: { makes: ['art'], themes: ['fantasy'], activity: 'casual', cardColor: 'rose' },
+  });
+  await anonymiseUser(mika.id);
+  const user = await User.findById(mika.id);
+  assert.deepEqual(user.toPublic().artistTags, { makes: [], themes: [], activity: '', cardColor: '' });
 });
 
 test('the short public profile hides banned accounts too', async () => {

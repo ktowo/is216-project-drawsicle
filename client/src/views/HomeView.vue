@@ -137,6 +137,14 @@ onMounted(loadOpenEvents);
               </RouterLink>
             </template>
           </div>
+          <RouterLink to="/find-your-style" class="style-cta">
+            <Sparkles :size="20" aria-hidden="true" class="style-icon" />
+            <span>
+              <strong>Find your style</strong>
+              <span class="style-sub">Answer 5 quick questions and meet artists who love what you love.</span>
+            </span>
+            <ArrowRight :size="18" aria-hidden="true" />
+          </RouterLink>
           <p v-if="!auth.user" class="hero-note">
             Already have an account? <RouterLink to="/login">Log in</RouterLink>
           </p>
@@ -390,6 +398,42 @@ onMounted(loadOpenEvents);
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 32px;
+}
+.style-cta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 460px;
+  margin-top: 18px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  border: 1px dashed var(--pink);
+  background: var(--pink-soft);
+  color: var(--text);
+  transition: transform 0.12s;
+}
+.style-cta:hover {
+  color: var(--pink-dark);
+  transform: translateY(-1px);
+}
+.style-cta strong {
+  display: block;
+}
+.style-sub {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.style-icon {
+  flex-shrink: 0;
+  color: var(--pink-dark);
+}
+@media (prefers-reduced-motion: reduce) {
+  .style-cta,
+  .style-cta:hover {
+    transition: none;
+    transform: none;
+  }
 }
 .hero-note {
   margin: 18px 0 0;

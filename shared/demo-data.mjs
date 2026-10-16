@@ -25,6 +25,8 @@ export function buildDemoData(now = new Date()) {
   const users = [
     {
       key: 'mika',
+      // Public artist tags (shared/taste.mjs), as if they'd taken the Find your style quiz
+      artistTags: { makes: ['art', 'writing'], themes: ['fantasy', 'cosy', 'animals', 'cute'], activity: 'seasonal', cardColor: 'rose' },
       // Happy for gifts they made or received to show on public profiles
       profilePrivacy: { showExchanges: true, showGifts: true },
       displayName: 'Mika',
@@ -41,6 +43,8 @@ export function buildDemoData(now = new Date()) {
     },
     {
       key: 'sol',
+      // Public artist tags (shared/taste.mjs), as if they'd taken the Find your style quiz
+      artistTags: { makes: ['art'], themes: ['adventure', 'fantasy', 'nature'], activity: 'seasonal', cardColor: 'coral' },
       // Happy for gifts they made or received to show on public profiles
       profilePrivacy: { showExchanges: true, showGifts: true },
       displayName: 'Sol',
@@ -57,6 +61,8 @@ export function buildDemoData(now = new Date()) {
     },
     {
       key: 'juniper',
+      // Public artist tags (shared/taste.mjs), as if they'd taken the Find your style quiz
+      artistTags: { makes: ['art', 'writing'], themes: ['spooky', 'nature', 'mythology'], activity: 'casual', cardColor: 'lavender' },
       displayName: 'Juniper',
       bio: 'I draw moths and write short stories about them. Organiser of the Spring Bloom Exchange and a regular at every lantern-lit event after it.',
       socials: { bluesky: 'juniper', tumblr: 'juniper-moth', discord: 'juniper.moth' },
@@ -71,6 +77,8 @@ export function buildDemoData(now = new Date()) {
     },
     {
       key: 'ash',
+      // Public artist tags (shared/taste.mjs), as if they'd taken the Find your style quiz
+      artistTags: { makes: ['art'], themes: ['sci_fi', 'creatures'], activity: 'casual', cardColor: 'sky' },
       displayName: 'Ash',
       bio: 'Sci-fi nerd. Robots, dragons and big chunky line art. I keep a running list of city backgrounds I want to draw next.',
       socials: { twitter: 'ash_unit7', toyhouse: 'ash-unit7', discord: 'ash_unit7' },
@@ -85,6 +93,8 @@ export function buildDemoData(now = new Date()) {
     },
     {
       key: 'remy',
+      // Public artist tags (shared/taste.mjs), as if they'd taken the Find your style quiz
+      artistTags: { makes: ['art', 'adoptable'], themes: ['food', 'cute', 'creatures'], activity: 'seasonal', cardColor: 'butter' },
       displayName: 'Remy',
       bio: 'Adoptable designer. Slimes, sweets and pastel everything. New batches land whenever the snack drawer is full.',
       socials: { instagram: 'remy.gloop', toyhouse: 'remygloop', discord: 'remy.gloop' },
@@ -99,6 +109,8 @@ export function buildDemoData(now = new Date()) {
     },
     {
       key: 'noor',
+      // Public artist tags (shared/taste.mjs), as if they'd taken the Find your style quiz
+      artistTags: { makes: ['writing'], themes: ['mythology', 'adventure', 'nature'], activity: 'casual', cardColor: 'sage' },
       // Helps the admins: reviews reports and museum chat
       role: 'moderator',
       displayName: 'Noor',
@@ -115,6 +127,8 @@ export function buildDemoData(now = new Date()) {
     },
     {
       key: 'kit',
+      // Public artist tags (shared/taste.mjs), as if they'd taken the Find your style quiz
+      artistTags: { makes: ['art'], themes: ['cosy', 'creatures', 'spooky'], activity: 'seasonal', cardColor: 'peach' },
       // Happy for gifts they made or received to show on public profiles
       profilePrivacy: { showExchanges: true, showGifts: true },
       displayName: 'Kit',

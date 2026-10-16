@@ -8,6 +8,8 @@ import ChoiceChips from '@/components/ui/ChoiceChips.vue';
 import TagInput from '@/components/ui/TagInput.vue';
 import UserAvatar from '@/components/UserAvatar.vue';
 import ProfileHeader from '@/components/profile/ProfileHeader.vue';
+import ArtistTagsEditor from '@/components/profile/ArtistTagsEditor.vue';
+import { artistTagsOf } from '@shared/taste.mjs';
 import ArtStyleCard from '@/components/profile/ArtStyleCard.vue';
 import { auth, setUser } from '@/stores/auth';
 import { toast } from '@/stores/toast';
@@ -42,9 +44,11 @@ function profileFromUser(user) {
     username: user?.username || '',
     bio: user?.bio || '',
     socials: Object.fromEntries(SOCIALS.map((s) => [s.key, user?.socials?.[s.key] || ''])),
+    artistTags: artistTagsOf(user?.artistTags),
     privacy: {
       showExchanges: user?.profilePrivacy?.showExchanges !== false,
       showGifts: Boolean(user?.profilePrivacy?.showGifts),
+      listInDiscover: user?.profilePrivacy?.listInDiscover !== false,
     },
   };
 }
@@ -115,6 +119,7 @@ async function saveProfile() {
     bio: profile.bio.trim(),
     socials: Object.fromEntries(SOCIALS.map((s) => [s.key, cleanHandle(profile.socials[s.key])])),
     profilePrivacy: { ...profile.privacy },
+    artistTags: { ...profile.artistTags },
   };
   const handle = profile.username.trim().toLowerCase();
   if (handle) body.username = handle;
@@ -272,6 +277,7 @@ const preview = computed(() => ({
   socials: Object.fromEntries(SOCIALS.map((s) => [s.key, cleanHandle(profile.socials[s.key])])),
   avatarUrl: auth.user?.avatarUrl || null,
   createdAt: auth.user?.createdAt,
+  artistTags: profile.artistTags,
 }));
 const publicLink = computed(() => (auth.user?.username ? `/users/${auth.user.username}` : ''));
 
@@ -451,6 +457,15 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
         </div>
       </fieldset>
 
+      <fieldset class="artist-tags">
+        <legend class="label">Your artist tags</legend>
+        <p class="hint tags-hint">
+          Shown on your profile and on Discover so people who like the same things can find you. Not sure?
+          <RouterLink to="/find-your-style">Take the Find your style quiz</RouterLink>.
+        </p>
+        <ArtistTagsEditor v-model="profile.artistTags" />
+      </fieldset>
+
       <fieldset class="privacy">
         <legend class="label">What your public profile shows</legend>
         <div class="privacy-row">
@@ -467,6 +482,23 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
           </label>
           <p id="privacy-exchanges-hint" class="hint">
             Finished public exchanges you took part in, and how many. Private events are never listed.
+          </p>
+        </div>
+        <div class="privacy-row">
+          <label class="switch" for="privacy-discover">
+            <input
+              id="privacy-discover"
+              v-model="profile.privacy.listInDiscover"
+              type="checkbox"
+              role="switch"
+              aria-describedby="privacy-discover-hint"
+            />
+            <span class="track" aria-hidden="true"><span class="thumb" /></span>
+            <span class="switch-label">List me in Discover</span>
+          </label>
+          <p id="privacy-discover-hint" class="hint">
+            Lets people find you by name or by the things you love. Turned off, your profile still works for anyone
+            with the link.
           </p>
         </div>
         <div class="privacy-row">
@@ -727,6 +759,15 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
   flex-wrap: wrap;
   gap: 14px;
   margin-top: 28px;
+}
+.artist-tags {
+  border: 0;
+  margin: 26px 0 0;
+  padding: 0;
+  min-width: 0;
+}
+.tags-hint {
+  margin: 0 0 14px;
 }
 .privacy {
   border: 0;

@@ -1,6 +1,7 @@
 // The mock's version of the server models and services/events.js: JSON shapes,
 // event roles, visibility rules and notifications. Shapes follow docs/ARCHITECTURE.md.
 import { newId } from './db.js';
+import { artistTagsOf } from '@shared/taste.mjs';
 import { permissionsFor } from '@shared/permissions.mjs';
 import { cleanLook } from '@shared/looks.mjs';
 
@@ -35,9 +36,11 @@ export function userPublic(user) {
       emailMatches: user.notificationPrefs?.emailMatches !== false,
       emailEventUpdates: Boolean(user.notificationPrefs?.emailEventUpdates),
     },
+    artistTags: artistTagsOf(user.artistTags),
     profilePrivacy: {
       showExchanges: user.profilePrivacy?.showExchanges !== false,
       showGifts: Boolean(user.profilePrivacy?.showGifts),
+      listInDiscover: user.profilePrivacy?.listInDiscover !== false,
     },
     providers: { google: false, discord: false },
     profileComplete: Boolean(user.displayName && user.bio),
@@ -48,8 +51,8 @@ export function userPublic(user) {
 }
 
 export function userProfile(user) {
-  const { id, username, displayName, avatarUrl, bio, socials, look } = userPublic(user);
-  return { id, username, displayName, avatarUrl, bio, socials, look };
+  const { id, username, displayName, avatarUrl, bio, socials, artistTags, look } = userPublic(user);
+  return { id, username, displayName, avatarUrl, bio, socials, artistTags, look };
 }
 
 export function userMini(user) {

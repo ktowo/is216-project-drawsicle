@@ -80,7 +80,9 @@ MatchAdmin    { id, giver: UserMini, recipient: UserMini, score, reasons[], stat
 Submission    { id, eventId, matchId, title, message, type, images: url[], links: [{label,url}],
                 submittedAt, late, verified, verifiedAt, updatedAt }
 Notification  { id, type, title, message, link, read, createdAt }
-ArtistProfile { id, username, displayName, avatarUrl, bio, socials{...}, createdAt }   // no email
+ArtistProfile { id, username, displayName, avatarUrl, bio, socials{...}, artistTags, createdAt }   // no email
+ArtistCard { user: UserMini, artistTags, badges[], gifts: [{ id, title, image, alt, contentWarnings[] }] (≤3, two-sided consent), exchangesCompleted?, following? (logged in) }
+ArtistTags { makes[], themes[] (max 5), activity: '' | 'casual' | 'seasonal', cardColor: '' | palette value }   // shared/taste.mjs
 ```
 
 Models carry `toPublic()` / `toMini()` methods producing these (see `server/models`).
@@ -119,13 +121,16 @@ All routes are under `/api`. (auth) = must be logged in, (org) = event organiser
 | POST | /auth/change-password | (auth) `{ currentPassword, newPassword }` → `{ user }`, logs out other devices |
 | GET | /auth/google, /auth/google/callback | optional (GOOGLE_CLIENT_ID/SECRET) |
 | GET | /auth/discord, /auth/discord/callback | optional (DISCORD_CLIENT_ID/SECRET), scope `identify email` |
-| PATCH | /profile | (auth) any of `{ displayName, bio, username, socials{...}, defaultForm{...}, notificationPrefs{...}, profilePrivacy{...} }` → `{ user }`; 409 `USERNAME_TAKEN` |
+| PATCH | /profile | (auth) any of `{ displayName, bio, username, socials{...}, defaultForm{...}, notificationPrefs{...}, profilePrivacy{...}, artistTags{...} }` → `{ user }`; 409 `USERNAME_TAKEN`. `artistTags` may be partial; unknown makes/themes/activity/colour or more than 5 themes → 400 `VALIDATION` |
 | POST/DELETE | /profile/avatar | (auth) multipart `avatar` |
 | POST | /profile/deactivate | (auth) `{ password? }` → `{ ok }`; sets status `deactivated`, logs out, withdraws sign-ups (see below). Anonymised after 30 days |
 | GET | /profile/export | (auth) → `{ exportedAt, user, characters, applications: [Application + eventName], submissions: [Submission + eventName], notifications }`, for a "download my data" button |
 | GET | /profile/:id | public profile (`ArtistProfile` without `createdAt`), by id or username; 404 `NOT_FOUND` for deactivated or banned accounts |
 | GET | /users/:username | (optional auth) public artist profile → `{ profile: ArtistProfile, organizing: Event[] (their public, non-draft events, newest first, max 12), exchanges?: Event[] (finished public exchanges they were accepted into, newest completion first, max 12), stats: { eventsOrganized, exchangesCompleted? }, hasGifts }`. The username matches in any case, with or without a leading `@`; an id works too. `exchangesCompleted` counts the same events as `exchanges` (public, completed, not disabled). Both are left out when the artist turned off `profilePrivacy.showExchanges`. `hasGifts` says whether the gift gallery below has anything to show. 404 `USER_NOT_FOUND` for unknown, deactivated or banned accounts |
+| GET | /users/:username/card | (optional auth) → `{ card: ArtistCard }` for profile hover cards; 404 `USER_NOT_FOUND` like the profile (listing in Discover doesn't matter, since the name is already linked where it appears) |
 | GET | /users/:username/gifts?limit=&before= | (optional auth) the artist's public gift gallery → `{ items: [{ submission: { id, title, type, images, links, submittedAt }, event: { id, name }, giver: UserMini, recipient: UserMini }], hasMore }`, newest first, 12 per page (max 48). `before` is an ISO date cursor (gifts submitted strictly earlier). Only gifts they *made*, in public, completed, non-disabled events, where both they and the recipient have `profilePrivacy.showGifts` and the recipient's account is active; never the private message or verification details. Same answer for every viewer. 400 `VALIDATION` for a bad `before`; 404 `USER_NOT_FOUND` like the profile |
+| GET | /discover/artists?q=&makes=&themes=&hasGifts=&following=&sort=&limit=&cursor= | (optional auth) Discover → `{ items: ArtistCard[], hasMore, nextCursor, total }`. Only active artists with `profilePrivacy.listInDiscover` (default true), never the viewer. `q` matches display name or username. `makes`/`themes` are comma lists (any value in a list matches; all filters must match); `hasGifts=true`; `following=true` needs a login (401). `sort`: default (having tags/gifts/exchanges, then exchanges, then newest), `newest`, `exchanges`, `recommended` (best fit by `shared/taste.mjs`, people you follow after new faces; each item gets `reasons`; falls back to default without a taste, and the response's `sort` says which was used); unknown values → 400 `VALIDATION`. The taste for `recommended` comes from `tasteMakes`/`tasteWants`/`tasteThemes`/`tasteActivity` (quiz answers, works logged out) or else the viewer's artist tags plus their sign-up `wantsTypes`. Other artists are only compared on their public tags. `cursor` is the offset from `nextCursor`; a bad one → 400 `VALIDATION` |
+| GET | /discover/recommendations?tasteMakes=&tasteWants=&tasteThemes=&tasteActivity= | (optional auth) → `{ hasTaste, artists: (ArtistCard + reasons)[≤3], events: [{ event: Event, reasons }] (≤3) }`. Same taste rules as the Recommended sort. Artists: listed, active, not you, scoring above 0. Events: open, public, not disabled, sign-ups still open, not ones you organise or already applied to. No taste → `{ hasTaste: false, artists: [], events: [] }` |
 | GET | /notifications?limit=&before= | (auth) → `{ items: Notification[], unreadCount, hasMore }`, newest first. `before` is an ISO date cursor (items strictly older than it); 400 `VALIDATION` if it isn't a date. `hasMore` says whether an older page exists |
 | GET | /notifications/unread-count | (auth) |
 | PATCH | /notifications/:id/read | (auth) |
@@ -141,7 +146,7 @@ Rejected applications are left alone, and logging back in does not restore withd
 `user` (from `User.toPublic()`): `{ id, email, username, role, status, displayName, avatarUrl, bio,
 socials{twitter,instagram,bluesky,discord,deviantart,toyhouse,tumblr}, defaultForm{communityUsername, canCreate[],
 wantsTypes[], likes, avoid, cannotDraw[]}, notificationPrefs{emailReminders, emailMatches, emailEventUpdates},
-profilePrivacy{showExchanges (default true), showGifts (default false)}, providers{google,discord}, profileComplete,
+profilePrivacy{showExchanges (default true), showGifts (default false), listInDiscover (default true)}, artistTags (public, see ArtistTags), providers{google,discord}, profileComplete,
 createdAt }`. `profilePrivacy` only ever appears in the owner's own `user`, never in `ArtistProfile`.
 
 ### Characters: `routes/character-router.js` (auth, owner only; other people's characters are 404)
@@ -286,6 +291,17 @@ demo artist a bio and two or three social handles so the public profile pages ha
 No API behind these: `client/src/utils/calendar.js` builds `.ics` files for deadlines (`eventCalendarEntries(event)`,
 `buildIcs(entries)`, `downloadIcs(filename, entries)`); `client/src/utils/eventTemplates.js` holds event presets (Secret Santa,
 Valentine swap, seasonal trade, art trade); `client/src/utils/social.js` turns saved social handles into profile links.
+
+### Discover, Find your style and hover cards
+
+- `shared/taste.mjs`: the theme list, card colours and activity levels for artist tags, and the scoring
+  (with reasons) used by both the server and the mock for Discover's Recommended sort and
+  `/discover/recommendations`.
+- `client/src/utils/styleQuiz.js`: Find your style answers in localStorage (`drawsicle-style-quiz`) until
+  they're saved; `pendingSave` makes the quiz page save them after a sign-up or login.
+- `client/src/utils/artistCards.js`: hover-card cache, one request per person per viewer.
+- Pages: `/discover` (filters live in the URL), `/find-your-style`. `PersonLink` opens
+  `ProfileHoverCard` on hover or keyboard focus (not on touch screens).
 
 ## Safety, social and the museum
 

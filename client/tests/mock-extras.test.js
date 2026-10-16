@@ -19,6 +19,7 @@ async function fails(path, options = {}) {
   return { status: res.status, code: res.data.code };
 }
 
+const logout = () => mockRequest('/auth/logout', { method: 'POST' });
 const loginAs = async (key) => {
   await mockRequest('/auth/logout', { method: 'POST' });
   return ok('/auth/login', { method: 'POST', body: { email: `${key}@demo.test`, password: DEMO_PASSWORD } });
@@ -352,6 +353,110 @@ describe('museum rooms', () => {
     const watching = await ok(`${room}/sync`);
     expect(watching.people.map((p) => [p.user.displayName, p.sitting])).toEqual([['Mika', true]]);
     expect(watching.messages.map((m) => m.text)).toEqual(['Hello museum']);
+  });
+});
+
+describe('discover artists', () => {
+  const names = (body) => body.items.map((i) => i.user.username);
+
+  it('lists active artists who stay listed, interesting ones first, and pages', async () => {
+    const all = await ok('/discover/artists?limit=48');
+    expect(all.items.length).toBe(all.total);
+    expect(names(all)).not.toContain(null);
+    // Mika has tags, gifts and an exchange, so she is near the top; Ada (admin, no tags) is near the end
+    expect(names(all).indexOf('mika')).toBeLessThan(names(all).indexOf('ada'));
+    const card = all.items.find((i) => i.user.username === 'mika');
+    expect(card.artistTags.cardColor).toBe('rose');
+    expect(card.gifts.length).toBeGreaterThan(0);
+    expect(card).not.toHaveProperty('following');
+
+    const first = await ok('/discover/artists?limit=3');
+    const second = await ok(`/discover/artists?limit=3&cursor=${first.nextCursor}`);
+    expect(new Set([...names(first), ...names(second)]).size).toBe(6);
+    expect((await fails('/discover/artists?cursor=-1')).code).toBe('VALIDATION');
+  });
+
+  it('searches, leaves out yourself and unlisted artists', async () => {
+    expect(names(await ok('/discover/artists?q=@MIK'))).toEqual(['mika']);
+    await loginAs('kit');
+    const asKit = await ok('/discover/artists?limit=48');
+    expect(names(asKit)).not.toContain('kit');
+    expect(asKit.items[0]).toHaveProperty('following');
+    await ok('/profile', { method: 'PATCH', body: { profilePrivacy: { listInDiscover: false } } });
+    await logout();
+    expect(names(await ok('/discover/artists?limit=48'))).not.toContain('kit');
+    expect((await ok('/users/kit')).profile.username).toBe('kit');
+  });
+});
+
+describe('discover filters and sorts', () => {
+  const names = (body) => body.items.map((i) => i.user.username).sort();
+
+  it('filters by makes, themes, gifts and follows, and sorts', async () => {
+    expect(names(await ok('/discover/artists?makes=writing&limit=48'))).toEqual(['juniper', 'mika', 'noor']);
+    expect(names(await ok('/discover/artists?themes=spooky&limit=48'))).toEqual(['juniper', 'kit']);
+    expect(names(await ok('/discover/artists?makes=writing&themes=spooky'))).toEqual(['juniper']);
+    expect(names(await ok('/discover/artists?hasGifts=true&limit=48'))).toEqual(expect.arrayContaining(['mika', 'kit']));
+    expect((await fails('/discover/artists?themes=nope')).code).toBe('VALIDATION');
+    expect((await fails('/discover/artists?sort=random')).code).toBe('VALIDATION');
+    expect((await fails('/discover/artists?following=true')).status).toBe(401);
+
+    await loginAs('mika');
+    await ok('/users/noor/follow', { method: 'POST' });
+    expect(names(await ok('/discover/artists?following=true'))).toEqual(['noor']);
+    const newest = await ok('/discover/artists?sort=newest&limit=48');
+    const times = newest.items.map((i) => i.user.username);
+    expect(times.length).toBe(newest.total);
+    expect((await ok('/discover/artists?sort=exchanges')).items[0].exchangesCompleted).toBeGreaterThan(0);
+  });
+});
+
+describe('find your style quiz', () => {
+  it('signing up then saving the answers fills artist tags, and sign-up defaults when asked', async () => {
+    const { profileUpdateFrom } = await import('../src/utils/styleQuiz.js');
+    const answers = { makes: ['writing'], themes: ['mythology', 'ocean'], wants: ['art'], activity: 'casual', cardColor: 'sky' };
+    await mockRequest('/auth/logout', { method: 'POST' });
+    await ok('/auth/register', { method: 'POST', body: { email: 'quiz@demo.test', password: 'longpassword1', displayName: 'Quiz Taker' } });
+    const { user } = await ok('/profile', { method: 'PATCH', body: profileUpdateFrom(answers, { copyDefaults: true }) });
+    expect(user.artistTags).toEqual({ makes: ['writing'], themes: ['mythology', 'ocean'], activity: 'casual', cardColor: 'sky' });
+    expect(user.defaultForm).toMatchObject({ canCreate: ['writing'], wantsTypes: ['art'] });
+    await mockRequest('/auth/logout', { method: 'POST' }); // Discover leaves out the viewer
+    const card = (await ok(`/discover/artists?q=${user.username}`)).items[0];
+    expect(card.artistTags.cardColor).toBe('sky');
+  });
+});
+
+describe('recommendations', () => {
+  it('suggests artists and open events with reasons, from quiz answers or your tags', async () => {
+    const none = await ok('/discover/recommendations');
+    expect(none).toEqual({ artists: [], events: [], hasTaste: false });
+
+    const quiz = await ok('/discover/recommendations?tasteThemes=spooky,creatures&tasteMakes=art&tasteWants=writing');
+    expect(quiz.hasTaste).toBe(true);
+    expect(quiz.artists.length).toBeGreaterThan(0);
+    expect(quiz.artists.length).toBeLessThanOrEqual(3);
+    expect(quiz.artists.every((a) => a.reasons.length > 0)).toBe(true);
+    expect(quiz.artists[0].user.username).toBe('kit'); // spooky + creatures
+    expect(quiz.events.every((e) => e.event.status === 'open' && e.reasons.length > 0)).toBe(true);
+
+    await loginAs('kit');
+    const mine = await ok('/discover/recommendations');
+    expect(mine.artists.map((a) => a.user.username)).not.toContain('kit');
+    const organising = (await ok('/events/mine')).organizing.map((e) => e.id);
+    expect(mine.events.some((e) => organising.includes(e.event.id))).toBe(false);
+
+    const sorted = await ok('/discover/artists?sort=recommended');
+    expect(sorted.sort).toBe('recommended');
+    expect(sorted.items[0].reasons.length).toBeGreaterThan(0);
+  });
+});
+
+describe('hover cards', () => {
+  it('returns the artist card and 404s for unknown or banned artists', async () => {
+    const { card } = await ok('/users/mika/card');
+    expect(card.user.username).toBe('mika');
+    expect(card.artistTags.cardColor).toBe('rose');
+    expect((await fails('/users/nobody_here/card')).code).toBe('USER_NOT_FOUND');
   });
 });
 
