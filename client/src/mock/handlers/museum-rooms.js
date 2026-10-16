@@ -2,7 +2,8 @@
 // so "who's here" is just the people the server would list, and chat is kept in this browser.
 import { CHAT, ROOM_KINDS, roomKey, parseChat, cooldownLeft, isRepeat } from '@shared/chat.mjs';
 import { isId, newId } from '../db.js';
-import { miniOf } from '../model.js';
+import { findUser, miniOf } from '../model.js';
+import { cleanLook } from '@shared/looks.mjs';
 import { httpError } from '../util.js';
 
 const FRESH_MS = 40 * 1000;
@@ -39,9 +40,14 @@ function enterRoom(ctx) {
   };
 }
 
+// Someone in the room: the usual mini, plus their avatar's look
+function person(state, id) {
+  return { ...miniOf(state, id), look: cleanLook(findUser(state, id)?.museumLook) };
+}
+
 const chatJson = (state, m) => ({
   id: m.id,
-  user: miniOf(state, m.user),
+  user: person(state, m.user),
   kind: m.kind,
   emote: m.emote || '',
   text: m.text,
@@ -60,7 +66,7 @@ function roomState(ctx, key, viewerId, sinceValue) {
   return {
     people: state.presence
       .filter((p) => p.room === key && p.user !== viewerId && now - new Date(p.updatedAt).getTime() < FRESH_MS)
-      .map((p) => ({ user: miniOf(state, p.user), x: p.x, y: p.y, facing: p.facing, sitting: p.sitting })),
+      .map((p) => ({ user: person(state, p.user), x: p.x, y: p.y, facing: p.facing, sitting: p.sitting, dancing: Boolean(p.dancing) })),
     messages: messages.map((m) => chatJson(state, m)),
     cursor: messages.length ? messages[messages.length - 1].createdAt : new Date(since).toISOString(),
   };
@@ -91,6 +97,7 @@ export function register(router) {
       y,
       facing: FACINGS.includes(ctx.body?.facing) ? ctx.body.facing : 'se',
       sitting: ctx.body?.sitting === true,
+      dancing: ctx.body?.sitting !== true && ctx.body?.dancing === true,
       updatedAt: ctx.now.toISOString(),
     };
     const row = ctx.state.presence.find((p) => p.user === user.id);

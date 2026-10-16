@@ -16,6 +16,7 @@ import {
 } from '../model.js';
 import { httpError, invalid, isPlainObject } from '../util.js';
 import { isId, newId } from '../db.js';
+import { cleanLook } from '@shared/looks.mjs';
 
 const USERNAME_RE = /^[a-z0-9_]{3,30}$/;
 const HANDLE_RE = /^[A-Za-z0-9_.-]{0,50}$/;
@@ -42,6 +43,15 @@ function typeList(value, label) {
 }
 
 export function register(router) {
+  // The museum avatar from the avatar creator (profile-router.js)
+  router.put('/profile/look', (ctx) => {
+    const user = ctx.requireAuth();
+    const look = cleanLook(ctx.body);
+    if (!look) throw httpError(400, 'Pick each part of your avatar from the options.', 'VALIDATION');
+    user.museumLook = look;
+    return { user: userPublic(user) };
+  });
+
   router.patch('/profile', (ctx) => {
     const user = ctx.requireAuth();
     const { displayName, bio, username, socials, defaultForm, notificationPrefs, profilePrivacy } = ctx.body;
