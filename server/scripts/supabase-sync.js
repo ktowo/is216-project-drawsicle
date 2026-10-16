@@ -146,12 +146,13 @@ async function applySchema(sql) {
 
 const plain = (value) => JSON.parse(JSON.stringify(value)); // ObjectIds become hex strings, dates ISO
 
+// Every column is there (null when the record doesn't have it): the REST API needs each row in
+// a batch to have the same columns
 function rowFor(doc, columns) {
   const row = {};
   for (const c of columns) {
     const value = doc[c.key];
-    if (value === undefined) continue;
-    if (value === null) row[c.column] = null;
+    if (value === undefined || value === null) row[c.column] = null;
     else if (c.type === 'text') row[c.column] = String(value);
     else if (c.type === 'text[]') row[c.column] = (value || []).map(String);
     else if (c.type === 'timestamptz') row[c.column] = new Date(value).toISOString();
