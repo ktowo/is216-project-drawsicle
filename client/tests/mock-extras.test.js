@@ -292,3 +292,19 @@ describe('activity timeline', () => {
     expect((await fails(`/events/${autumn.id}/activity`)).status).toBe(403);
   });
 });
+
+describe('the museum', () => {
+  it('opens a wing for each finished public exchange with gifts people chose to show', async () => {
+    const { wings } = await ok('/museum');
+    expect(wings.length).toBeGreaterThan(0);
+    const [first] = wings;
+    const { artworks, event } = await ok(`/museum/${first.event.id}`);
+    expect(event.id).toBe(first.event.id);
+    expect(artworks).toHaveLength(first.count);
+    for (const art of artworks) {
+      expect(art.submission.message).toBeUndefined();
+      expect(art.giver.displayName).toBeTruthy();
+    }
+    expect((await fails('/museum/0123456789abcdef01234567')).status).toBe(404);
+  });
+});

@@ -19,6 +19,7 @@ import * as submissions from './handlers/submissions.js';
 import * as dashboard from './handlers/dashboard.js';
 import * as outreach from './handlers/outreach.js';
 import * as reports from './handlers/reports.js';
+import * as museum from './handlers/museum.js';
 
 const router = createRouter();
 // Order matters where paths overlap: events.js adds /events/mine before /events/:eventId
@@ -34,6 +35,7 @@ for (const feature of [
   submissions,
   outreach,
   reports,
+  museum,
   dashboard,
 ]) {
   feature.register(router);

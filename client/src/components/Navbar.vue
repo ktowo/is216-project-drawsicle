@@ -18,6 +18,7 @@ import {
   CircleHelp,
   Eye,
   ShieldCheck,
+  Landmark,
 } from 'lucide-vue-next';
 import NotificationBell from './NotificationBell.vue';
 import DisplayToggles from './DisplayToggles.vue';
@@ -198,6 +199,7 @@ watch(
         >
           Browse events
         </RouterLink>
+        <RouterLink to="/museum" class="nav-link">Museum</RouterLink>
         <template v-if="auth.user">
           <RouterLink to="/dashboard" class="nav-link">Dashboard</RouterLink>
           <RouterLink to="/my-events" class="nav-link">My events</RouterLink>
@@ -302,6 +304,11 @@ watch(
           <li>
             <RouterLink to="/events" class="mobile-link" :class="{ 'is-active': browseActive }" active-class="" exact-active-class="">
               <Compass :size="20" aria-hidden="true" /> Browse events
+            </RouterLink>
+          </li>
+          <li>
+            <RouterLink to="/museum" class="mobile-link">
+              <Landmark :size="20" aria-hidden="true" /> Museum
             </RouterLink>
           </li>
           <template v-if="auth.user">
