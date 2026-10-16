@@ -151,6 +151,14 @@ stop_local_db() {
 stop_local_db
 stop_recorded client
 stop_recorded server
+# Ollama and the Cloudflare Tunnel, if run-ollama.sh started them
+if [[ -f ./run-ollama.sh ]]; then
+  out="$(bash ./run-ollama.sh --stop 2>/dev/null)"
+  if [[ -n $out ]]; then
+    echo "$out"
+    STOPPED=$((STOPPED + 1))
+  fi
+fi
 
 # The recorded processes are wrappers (pnpm, nodemon); whatever still holds a port goes too.
 # The API comes before its database so it can close the connection first.
