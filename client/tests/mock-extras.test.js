@@ -19,6 +19,7 @@ async function fails(path, options = {}) {
   return { status: res.status, code: res.data.code };
 }
 
+const logout = () => mockRequest('/auth/logout', { method: 'POST' });
 const loginAs = async (key) => {
   await mockRequest('/auth/logout', { method: 'POST' });
   return ok('/auth/login', { method: 'POST', body: { email: `${key}@demo.test`, password: DEMO_PASSWORD } });
@@ -352,5 +353,38 @@ describe('museum rooms', () => {
     const watching = await ok(`${room}/sync`);
     expect(watching.people.map((p) => [p.user.displayName, p.sitting])).toEqual([['Mika', true]]);
     expect(watching.messages.map((m) => m.text)).toEqual(['Hello museum']);
+  });
+});
+
+describe('discover artists', () => {
+  const names = (body) => body.items.map((i) => i.user.username);
+
+  it('lists active artists who stay listed, interesting ones first, and pages', async () => {
+    const all = await ok('/discover/artists?limit=48');
+    expect(all.items.length).toBe(all.total);
+    expect(names(all)).not.toContain(null);
+    // Mika has tags, gifts and an exchange, so she is near the top; Ada (admin, no tags) is near the end
+    expect(names(all).indexOf('mika')).toBeLessThan(names(all).indexOf('ada'));
+    const card = all.items.find((i) => i.user.username === 'mika');
+    expect(card.artistTags.cardColor).toBe('rose');
+    expect(card.gifts.length).toBeGreaterThan(0);
+    expect(card).not.toHaveProperty('following');
+
+    const first = await ok('/discover/artists?limit=3');
+    const second = await ok(`/discover/artists?limit=3&cursor=${first.nextCursor}`);
+    expect(new Set([...names(first), ...names(second)]).size).toBe(6);
+    expect((await fails('/discover/artists?cursor=-1')).code).toBe('VALIDATION');
+  });
+
+  it('searches, leaves out yourself and unlisted artists', async () => {
+    expect(names(await ok('/discover/artists?q=@MIK'))).toEqual(['mika']);
+    await loginAs('kit');
+    const asKit = await ok('/discover/artists?limit=48');
+    expect(names(asKit)).not.toContain('kit');
+    expect(asKit.items[0]).toHaveProperty('following');
+    await ok('/profile', { method: 'PATCH', body: { profilePrivacy: { listInDiscover: false } } });
+    await logout();
+    expect(names(await ok('/discover/artists?limit=48'))).not.toContain('kit');
+    expect((await ok('/users/kit')).profile.username).toBe('kit');
   });
 });
