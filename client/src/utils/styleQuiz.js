@@ -60,7 +60,13 @@ export function sameTags(answers, tags) {
 }
 
 // Query string values describing this taste, for recommendations without an account
+// (GET /discover/recommendations and Discover's Recommended sort)
 export function tasteQuery(answers) {
   const a = cleanAnswers(answers);
-  return { makes: a.makes.join(','), wants: a.wants.join(','), themes: a.themes.join(','), activity: a.activity };
+  return {
+    tasteMakes: a.makes.join(','),
+    tasteWants: a.wants.join(','),
+    tasteThemes: a.themes.join(','),
+    tasteActivity: a.activity,
+  };
 }

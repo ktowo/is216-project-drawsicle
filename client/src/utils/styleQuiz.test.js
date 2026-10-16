@@ -45,7 +45,7 @@ describe('turning answers into a profile update', () => {
   it('knows when saved tags already match, and builds a taste query', () => {
     expect(sameTags(answers, { makes: ['art'], themes: ['cosy', 'spooky'], activity: 'casual', cardColor: 'sky' })).toBe(true);
     expect(sameTags(answers, { makes: [], themes: [], activity: '', cardColor: '' })).toBe(false);
-    expect(tasteQuery(answers)).toEqual({ makes: 'art', wants: 'writing', themes: 'cosy,spooky', activity: 'casual' });
+    expect(tasteQuery(answers)).toEqual({ tasteMakes: 'art', tasteWants: 'writing', tasteThemes: 'cosy,spooky', tasteActivity: 'casual' });
     expect(hasAnswers(emptyAnswers())).toBe(false);
     expect(hasAnswers({ ...emptyAnswers(), cardColor: 'sky' })).toBe(true);
   });

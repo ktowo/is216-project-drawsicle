@@ -8,7 +8,9 @@ const { FINISHED, artistCard } = require('../services/artists.js');
 const Follow = require('../models/Follow.js');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
 const { CREATION_TYPE_VALUES } = require('../../shared/constants.mjs');
-const { THEME_VALUES } = require('../../shared/taste.mjs');
+const { THEME_VALUES, tasteOf, hasTaste, scoreArtist, scoreEvent } = require('../../shared/taste.mjs');
+const EventMember = require('../models/EventMember.js');
+const { serializeEvents } = require('../services/events.js');
 
 // Discover artists: /api/discover/artists. Only active artists who haven't turned off
 // profilePrivacy.listInDiscover, never yourself.
@@ -72,7 +74,28 @@ const ORDERS = {
   default: [interesting, (c) => c.exchanges, (c) => c.createdAt],
   newest: [(c) => c.createdAt],
   exchanges: [(c) => c.exchanges, interesting, (c) => c.createdAt],
+  // Best fit first; people you already follow after new faces
+  recommended: [(c) => c.score, (c) => Number(!c.followed), interesting, (c) => c.exchanges, (c) => c.createdAt],
 };
+
+// Whose taste to recommend for: quiz answers in the query (works logged out), otherwise the
+// viewer's own artist tags plus what their sign-up defaults say they'd like to receive.
+function tasteFor(query, viewer) {
+  const fromQuery = tasteOf({
+    makes: String(query.tasteMakes || '').split(','),
+    wants: String(query.tasteWants || '').split(','),
+    themes: String(query.tasteThemes || '').split(','),
+    activity: query.tasteActivity,
+  });
+  if (hasTaste(fromQuery)) return fromQuery;
+  if (!viewer) return null;
+  const tags = viewer.toPublic().artistTags;
+  const taste = tasteOf({ ...tags, wants: viewer.defaultForm?.wantsTypes || [] });
+  return hasTaste(taste) ? taste : null;
+}
+
+// Only public facts about the other artist count (never their private sign-up defaults)
+const publicTaste = (c) => ({ makes: c.tags.makes, themes: c.tags.themes, activity: c.tags.activity });
 
 // ?makes=art,writing&themes=fantasy&hasGifts=true&following=true. Within makes or themes any value
 // matches; different filters must all match.
@@ -127,11 +150,66 @@ router.get('/artists', optionalAuth, asyncHandler(async (req, res) => {
     filters.following ? (await Follow.distinct('following', { follower: req.user._id })).map(String) : []
   );
   const list = (await candidates({ q: req.query.q, viewer: req.user })).filter(matches(filters, followed));
-  const ordered = sortBy(list, ORDERS[filters.sort]);
+  // Recommended needs a taste to compare with; without one it's the usual order
+  const taste = filters.sort === 'recommended' ? tasteFor(req.query, req.user) : null;
+  let sort = filters.sort;
+  if (sort === 'recommended') {
+    if (!taste) sort = 'default';
+    else {
+      const mine = new Set(req.user ? (await Follow.distinct('following', { follower: req.user._id })).map(String) : []);
+      for (const c of list) Object.assign(c, scoreArtist(taste, publicTaste(c)), { followed: mine.has(c.id) });
+    }
+  }
+  const ordered = sortBy(list, ORDERS[sort]);
   const page = ordered.slice(offset, offset + limit);
-  const items = await Promise.all(page.map((c) => artistCard(c.user, req.user)));
+  const items = await Promise.all(
+    page.map(async (c) => ({ ...(await artistCard(c.user, req.user)), ...(c.reasons ? { reasons: c.reasons } : {}) }))
+  );
   const hasMore = ordered.length > offset + limit;
-  res.json({ items, hasMore, nextCursor: hasMore ? String(offset + limit) : null, total: ordered.length });
+  res.json({ items, hasMore, nextCursor: hasMore ? String(offset + limit) : null, total: ordered.length, sort });
+}));
+
+const SUGGESTIONS = 3;
+
+// Three artists like you and three open events that fit you, each with reasons
+router.get('/recommendations', optionalAuth, asyncHandler(async (req, res) => {
+  const taste = tasteFor(req.query, req.user);
+  if (!taste) return res.json({ artists: [], events: [], hasTaste: false });
+
+  const list = await candidates({ viewer: req.user });
+  const mine = new Set(req.user ? (await Follow.distinct('following', { follower: req.user._id })).map(String) : []);
+  for (const c of list) Object.assign(c, scoreArtist(taste, publicTaste(c)), { followed: mine.has(c.id) });
+  const bestArtists = sortBy(list.filter((c) => c.score > 0), ORDERS.recommended).slice(0, SUGGESTIONS);
+
+  // Open public events you can still join: not ones you run or already signed up for
+  const [running, applied] = req.user
+    ? await Promise.all([
+        EventMember.distinct('event', { user: req.user._id, roles: 'organizer' }),
+        Application.distinct('event', { user: req.user._id, status: { $ne: 'withdrawn' } }),
+      ])
+    : [[], []];
+  const skip = [...running, ...applied];
+  const open = await Event.find({
+    status: 'open',
+    publicity: 'public',
+    disabledAt: null,
+    signupDeadline: { $gt: new Date() },
+    _id: { $nin: skip },
+  }).limit(CANDIDATES_MAX);
+  const scored = open
+    .map((event) => ({ event, ...scoreEvent(taste, event) }))
+    .filter((e) => e.score > 0)
+    .sort((a, b) => b.score - a.score || a.event.signupDeadline - b.event.signupDeadline || String(a.event._id).localeCompare(String(b.event._id)))
+    .slice(0, SUGGESTIONS);
+  const serialized = await serializeEvents(scored.map((e) => e.event), req.user);
+
+  res.json({
+    hasTaste: true,
+    artists: await Promise.all(
+      bestArtists.map(async (c) => ({ ...(await artistCard(c.user, req.user)), reasons: c.reasons }))
+    ),
+    events: serialized.map((event, i) => ({ event, reasons: scored[i].reasons })),
+  });
 }));
 
 router.use(apiErrorHandler);
