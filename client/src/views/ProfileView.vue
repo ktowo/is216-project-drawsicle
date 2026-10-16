@@ -8,6 +8,7 @@ import ChoiceChips from '@/components/ui/ChoiceChips.vue';
 import TagInput from '@/components/ui/TagInput.vue';
 import UserAvatar from '@/components/UserAvatar.vue';
 import ProfileHeader from '@/components/profile/ProfileHeader.vue';
+import ArtStyleCard from '@/components/profile/ArtStyleCard.vue';
 import { auth, setUser } from '@/stores/auth';
 import { toast } from '@/stores/toast';
 import { api } from '@/api';
@@ -515,6 +516,8 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
       </p>
       <ProfileHeader :profile="preview" heading-tag="h3" />
     </section>
+
+    <ArtStyleCard />
 
     <form class="card panel" novalidate aria-labelledby="defaults-heading" @submit.prevent="saveDefaults">
       <h2 id="defaults-heading" class="section-title">Sign-up form defaults</h2>
