@@ -450,3 +450,12 @@ describe('recommendations', () => {
     expect(sorted.items[0].reasons.length).toBeGreaterThan(0);
   });
 });
+
+describe('hover cards', () => {
+  it('returns the artist card and 404s for unknown or banned artists', async () => {
+    const { card } = await ok('/users/mika/card');
+    expect(card.user.username).toBe('mika');
+    expect(card.artistTags.cardColor).toBe('rose');
+    expect((await fails('/users/nobody_here/card')).code).toBe('USER_NOT_FOUND');
+  });
+});
