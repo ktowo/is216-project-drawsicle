@@ -292,6 +292,17 @@ No API behind these: `client/src/utils/calendar.js` builds `.ics` files for dead
 `buildIcs(entries)`, `downloadIcs(filename, entries)`); `client/src/utils/eventTemplates.js` holds event presets (Secret Santa,
 Valentine swap, seasonal trade, art trade); `client/src/utils/social.js` turns saved social handles into profile links.
 
+### Discover, Find your style and hover cards
+
+- `shared/taste.mjs`: the theme list, card colours and activity levels for artist tags, and the scoring
+  (with reasons) used by both the server and the mock for Discover's Recommended sort and
+  `/discover/recommendations`.
+- `client/src/utils/styleQuiz.js`: Find your style answers in localStorage (`drawsicle-style-quiz`) until
+  they're saved; `pendingSave` makes the quiz page save them after a sign-up or login.
+- `client/src/utils/artistCards.js`: hover-card cache, one request per person per viewer.
+- Pages: `/discover` (filters live in the URL), `/find-your-style`. `PersonLink` opens
+  `ProfileHoverCard` on hover or keyboard focus (not on touch screens).
+
 ## Safety, social and the museum
 
 ### Site roles (`shared/permissions.mjs`)

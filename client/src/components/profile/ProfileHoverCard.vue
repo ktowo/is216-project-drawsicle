@@ -133,12 +133,15 @@ watch(card, () => requestAnimationFrame(place));
   margin: 0;
 }
 .who {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  margin-top: -20px;
+  position: relative;
+  padding-left: 64px;
+  min-height: 34px;
+  margin-top: 8px;
 }
 .avatar {
+  position: absolute;
+  left: 0;
+  top: -28px;
   border: 3px solid var(--surface);
   border-radius: 50%;
   background: var(--surface);
