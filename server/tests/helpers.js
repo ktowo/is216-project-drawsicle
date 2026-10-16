@@ -11,6 +11,9 @@
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
 process.env.REMINDER_INTERVAL_MINUTES = '0';
+// Tests never touch a real Supabase project, even when its keys are in the shell
+delete process.env.SUPABASE_URL;
+delete process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const mongoose = require('mongoose');
 const request = require('supertest');
