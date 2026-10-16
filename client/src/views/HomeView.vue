@@ -19,8 +19,9 @@ onMounted(async () => {
 </script>
 
 <template>
-    <h1 class="text-purple-800 text-4xl">Hello World!</h1>
+    <h1 class="text-purple-800 text-4xl"><img class="float-left h-12 m-3" src="/drawsicle.svg">Hello World!</h1>
     <p>The <a :href="API_URL">server</a> says: <code class="text-blue-500">{{ response }}</code></p>
 </template>
 
-<style scoped></style>
+<style scoped>
+</style>
