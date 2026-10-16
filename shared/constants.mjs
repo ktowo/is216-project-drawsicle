@@ -95,6 +95,8 @@ export const NOTIFICATION_TYPES = [
   'event_status',
   'organizer_added',
   'match_assigned',
+  'gift_question',
+  'gift_answer',
   'deadline_reminder',
   'submission_received',
   'gift_revealed',

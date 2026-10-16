@@ -17,6 +17,7 @@ import {
   LifeBuoy,
   Flag,
   UserPlus,
+  MessageCircleQuestion,
 } from 'lucide-vue-next';
 import { api, qs } from '../api';
 
@@ -48,6 +49,8 @@ const KINDS = {
   application_accepted: { icon: CircleCheck, group: 'signups', tone: 'success' },
   application_rejected: { icon: Ban, group: 'signups', tone: 'muted' },
   match_assigned: { icon: Gift, group: 'matches', tone: 'pink' },
+  gift_question: { icon: MessageCircleQuestion, group: 'matches', tone: 'info' },
+  gift_answer: { icon: MessageCircleQuestion, group: 'matches', tone: 'pink' },
   submission_received: { icon: ImageUp, group: 'matches', tone: 'info' },
   gift_revealed: { icon: PartyPopper, group: 'matches', tone: 'pink' },
   gift_thanked: { icon: Heart, group: 'matches', tone: 'pink' },

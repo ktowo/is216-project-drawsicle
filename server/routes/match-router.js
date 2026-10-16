@@ -14,6 +14,7 @@ const { announceMilestone } = require('../services/discord.js');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
 const { generateMatches, scorePair, skippedAccountsWarning } = require('../../shared/matching.mjs');
 const { LIMITS, PROGRESS_VALUES } = require('../../shared/constants.mjs');
+const { readQuestion, readAnswer, askingProblem, questionJson } = require('../../shared/gift-questions.mjs');
 const StyleProfile = require('../models/StyleProfile.js');
 const Event = require('../models/Event.js');
 const { STYLE_MODES } = require('../../shared/style.mjs');
@@ -481,6 +482,7 @@ async function myMatchJson(event, match, { asBackup = false } = {}) {
     },
     // The original giver doesn't see the backup's gift
     submission: submission && (asBackup || !match.backupGiver) ? submission.toPublic() : null,
+    questions: (match.questions || []).map(questionJson),
   };
 }
 
@@ -513,6 +515,69 @@ const rejectIfHandedOver = (req, res, next) =>
 
 router.put('/my-match/progress', requireAuth, loadEvent, requireParticipant, loadMyMatch, rejectIfHandedOver, requireActiveEvent, asyncHandler(saveProgress));
 
+// ---------- Asking the recipient ----------
+// The person making a gift can ask its recipient a few questions ("warm or cool colours?").
+// The recipient answers on the event page and never learns who asked.
+
+const questionsOpen = (req, res, next) =>
+  req.event.status === 'active'
+    ? next()
+    : next(httpError(409, 'Questions can only be asked and answered while gifts are being made.', 'WRONG_STATUS'));
+
+async function askQuestion(req, res) {
+  const { text, error } = readQuestion(req.body?.text);
+  if (error) throw httpError(400, error, 'VALIDATION');
+  const problem = askingProblem(req.match.questions);
+  if (problem) throw httpError(409, problem, 'TOO_MANY_QUESTIONS');
+  req.match.questions.push({ text, askedBy: req.user._id, askedAt: new Date() });
+  await req.match.save();
+  const question = req.match.questions[req.match.questions.length - 1];
+  await notify(req.match.recipient, {
+    type: 'gift_question',
+    title: 'Your secret artist has a question',
+    message: `About your gift in ${req.event.name}: "${text.length > 200 ? `${text.slice(0, 199)}…` : text}"`,
+    link: `/events/${req.event._id}#gift-questions`,
+  }).catch((e) => console.error('Question notification failed:', e.message));
+  res.status(201).json({ question: questionJson(question), questions: req.match.questions.map(questionJson) });
+}
+
+router.post('/my-match/questions', requireAuth, loadEvent, requireParticipant, loadMyMatch, rejectIfHandedOver, questionsOpen, asyncHandler(askQuestion));
+
+// The match whose gift is for the viewer
+async function matchForMe(req) {
+  if (!['active', 'completed'].includes(req.event.status)) return null;
+  return Match.findOne({ event: req.event._id, recipient: req.user._id, published: true });
+}
+
+router.get('/questions-for-me', requireAuth, loadEvent, requireParticipant, asyncHandler(async (req, res) => {
+  const match = await matchForMe(req);
+  res.json({ questions: (match?.questions || []).map(questionJson), canAnswer: req.event.status === 'active' });
+}));
+
+router.post('/questions-for-me/:questionId/answer', requireAuth, loadEvent, requireParticipant, questionsOpen, asyncHandler(async (req, res) => {
+  const match = await matchForMe(req);
+  const question = match && mongoose.isValidObjectId(req.params.questionId) ? match.questions.id(req.params.questionId) : null;
+  if (!question) throw httpError(404, "That question isn't for you.", 'NOT_FOUND');
+  const { text, error } = readAnswer(req.body?.answer);
+  if (error) throw httpError(400, error, 'VALIDATION');
+  const first = !question.answer;
+  question.answer = text;
+  question.answeredAt = new Date();
+  await match.save();
+  // Whoever is making the gift now hears back (a backup artist, if one took it over)
+  const maker = match.backupGiver || match.giver;
+  const link = match.backupGiver ? `/events/${req.event._id}/matches?backup=${match._id}` : `/events/${req.event._id}/matches`;
+  if (first) {
+    await notify(maker, {
+      type: 'gift_answer',
+      title: `${userMini(req.user).displayName} answered your question`,
+      message: `"${question.text.length > 120 ? `${question.text.slice(0, 119)}…` : question.text}"`,
+      link,
+    }).catch((e) => console.error('Answer notification failed:', e.message));
+  }
+  res.json({ question: questionJson(question) });
+}));
+
 // ---------- Backup artists ----------
 // Accepted participants who ticked "I can be a backup" can take over a gift whose giver dropped
 // out. The organisers pick them; the backup then sees the recipient and submits the gift.
@@ -538,6 +603,7 @@ router.get('/backups/:matchId', requireAuth, loadEvent, requireParticipant, load
 }));
 
 router.put('/backups/:matchId/progress', requireAuth, loadEvent, requireParticipant, loadBackupMatch, requireActiveEvent, asyncHandler(saveProgress));
+router.post('/backups/:matchId/questions', requireAuth, loadEvent, requireParticipant, loadBackupMatch, questionsOpen, asyncHandler(askQuestion));
 
 // Volunteers for one match, for the organisers' "Find a backup" list
 router.get('/backups/volunteers/:matchId', ...organizerOnly, asyncHandler(async (req, res) => {

@@ -17,6 +17,7 @@ import {
 import { byName, formatDay, httpError, invalid } from '../util.js';
 import { myMatch, participantEvent, roleEvent } from './common.js';
 import { STYLE_MODES } from '@shared/style.mjs';
+import { readQuestion, readAnswer, askingProblem, questionJson } from '@shared/gift-questions.mjs';
 
 // Matches of one event for organisers, sorted by giver name like the server does
 export function adminMatches(state, eventId, { publishedOnly = false } = {}) {
@@ -380,6 +381,7 @@ export function register(router) {
           .map((c) => characterPublic(c)),
       },
       submission: submission && (asBackup || !match.backupGiver) ? submissionPublic(submission) : null,
+      questions: (match.questions || []).map(questionJson),
     };
   }
 
@@ -407,6 +409,80 @@ export function register(router) {
       throw httpError(409, 'This gift was handed to a backup artist, so you no longer need to make it.', 'HANDED_OVER');
     }
     return saveProgress(ctx, event, match);
+  });
+
+  // ---------- Asking the recipient (anonymously) ----------
+
+  const questionsOpen = (event) => {
+    if (event.status !== 'active') {
+      throw httpError(409, 'Questions can only be asked and answered while gifts are being made.', 'WRONG_STATUS');
+    }
+  };
+  const clip = (text, n) => (text.length > n ? `${text.slice(0, n - 1)}…` : text);
+
+  function askQuestion(ctx, event, match, user) {
+    questionsOpen(event);
+    const { text, error } = readQuestion(ctx.body?.text);
+    if (error) throw invalid(error);
+    match.questions ||= [];
+    const problem = askingProblem(match.questions);
+    if (problem) throw httpError(409, problem, 'TOO_MANY_QUESTIONS');
+    const question = { id: newId(), text, askedBy: user.id, askedAt: ctx.now.toISOString(), answer: '', answeredAt: null };
+    match.questions.push(question);
+    notify(ctx.state, match.recipient, {
+      type: 'gift_question',
+      title: 'Your secret artist has a question',
+      message: `About your gift in ${event.name}: "${clip(text, 200)}"`,
+      link: `/events/${event.id}#gift-questions`,
+    });
+    ctx.status = 201;
+    return { question: questionJson(question), questions: match.questions.map(questionJson) };
+  }
+
+  router.post('/events/:eventId/my-match/questions', (ctx) => {
+    const { user, event } = participantEvent(ctx);
+    const match = myMatch(ctx, event, user);
+    if (match.backupGiver) {
+      throw httpError(409, 'This gift was handed to a backup artist, so you no longer need to make it.', 'HANDED_OVER');
+    }
+    return askQuestion(ctx, event, match, user);
+  });
+
+  router.post('/events/:eventId/backups/:matchId/questions', (ctx) => {
+    const { user, event } = participantEvent(ctx);
+    return askQuestion(ctx, event, backupMatch(ctx, event, user), user);
+  });
+
+  const matchForMe = (state, event, user) =>
+    ['active', 'completed'].includes(event.status)
+      ? state.matches.find((m) => m.event === event.id && m.recipient === user.id && m.published) || null
+      : null;
+
+  router.get('/events/:eventId/questions-for-me', (ctx) => {
+    const { user, event } = participantEvent(ctx);
+    const match = matchForMe(ctx.state, event, user);
+    return { questions: (match?.questions || []).map(questionJson), canAnswer: event.status === 'active' };
+  });
+
+  router.post('/events/:eventId/questions-for-me/:questionId/answer', (ctx) => {
+    const { user, event } = participantEvent(ctx);
+    questionsOpen(event);
+    const match = matchForMe(ctx.state, event, user);
+    const question = match?.questions?.find((q) => q.id === ctx.params.questionId);
+    if (!question) throw httpError(404, "That question isn't for you.", 'NOT_FOUND');
+    const { text, error } = readAnswer(ctx.body?.answer);
+    if (error) throw invalid(error);
+    const first = !question.answer;
+    Object.assign(question, { answer: text, answeredAt: ctx.now.toISOString() });
+    if (first) {
+      notify(ctx.state, match.backupGiver || match.giver, {
+        type: 'gift_answer',
+        title: `${miniOf(ctx.state, user.id).displayName} answered your question`,
+        message: `"${clip(question.text, 120)}"`,
+        link: match.backupGiver ? `/events/${event.id}/matches?backup=${match.id}` : `/events/${event.id}/matches`,
+      });
+    }
+    return { question: questionJson(question) };
   });
 
   // ---------- Backup artists ----------
