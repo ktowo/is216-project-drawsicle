@@ -459,7 +459,8 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
       <fieldset class="artist-tags">
         <legend class="label">Your artist tags</legend>
         <p class="hint tags-hint">
-          Shown on your profile and on Discover so people who like the same things can find you.
+          Shown on your profile and on Discover so people who like the same things can find you. Not sure?
+          <RouterLink to="/find-your-style">Take the Find your style quiz</RouterLink>.
         </p>
         <ArtistTagsEditor v-model="profile.artistTags" />
       </fieldset>
