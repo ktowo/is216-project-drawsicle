@@ -30,6 +30,7 @@ import StatTile from '@/components/events/manage/StatTile.vue';
 import EventBanner from '@/components/events/EventBanner.vue';
 import GettingStarted from '@/components/dashboard/GettingStarted.vue';
 import RecentActivity from '@/components/dashboard/RecentActivity.vue';
+import InspirationCard from '@/components/InspirationCard.vue';
 import { auth } from '@/stores/auth';
 import { notifications, refreshUnreadCount, loadNotifications } from '@/stores/notifications';
 import { toast } from '@/stores/toast';
@@ -385,6 +386,8 @@ async function sendTestNotification() {
           </section>
 
           <RecentActivity />
+
+          <InspirationCard />
 
           <!-- Quick actions -->
           <section class="card panel" aria-labelledby="quick-title">

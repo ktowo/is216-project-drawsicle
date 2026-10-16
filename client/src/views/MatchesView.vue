@@ -37,6 +37,7 @@ import { formatDateTime } from '@/utils/format';
 import { eventCalendarEntries, downloadIcs } from '@/utils/calendar';
 import ProgressPicker from '@/components/events/ProgressPicker.vue';
 import GiftQuestions from '@/components/events/GiftQuestions.vue';
+import InspirationCard from '@/components/InspirationCard.vue';
 import ReportButton from '@/components/ReportButton.vue';
 import {
   eventLink,
@@ -376,6 +377,13 @@ async function copyUsername() {
               :url="progressUrl"
               :progress="match.progress"
               @saved="match.progress = $event"
+            />
+
+            <InspirationCard
+              v-if="isActive && !submission"
+              :title="`Ideas for ${recipientName}`"
+              :characters="characters.map((c) => c.name)"
+              :likes="recipient.likes"
             />
 
             <section v-if="backups.length" class="card panel tools" aria-labelledby="backups-heading">
