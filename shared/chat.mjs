@@ -28,7 +28,7 @@ export const EMOTES = [
 ];
 export const EMOTE_KEYS = EMOTES.map((e) => e.key);
 export const CHAT_KINDS = ['say', 'shout', 'emote'];
-const ROOM_COMMANDS = ['sit', 'stand'];
+const ROOM_COMMANDS = ['sit', 'stand', 'stop'];
 
 export const MUTE_OPTIONS = [
   { minutes: 60, label: '1 hour' },
@@ -73,7 +73,7 @@ export function parseChat(input) {
       if (!after) return { error: 'Add what to shout, like "/shout Hello!".' };
       return checkLength({ kind: 'shout', text: after });
     }
-    return { error: 'Unknown command. Try /wave, /dance, /laugh, /heart, /clap, /cheer, /me, /shout, /sit or /stand.' };
+    return { error: 'Unknown command. Try /wave, /dance, /laugh, /heart, /clap, /cheer, /me, /shout, /sit, /stand or /stop.' };
   }
   return checkLength({ kind: 'say', text });
 }

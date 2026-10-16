@@ -14,6 +14,7 @@ const props = defineProps({
   mutedUntil: { type: [String, Date], default: null },
   open: { type: String, default: '' }, // which panel is open: me | friends | log
   logCount: { type: Number, default: 0 },
+  dancing: { type: Boolean, default: false },
 });
 const emit = defineEmits(['toggle', 'command']);
 
@@ -74,6 +75,12 @@ function emote(key) {
   submit(`/${key}`);
 }
 
+// The dance button stops the dance once you're dancing
+function quick(key) {
+  if (key === 'dance' && props.dancing) emit('command', 'stop');
+  else emote(key);
+}
+
 defineExpose({ focus: () => inputRef.value?.focus() });
 </script>
 
@@ -110,6 +117,23 @@ defineExpose({ focus: () => inputRef.value?.focus() });
       >
         <MessagesSquare :size="18" aria-hidden="true" /> <span class="tool-label">Chat</span>
         <span v-if="logCount" class="count">{{ logCount }}</span>
+      </button>
+    </div>
+
+    <div v-if="me && !muted" class="quick" role="group" aria-label="Quick emotes">
+      <button
+        v-for="(e, i) in EMOTES"
+        :key="e.key"
+        type="button"
+        class="quick-emote"
+        :class="{ on: e.key === 'dance' && dancing }"
+        :aria-pressed="e.key === 'dance' ? (dancing ? 'true' : 'false') : undefined"
+        :title="e.key === 'dance' && dancing ? 'Stop dancing' : `${e.label} (${i + 1})`"
+        :disabled="waitLeft > 0 && !(e.key === 'dance' && dancing)"
+        @click="quick(e.key)"
+      >
+        <span aria-hidden="true">{{ e.icon }}</span>
+        <span class="sr-only">{{ e.key === 'dance' && dancing ? 'Stop dancing' : e.label }}</span>
       </button>
     </div>
 
@@ -257,6 +281,54 @@ defineExpose({ focus: () => inputRef.value?.focus() });
 }
 .emotes-wrap {
   position: relative;
+}
+.quick {
+  display: flex;
+  gap: 3px;
+}
+.quick-emote {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: #2a2f40;
+  font-size: 1.05rem;
+  cursor: pointer;
+  transition: transform 0.12s;
+}
+.quick-emote:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background: #3a4056;
+}
+.quick-emote.on {
+  border-color: #ec6a93;
+  background: rgba(236, 106, 147, 0.3);
+}
+.quick-emote:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.quick-emote:focus-visible {
+  outline: 3px solid #ec6a93;
+  outline-offset: 1px;
+}
+/* Narrow screens keep the emotes in the smiley menu instead */
+@media (max-width: 720px) {
+  .quick {
+    display: none;
+  }
+}
+@media (min-width: 721px) {
+  .emotes-wrap {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .quick-emote {
+    transition: none;
+  }
 }
 .emotes {
   position: absolute;

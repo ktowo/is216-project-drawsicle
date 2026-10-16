@@ -1,6 +1,8 @@
 // The mock's version of the server models and services/events.js: JSON shapes,
 // event roles, visibility rules and notifications. Shapes follow docs/ARCHITECTURE.md.
 import { newId } from './db.js';
+import { permissionsFor } from '@shared/permissions.mjs';
+import { cleanLook } from '@shared/looks.mjs';
 
 const SOCIAL_KEYS = ['twitter', 'instagram', 'bluesky', 'discord', 'deviantart', 'toyhouse', 'tumblr'];
 
@@ -14,6 +16,7 @@ export function userPublic(user) {
     email: user.email,
     username: user.username || null,
     role: user.role || 'user',
+    permissions: permissionsFor(user.role || 'user'),
     status: user.status || 'active',
     displayName: user.displayName || user.email.split('@')[0],
     avatarUrl: user.avatarUrl || null,
@@ -38,13 +41,15 @@ export function userPublic(user) {
     },
     providers: { google: false, discord: false },
     profileComplete: Boolean(user.displayName && user.bio),
+    chatMutedUntil: user.chatMutedUntil && new Date(user.chatMutedUntil) > new Date() ? user.chatMutedUntil : null,
+    look: cleanLook(user.museumLook),
     createdAt: user.createdAt,
   };
 }
 
 export function userProfile(user) {
-  const { id, username, displayName, avatarUrl, bio, socials } = userPublic(user);
-  return { id, username, displayName, avatarUrl, bio, socials };
+  const { id, username, displayName, avatarUrl, bio, socials, look } = userPublic(user);
+  return { id, username, displayName, avatarUrl, bio, socials, look };
 }
 
 export function userMini(user) {

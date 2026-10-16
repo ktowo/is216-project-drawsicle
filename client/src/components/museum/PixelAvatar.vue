@@ -64,21 +64,67 @@ const top = computed(() => -70 + drop.value);
         <!-- Head -->
         <g class="head">
           <rect x="-8" y="-45" width="16" height="16" rx="4" :fill="look.skin" />
+          <!-- Hair, seen from behind -->
           <template v-if="fromBehind">
-            <rect x="-9" y="-48" width="18" height="17" rx="5" :fill="look.hair" />
-            <rect v-if="look.style === 'long'" x="-9" y="-36" width="18" height="10" rx="3" :fill="look.hair" />
+            <rect v-if="look.style === 'buzz'" x="-8" y="-46" width="16" height="12" rx="4" :fill="look.hair" opacity="0.85" />
+            <template v-else>
+              <rect x="-9" y="-48" width="18" height="17" rx="5" :fill="look.hair" />
+              <rect v-if="look.style === 'long'" x="-9" y="-36" width="18" height="10" rx="3" :fill="look.hair" />
+              <rect v-if="look.style === 'bob'" x="-10" y="-40" width="20" height="8" rx="3" :fill="look.hair" />
+              <rect v-if="look.style === 'bun'" x="-4" y="-53" width="8" height="6" rx="3" :fill="look.hair" />
+              <polygon v-if="look.style === 'spiky'" points="-9,-46 -6,-53 -3,-47 0,-54 3,-47 6,-53 9,-46" :fill="look.hair" />
+            </template>
           </template>
+          <!-- Hair and face, from the front -->
           <template v-else>
-            <rect x="-9" y="-48" width="18" height="7" rx="3" :fill="look.hair" />
-            <rect x="-9" y="-45" width="4" height="9" rx="2" :fill="look.hair" />
-            <rect v-if="look.style === 'long'" x="-9" y="-40" width="5" height="16" rx="2" :fill="look.hair" />
-            <rect v-if="look.style === 'bun'" x="-4" y="-53" width="8" height="6" rx="3" :fill="look.hair" />
+            <rect v-if="look.style === 'buzz'" x="-8" y="-46" width="16" height="4" rx="2" :fill="look.hair" opacity="0.85" />
+            <polygon v-else-if="look.style === 'spiky'" points="-9,-41 -9,-47 -6,-53 -3,-47 0,-54 3,-47 6,-53 9,-47 9,-42" :fill="look.hair" />
+            <template v-else>
+              <rect :x="look.style === 'bob' ? -10 : -9" y="-48" :width="look.style === 'bob' ? 20 : 18" height="7" rx="3" :fill="look.hair" />
+              <rect :x="look.style === 'bob' ? -10 : -9" y="-45" :width="look.style === 'bob' ? 5 : 4" :height="look.style === 'bob' ? 13 : 9" rx="2" :fill="look.hair" />
+              <rect v-if="look.style === 'long'" x="-9" y="-40" width="5" height="16" rx="2" :fill="look.hair" />
+              <rect v-if="look.style === 'bun'" x="-4" y="-53" width="8" height="6" rx="3" :fill="look.hair" />
+            </template>
             <rect x="0" y="-39" width="2" height="3" fill="#2b2230" />
             <rect x="5" y="-39" width="2" height="3" fill="#2b2230" />
             <rect v-if="emote === 'laugh'" x="1" y="-34" width="6" height="3" rx="1.5" fill="#b5536b" />
             <rect v-else x="2" y="-33" width="4" height="1.5" rx="0.75" fill="#b5536b" />
             <rect x="5" y="-36" width="3" height="2" rx="1" fill="#f19bb0" opacity="0.6" />
+            <g v-if="look.accessory === 'glasses'" class="glasses">
+              <rect x="-1.5" y="-40.5" width="4.5" height="4.5" rx="1" />
+              <rect x="4" y="-40.5" width="4.5" height="4.5" rx="1" />
+              <path d="M 3 -38.5 L 4 -38.5" />
+            </g>
           </template>
+          <!-- Accessories (the same from either side) -->
+          <template v-if="look.accessory === 'beret'">
+            <rect x="-10" y="-52" width="18" height="6" rx="3" fill="#c4314f" />
+            <rect x="-2" y="-55" width="3" height="3" rx="1" fill="#c4314f" />
+          </template>
+          <template v-else-if="look.accessory === 'bow'">
+            <polygon points="-9,-53 -4,-49.5 -9,-46" fill="#f48fb1" />
+            <polygon points="1,-53 -4,-49.5 1,-46" fill="#f48fb1" />
+            <circle cx="-4" cy="-49.5" r="1.6" fill="#d04876" />
+          </template>
+          <template v-else-if="look.accessory === 'headphones'">
+            <path d="M -9 -42 Q -9 -53 0 -53 Q 9 -53 9 -42" fill="none" stroke="#2f2f3a" stroke-width="2" />
+            <rect x="-11" y="-43" width="4" height="7" rx="1.5" fill="#ec6a93" />
+            <rect v-if="fromBehind" x="7" y="-43" width="4" height="7" rx="1.5" fill="#ec6a93" />
+          </template>
+          <template v-else-if="look.accessory === 'flower'">
+            <circle cx="-8" cy="-50" r="2" fill="#f6a5c0" />
+            <circle cx="-5" cy="-50" r="2" fill="#f6a5c0" />
+            <circle cx="-6.5" cy="-52.5" r="2" fill="#f6a5c0" />
+            <circle cx="-6.5" cy="-47.5" r="2" fill="#f6a5c0" />
+            <circle cx="-6.5" cy="-50" r="1.4" fill="#f4cf6a" />
+          </template>
+          <polygon
+            v-else-if="look.accessory === 'crown'"
+            points="-7,-48 -7,-54 -4,-51 0,-56 4,-51 7,-54 7,-48"
+            fill="#f4cf6a"
+            stroke="#c99a2e"
+            stroke-width="0.8"
+          />
         </g>
       </g>
     </g>
@@ -104,6 +150,12 @@ const top = computed(() => -70 + drop.value);
 <style scoped>
 .shadow {
   fill: rgba(0, 0, 0, 0.28);
+}
+.glasses rect,
+.glasses path {
+  fill: rgba(255, 255, 255, 0.25);
+  stroke: #2b2230;
+  stroke-width: 1;
 }
 .shade {
   filter: brightness(0.82);
@@ -178,8 +230,15 @@ const top = computed(() => -70 + drop.value);
   .emote-wave .front-arm {
     animation: wave 0.5s ease-in-out infinite alternate;
   }
+  /* A little routine: bounce and sway, arms pumping in turn, and a quick spin now and then */
   .emote-dance .body {
-    animation: dance 0.5s ease-in-out infinite alternate;
+    animation: dance 1.6s ease-in-out infinite;
+  }
+  .emote-dance .front-arm {
+    animation: dance-arm 0.4s ease-in-out infinite alternate;
+  }
+  .emote-dance .back-arm {
+    animation: dance-arm-back 0.4s ease-in-out infinite alternate;
   }
   .emote-laugh .head {
     animation: shake 0.18s linear infinite alternate;
@@ -203,6 +262,7 @@ const top = computed(() => -70 + drop.value);
 }
 /* Without motion, emotes still show their pose */
 @media (prefers-reduced-motion: reduce) {
+  .emote-dance .front-arm,
   .emote-wave .front-arm,
   .emote-cheer .front-arm,
   .emote-cheer .back-arm {
@@ -219,11 +279,40 @@ const top = computed(() => -70 + drop.value);
   }
 }
 @keyframes dance {
-  from {
+  0%,
+  100% {
     transform: translateY(0) rotate(-7deg);
   }
+  20% {
+    transform: translateY(-5px) rotate(0deg);
+  }
+  40% {
+    transform: translateY(0) rotate(7deg);
+  }
+  60% {
+    transform: translateY(-5px) rotate(0deg) scaleX(1);
+  }
+  70% {
+    transform: translateY(-7px) scaleX(-1);
+  }
+  80% {
+    transform: translateY(-3px) scaleX(1);
+  }
+}
+@keyframes dance-arm {
+  from {
+    transform: rotate(150deg);
+  }
   to {
-    transform: translateY(-4px) rotate(7deg);
+    transform: rotate(40deg);
+  }
+}
+@keyframes dance-arm-back {
+  from {
+    transform: rotate(-40deg);
+  }
+  to {
+    transform: rotate(-170deg);
   }
 }
 @keyframes shake {

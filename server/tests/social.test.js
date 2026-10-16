@@ -78,3 +78,15 @@ test('the friend list shows who is in the museum, and deleted accounts drop out'
   const after2 = await ada.agent.get('/api/friends').expect(200);
   assert.deepEqual(after2.body.friends.map((f) => f.user.displayName), ['Ben']);
 });
+
+test('people save a museum avatar made from the listed options, and others see it', async () => {
+  const ada = await person('Ada', 'ada');
+  const look = { skin: '#c98e66', hair: '#3fb6b2', shirt: '#9b7be0', pants: '#2f4f4f', style: 'spiky', accessory: 'beret' };
+  await h.request(app).put('/api/profile/look').send(look).expect(401);
+  await ada.agent.put('/api/profile/look').send({ ...look, accessory: 'jetpack' }).expect(400);
+  await ada.agent.put('/api/profile/look').send({ ...look, skin: 'red; background:url(x)' }).expect(400);
+  const saved = await ada.agent.put('/api/profile/look').send({ ...look, extra: 'ignored' }).expect(200);
+  assert.deepEqual(saved.body.user.look, look);
+  const profile = await h.request(app).get('/api/users/ada').expect(200);
+  assert.deepEqual(profile.body.profile.look, look);
+});

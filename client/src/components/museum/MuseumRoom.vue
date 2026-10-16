@@ -16,6 +16,7 @@ import { boxFaces, depthOf } from '@/museum/furniture';
 import { lookFor, CHATTER } from '@/museum/looks';
 import { useRoomSync } from '@/museum/sync';
 import { formatTime } from '@/utils/format';
+import { EMOTES } from '@shared/chat.mjs';
 
 // One room of the museum, drawn isometrically. Click (or tap) the floor to walk there; click a
 // picture to walk up to it and look (emits `view`); click a bench or chair to sit down. The arrow
@@ -66,6 +67,7 @@ function walker(extra) {
     facing: 'nw',
     walking: false,
     sitting: false,
+    dancing: false,
     emote: '',
     emoteUntil: 0,
     step: 0,
@@ -84,7 +86,7 @@ let cameFrom = null; // the room we just left, so we arrive by its door
 const shared = computed(() => Boolean(props.place));
 const showWanderers = computed(() => !shared.value || isMockMode);
 const myName = computed(() => props.me?.displayName || 'You');
-const myLook = computed(() => lookFor(props.me?.id || 'guest'));
+const myLook = computed(() => lookFor(props.me || 'guest'));
 
 function say(who, text, ms = 2600) {
   who.bubble = text;
@@ -129,7 +131,7 @@ function placeEveryone() {
     visitors.push(
       walker({
         user,
-        look: lookFor(user.id || user.displayName),
+        look: lookFor(user),
         x: spot.x,
         y: spot.y,
         facing: ['se', 'sw', 'ne', 'nw'][i % 4],
@@ -150,6 +152,7 @@ function walkTo(target, action = null) {
   if (route === null) return;
   player.action = action;
   player.sitting = false;
+  player.dancing = false;
 
   if (calm.value || route.length === 0) {
     // No walking: appear there, facing the way the last step went
@@ -196,7 +199,7 @@ function goSit(seat) {
 }
 
 function sitDown(seat) {
-  Object.assign(player, { x: seat.x, y: seat.y, path: [], walking: false, sitting: true, facing: seat.facing });
+  Object.assign(player, { x: seat.x, y: seat.y, path: [], walking: false, sitting: true, dancing: false, facing: seat.facing });
   sync?.now();
 }
 
@@ -226,7 +229,10 @@ function arrive() {
 function onCommand(command) {
   if (command === 'sit') {
     const seat = seatAt(Math.round(player.x), Math.round(player.y));
-    Object.assign(player, { path: [], walking: false, sitting: true, facing: seat ? seat.facing : player.facing });
+    Object.assign(player, { path: [], walking: false, sitting: true, dancing: false, facing: seat ? seat.facing : player.facing });
+  } else if (command === 'stop') {
+    player.dancing = false;
+    player.emote = '';
   } else {
     player.sitting = false;
   }
@@ -277,13 +283,26 @@ function wander(v, now) {
   }
   const goal = options[Math.floor(Math.random() * options.length)];
   const route = goal && findPath(here, goal, layout.value.isOpen);
+  if (Math.random() < 0.15) {
+    // Now and then someone stops to dance for a bit instead
+    v.dancing = true;
+    v.danceUntil = now + 4000 + Math.random() * 4000;
+    return;
+  }
   if (route) v.path = route.slice(0, 5);
   if (Math.random() < 0.3) say(v, CHATTER[Math.floor(Math.random() * CHATTER.length)]);
 }
 
 let raf = 0;
 let last = 0;
+let onScreen = true;
+let observer = null;
 function tick(now) {
+  if (!onScreen) {
+    raf = 0;
+    last = 0;
+    return;
+  }
   const dt = last ? Math.min(0.05, (now - last) / 1000) : 0;
   last = now;
   if (advance(player, SPEED, dt) === 'stopped') arrive();
@@ -300,6 +319,17 @@ function tick(now) {
   for (const w of [player, ...others, ...visitors]) {
     if (w.bubble && now > w.bubbleUntil) w.bubble = '';
     if (w.emote && now > w.emoteUntil) w.emote = '';
+    if (w.dancing && !w.walking) {
+      w.clock += dt;
+      if (w.clock > 0.22) {
+        w.clock = 0;
+        w.step++;
+      }
+    }
+    if (w.danceUntil && now > w.danceUntil) {
+      w.dancing = false;
+      w.danceUntil = 0;
+    }
   }
   // Chat bubbles drift up a row now and then, like a lift going up
   if (bubbles.value.length && now - lastShift > BUBBLE_DRIFT_MS) shiftBubbles(now);
@@ -314,11 +344,22 @@ function applyPeople(list) {
     let o = others.find((w) => w.user.id === p.user.id);
     if (!o) {
       others.push(
-        walker({ user: p.user, look: lookFor(p.user.id), x: p.x, y: p.y, facing: p.facing, sitting: p.sitting, target: { x: p.x, y: p.y } })
+        walker({
+          user: p.user,
+          look: lookFor(p.user),
+          x: p.x,
+          y: p.y,
+          facing: p.facing,
+          sitting: p.sitting,
+          dancing: Boolean(p.dancing),
+          target: { x: p.x, y: p.y },
+        })
       );
       continue;
     }
     o.user = p.user;
+    o.look = lookFor(p.user);
+    o.dancing = Boolean(p.dancing);
     if (o.target.x !== p.x || o.target.y !== p.y) {
       o.target = { x: p.x, y: p.y };
       o.sitting = false;
@@ -360,8 +401,15 @@ function onMessages(list) {
     const speaker = mine ? player : others.find((o) => o.user.id === m.user.id);
     addBubble({ user: m.user, name: m.user.displayName, kind: m.kind, text: m.text, left: screenLeft(speaker) });
     if (m.kind === 'emote' && m.emote && speaker) {
-      speaker.emote = m.emote;
-      speaker.emoteUntil = performance.now() + EMOTE_MS;
+      if (m.emote === 'dance') {
+        // Dancing goes on until you walk, sit down or type /stop
+        speaker.dancing = true;
+        speaker.sitting = false;
+        if (mine) sync?.now();
+      } else {
+        speaker.emote = m.emote;
+        speaker.emoteUntil = performance.now() + EMOTE_MS;
+      }
     }
   }
 }
@@ -394,7 +442,7 @@ const sync = props.place
   ? useRoomSync({
       place: () => (props.place ? { ...props.place, room: layout.value.index } : null),
       signedIn: () => Boolean(props.me),
-      spot: () => ({ ...goalOf(player), facing: player.facing, sitting: player.sitting }),
+      spot: () => ({ ...goalOf(player), facing: player.facing, sitting: player.sitting, dancing: player.dancing }),
       onPeople: applyPeople,
       onMessages,
     })
@@ -469,6 +517,13 @@ function onKeydown(event) {
     toolbarRef.value?.focus();
     return;
   }
+  // 1-6: quick emotes, in the order of the emote bar
+  const quick = /^[1-9]$/.test(event.key) ? EMOTES[Number(event.key) - 1] : null;
+  if (quick && props.me && shared.value) {
+    event.preventDefault();
+    send(`/${quick.key}`).catch(() => {});
+    return;
+  }
   const step = KEY_STEPS[event.key];
   if (!step) return;
   event.preventDefault();
@@ -491,24 +546,55 @@ function onVisitorClick(v) {
 }
 
 // ---------- What gets drawn, nearest last ----------
+// Seat colours: [left side, right side, top]
+const COLOURS = {
+  bench: { seat: ['#8a5a3b', '#724830', '#b77d55'], back: ['#7d4f33', '#6a412a', '#a46d48'] },
+  chair: { seat: ['#c75b7f', '#a94a6b', '#ec8fb0'], back: ['#b84f72', '#9c3f5f', '#e07b9e'] },
+};
+
+// The backrest goes behind whoever sits, so it's on the side opposite the way the seat faces.
+// Seats facing away from the viewer ('nw', 'ne') have their backrest nearest us: that part is
+// drawn after the person sitting, so it covers their back like a real bench would.
+const BACK_THICKNESS = 0.3;
+function backrest(x0, y0, w, d, facing, height) {
+  const t = BACK_THICKNESS;
+  if (facing === 'sw') return boxFaces(x0, y0, w, t, height, 0.08);
+  if (facing === 'se') return boxFaces(x0, y0, t, d, height, 0.08);
+  if (facing === 'nw') return boxFaces(x0 + w - t, y0, t, d, height, 0.08);
+  return boxFaces(x0, y0 + d - t, w, t, height, 0.08);
+}
+
 const furniture = computed(() =>
-  layout.value.furniture.map((piece, i) => {
+  layout.value.furniture.flatMap((piece, i) => {
     const [t] = piece.tiles;
-    const span = piece.tiles.length;
-    let parts;
-    if (piece.kind === 'bench') {
-      parts = { seat: boxFaces(t.x, t.y, span, 1, 15, 0.18), back: boxFaces(t.x, t.y, span, 0.32, 30, 0.12) };
-    } else if (piece.kind === 'chair') {
-      const back = piece.facing === 'se' ? boxFaces(t.x, t.y, 0.34, 1, 32, 0.16) : boxFaces(t.x, t.y, 1, 0.34, 32, 0.16);
-      parts = { seat: boxFaces(t.x, t.y, 1, 1, 14, 0.2), back };
-    } else if (piece.kind === 'plant') {
-      const c = iso(t.x + 0.5, t.y + 0.5);
-      parts = { pot: boxFaces(t.x, t.y, 1, 1, 18, 0.3), cx: c.x, cy: c.y };
-    } else {
-      const c = iso(t.x + 0.5, t.y + 0.5);
-      parts = { stand: boxFaces(t.x, t.y, 1, 1, 36, 0.2), cx: c.x, cy: c.y };
+    const depth = depthOf(piece);
+    if (piece.facing) {
+      const xs = piece.tiles.map((p) => p.x);
+      const ys = piece.tiles.map((p) => p.y);
+      const x0 = Math.min(...xs);
+      const y0 = Math.min(...ys);
+      const w = Math.max(...xs) - x0 + 1;
+      const d = Math.max(...ys) - y0 + 1;
+      const bench = piece.kind === 'bench';
+      const backInFront = piece.facing === 'nw' || piece.facing === 'ne';
+      return [
+        { key: `f${i}`, kind: piece.kind, part: 'seat', piece, depth, parts: boxFaces(x0, y0, w, d, bench ? 15 : 14, bench ? 0.16 : 0.2) },
+        {
+          key: `f${i}-back`,
+          kind: piece.kind,
+          part: 'back',
+          piece,
+          depth: backInFront ? depth + 0.6 : depth - 0.01,
+          parts: backrest(x0, y0, w, d, piece.facing, bench ? 30 : 34),
+        },
+      ];
     }
-    return { key: `f${i}`, kind: piece.kind, piece, depth: depthOf(piece), parts };
+    const c = iso(t.x + 0.5, t.y + 0.5);
+    const parts =
+      piece.kind === 'plant'
+        ? { pot: boxFaces(t.x, t.y, 1, 1, 18, 0.3), cx: c.x, cy: c.y }
+        : { stand: boxFaces(t.x, t.y, 1, 1, 36, 0.2), cx: c.x, cy: c.y };
+    return [{ key: `f${i}`, kind: piece.kind, part: 'whole', piece, depth, parts }];
   })
 );
 
@@ -529,7 +615,8 @@ const sprites = computed(() =>
       return {
         ...p,
         type: 'person',
-        depth: p.w.x + p.w.y + 1 + (onSeat ? 0.6 : 0),
+        // Sitting: just after the seat, before a backrest that's nearer the viewer
+        depth: onSeat ? onSeat.depth + 0.3 : p.w.x + p.w.y + 1,
         sx: at.x,
         sy: at.y - (onSeat ? 12 : 0),
       };
@@ -561,8 +648,17 @@ onMounted(() => {
   motionQuery?.addEventListener?.('change', onMotionChange);
   placeEveryone();
   raf = requestAnimationFrame(tick);
+  // Nothing to animate while the room is scrolled away: stop the loop, start it again on return
+  if (typeof IntersectionObserver !== 'undefined' && svgRef.value) {
+    observer = new IntersectionObserver(([entry]) => {
+      onScreen = entry.isIntersecting;
+      if (onScreen && !raf) raf = requestAnimationFrame(tick);
+    });
+    observer.observe(svgRef.value);
+  }
 });
 onBeforeUnmount(() => {
+  observer?.disconnect();
   cancelAnimationFrame(raf);
   motionQuery?.removeEventListener?.('change', onMotionChange);
 });
@@ -604,21 +700,11 @@ defineExpose({ walkTo });
             aria-hidden="true"
             @click.stop="onFurnitureClick(s.piece, $event)"
           >
-            <template v-if="s.kind === 'bench'">
-              <polygon :points="s.parts.back.left" fill="#7d4f33" />
-              <polygon :points="s.parts.back.right" fill="#6a412a" />
-              <polygon :points="s.parts.back.top" fill="#a46d48" />
-              <polygon :points="s.parts.seat.left" fill="#8a5a3b" />
-              <polygon :points="s.parts.seat.right" fill="#724830" />
-              <polygon :points="s.parts.seat.top" fill="#b77d55" />
-            </template>
-            <template v-else-if="s.kind === 'chair'">
-              <polygon :points="s.parts.back.left" fill="#b84f72" />
-              <polygon :points="s.parts.back.right" fill="#9c3f5f" />
-              <polygon :points="s.parts.back.top" fill="#e07b9e" />
-              <polygon :points="s.parts.seat.left" fill="#c75b7f" />
-              <polygon :points="s.parts.seat.right" fill="#a94a6b" />
-              <polygon :points="s.parts.seat.top" fill="#ec8fb0" />
+            <!-- Seats: wooden benches and pink chairs, each drawn as a seat and a backrest -->
+            <template v-if="s.part === 'seat' || s.part === 'back'">
+              <polygon :points="s.parts.left" :fill="COLOURS[s.kind][s.part][0]" />
+              <polygon :points="s.parts.right" :fill="COLOURS[s.kind][s.part][1]" />
+              <polygon :points="s.parts.top" :fill="COLOURS[s.kind][s.part][2]" />
             </template>
             <template v-else-if="s.kind === 'plant'">
               <polygon :points="s.parts.pot.left" fill="#c4643f" />
@@ -648,9 +734,9 @@ defineExpose({ walkTo });
               :x="s.sx"
               :y="s.sy"
               :facing="s.w.facing"
-              :walking="s.w.walking"
+              :walking="s.w.walking || s.w.dancing"
               :sitting="s.w.sitting && !s.w.walking"
-              :emote="s.w.emote"
+              :emote="s.w.emote || (s.w.dancing && !s.w.walking ? 'dance' : '')"
               :step="s.w.step"
               :look="s.look"
               :name="s.name"
@@ -695,7 +781,7 @@ defineExpose({ walkTo });
         <MousePointerClick :size="16" aria-hidden="true" /> {{ status }}
         <span class="sr-only">
           Use the arrow keys to walk, or Tab to the pictures and press Enter to look.
-          <template v-if="me && shared">Press Enter in the room to chat.</template>
+          <template v-if="me && shared">Press Enter in the room to chat, or 1 to 6 for quick emotes.</template>
         </span>
       </p>
       <div class="hud-right">
@@ -725,6 +811,7 @@ defineExpose({ walkTo });
       :muted-until="sync?.mutedUntil.value || me?.chatMutedUntil || null"
       :open="panel"
       :log-count="unread"
+      :dancing="player.dancing"
       @toggle="toggle"
       @command="onCommand"
     />
