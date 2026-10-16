@@ -7,6 +7,7 @@ const { describeTarget } = require('../services/reports.js');
 const { notifyMany } = require('../services/notify.js');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
 const { REPORT_REASON_VALUES, REPORT_TARGETS, LIMITS } = require('../../shared/constants.mjs');
+const { rolesWith } = require('../../shared/permissions.mjs');
 
 // Anyone signed in can flag a gift, a profile, a character or an event for the site admins.
 // The admins work through them in /admin (admin-router.js).
@@ -51,7 +52,8 @@ router.post('/', asyncHandler(async (req, res) => {
     details,
   });
 
-  const admins = await User.find({ role: 'admin', status: 'active' }).distinct('_id');
+  // Everyone who reviews reports: moderators and admins
+  const admins = await User.find({ role: { $in: rolesWith('reports.review') }, status: 'active' }).distinct('_id');
   try {
     await notifyMany(admins, {
       type: 'report_received',

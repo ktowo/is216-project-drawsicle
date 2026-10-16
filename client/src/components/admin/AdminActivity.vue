@@ -10,8 +10,8 @@ import EmptyState from '@/components/ui/EmptyState.vue';
 import { formatDateTime, timeAgo } from '@/utils/format';
 
 const ACTIONS = {
-  'user.promote': 'made an admin:',
-  'user.demote': 'removed admin from',
+  'user.promote': 'gave a site role to',
+  'user.demote': 'took a site role from',
   'user.ban': 'banned',
   'user.unban': 'unbanned',
   'user.delete': 'deleted the account of',

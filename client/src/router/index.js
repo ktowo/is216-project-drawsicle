@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, createWebHashHistory } from 'vue-router';
 import { auth, loadUser } from '../stores/auth';
+import { can } from '@shared/permissions.mjs';
 
 // meta:
 //   requiresAuth  - send guests to /login first
@@ -58,8 +59,8 @@ const routes = [
   { path: '/privacy', name: 'privacy', component: () => import('../views/PrivacyView.vue'), meta: { title: 'Privacy' } },
   { path: '/terms', name: 'terms', component: () => import('../views/TermsView.vue'), meta: { title: 'Terms' } },
 
-  // Site admins only (User.role === 'admin')
-  { path: '/admin', name: 'admin', component: () => import('../views/AdminView.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: 'Site admin' } },
+  // Moderators and admins (shared/permissions.mjs decides which tabs each sees)
+  { path: '/admin', name: 'admin', component: () => import('../views/AdminView.vue'), meta: { requiresAuth: true, permission: 'admin.access', title: 'Site admin' } },
 
   { path: '/forbidden', name: 'forbidden', component: () => import('../views/ForbiddenView.vue'), meta: { title: 'No access' } },
   { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('../views/NotFoundView.vue'), meta: { title: 'Page not found' } },
@@ -88,7 +89,7 @@ router.beforeEach(async (to) => {
   if (to.meta.requiresAuth && !auth.user) {
     return { name: 'login', query: { redirect: to.fullPath } };
   }
-  if (to.meta.requiresAdmin && auth.user?.role !== 'admin') {
+  if (to.meta.permission && !can(auth.user, to.meta.permission)) {
     return { name: 'forbidden' };
   }
   if (to.meta.guestOnly && auth.user) {

@@ -85,7 +85,8 @@ export const EVENT_ROLES = ['organizer', 'participant', 'helper', 'approver'];
 
 // Site-wide account states. Banned accounts can't log in; deactivated ones can (which reactivates them).
 export const USER_STATUSES = ['active', 'deactivated', 'banned'];
-export const SITE_ROLES = ['user', 'admin'];
+// What each role may do is in shared/permissions.mjs
+export const SITE_ROLES = ['user', 'moderator', 'admin'];
 
 export const NOTIFICATION_TYPES = [
   'application_received',

@@ -99,6 +99,8 @@ export function buildDemoData(now = new Date()) {
     },
     {
       key: 'noor',
+      // Helps the admins: reviews reports and museum chat
+      role: 'moderator',
       displayName: 'Noor',
       bio: 'Writer and hobby composer. I turn characters into short stories and little piano pieces.',
       socials: { bluesky: 'noor', tumblr: 'noor-writes', discord: 'noor.writes' },
