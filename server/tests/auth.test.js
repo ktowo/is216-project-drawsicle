@@ -501,3 +501,24 @@ test('Discord sign-in creates, links and reactivates accounts', async (t) => {
   assert.equal(linkedMe.body.user.providers.discord, true);
   assert.equal(await User.countDocuments({ email: 'linked@example.com' }), 1);
 });
+
+test('"Remember me" keeps you in for 30 days; without it, until the browser closes', async () => {
+  const app = h.makeApp();
+  await h.signUp(app, { email: 'remember@example.com' });
+  const cookieOf = (res) => (res.headers['set-cookie'] || []).find((c) => c.startsWith('drawsicle_token='));
+  const login = (remember) =>
+    h.request(app).post('/api/auth/login').send({ email: 'remember@example.com', password: PASSWORD, remember }).expect(200);
+
+  const kept = cookieOf(await login(true));
+  const maxAge = Number(/Max-Age=(\d+)/i.exec(kept)?.[1]);
+  assert.equal(maxAge, 30 * 24 * 60 * 60);
+
+  // A browser-session cookie: no Max-Age or Expires
+  const session = cookieOf(await login(false));
+  assert.ok(session);
+  assert.doesNotMatch(session, /Max-Age|Expires/i);
+
+  // Not saying keeps the usual week
+  const usual = cookieOf(await login(undefined));
+  assert.equal(Number(/Max-Age=(\d+)/i.exec(usual)?.[1]), 7 * 24 * 60 * 60);
+});

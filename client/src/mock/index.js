@@ -124,7 +124,7 @@ async function handle(path, { method, body, form }) {
         if (!user) throw new MockHttpError(401, 'Your session has expired. Please log in again.', 'SESSION_EXPIRED');
         return user;
       },
-      startSession: (user) => setSession(user),
+      startSession: (user, options) => setSession(user, options),
       endSession: () => clearSession(),
     };
 
