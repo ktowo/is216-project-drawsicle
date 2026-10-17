@@ -49,6 +49,7 @@ const routes = [
       { path: '/profile', name: 'profile', component: () => import('../views/ProfileView.vue'), meta: { requiresAuth: true, title: 'Your profile' } },
       { path: '/characters', name: 'characters', component: () => import('../views/CharactersView.vue'), meta: { requiresAuth: true, title: 'Character library' } },
       { path: '/characters/new', name: 'character-new', component: () => import('../views/CharacterFormView.vue'), meta: { requiresAuth: true, title: 'New character' } },
+      { path: '/characters/:id', name: 'character', component: () => import('../views/CharacterView.vue'), meta: { requiresAuth: true, title: 'Character' } },
       { path: '/characters/:id/edit', name: 'character-edit', component: () => import('../views/CharacterFormView.vue'), meta: { requiresAuth: true, title: 'Edit character' } },
       { path: '/notification', name: 'notifications', component: () => import('../views/NotificationsView.vue'), meta: { requiresAuth: true, title: 'Notifications' }, alias: '/notifications' },
       { path: '/settings/account', name: 'account', component: () => import('../views/AccountView.vue'), meta: { requiresAuth: true, title: 'Account' } },

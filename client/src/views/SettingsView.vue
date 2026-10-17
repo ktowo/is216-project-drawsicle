@@ -14,7 +14,7 @@ const ITEMS = [
     to: '/characters',
     label: 'Character library',
     icon: BookHeart,
-    routes: ['characters', 'character-new', 'character-edit'],
+    routes: ['characters', 'character', 'character-new', 'character-edit'],
   },
   { to: '/notification', label: 'Notifications', icon: Bell, routes: ['notifications'] },
   { to: '/settings/account', label: 'Account', icon: Settings, routes: ['account'] },
