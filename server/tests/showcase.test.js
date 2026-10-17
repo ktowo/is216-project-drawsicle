@@ -175,3 +175,11 @@ test('community style and feed helpers are stable', () => {
   ], now);
   assert.deepEqual(rows.map((r) => [r.event.id, r.kind, r.spotsLeft]), [['a', 'open', 0], ['b', 'revealed', undefined]]);
 });
+
+test('community tiles link to a search that finds that community', async () => {
+  const org = await artist('Org', 'org');
+  await exchange(org.id, { name: 'Midsummer Swap', platformName: 'Moonlit Moth Society' });
+  await exchange(org.id, { name: 'Other Swap', platformName: 'Elsewhere' });
+  const { body } = await h.request(app).get('/api/events?status=all&q=moonlit').expect(200);
+  assert.deepEqual(body.events.map((e) => e.name), ['Midsummer Swap']);
+});

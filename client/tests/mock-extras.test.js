@@ -499,3 +499,10 @@ describe('landing showcase', () => {
     expect(JSON.stringify(body)).not.toMatch(/Happy spring, Sol/);
   });
 });
+
+describe('event search by community', () => {
+  it('finds exchanges by their community name', async () => {
+    const { events } = await ok('/events?status=all&q=moonlit');
+    expect(events.map((e) => e.name)).toEqual(['Midsummer Moth Swap']);
+  });
+});

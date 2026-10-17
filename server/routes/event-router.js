@@ -281,7 +281,7 @@ router.get('/', optionalAuth, asyncHandler(async (req, res) => {
     const organised = users.length
       ? await EventMember.distinct('event', { user: { $in: users.map((u) => u._id) }, roles: 'organizer' })
       : [];
-    match.$or = [{ name: re }, { theme: re }, { description: re }];
+    match.$or = [{ name: re }, { theme: re }, { description: re }, { platformName: re }];
     if (organised.length) match.$or.push({ _id: { $in: organised } });
   }
 
