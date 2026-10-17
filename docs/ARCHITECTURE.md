@@ -69,7 +69,9 @@ Event         { id, name, description, theme, season, rules, tags[], platform, p
                 organizers: UserMini[],
                 viewer: null | { roles: string[], isOrganizer: bool, applicationStatus: null|'pending'|'accepted'|'rejected'|'withdrawn' },
                 inviteCode? }                // organisers only
-Character     { id, ownerId, name, description, species, tags[], referenceLinks: [{label,url}], notesForArtists,
+Character     { id, ownerId, name, description, species, pronouns, personality, colours[] ('#rrggbb', max 6),
+                folder, favourite, pet: { shown, kind, palette },   // kind/palette '' = worked out from the character
+                tags[], referenceLinks: [{label,url}], notesForArtists,
                 archived, archivedAt, createdAt, updatedAt, inUse?, eventCount?,
                 usedIn? }                    // GET /characters/:id only: [{ eventId, eventName, eventStatus, applicationStatus }]
 Application   { id, eventId, userId, user: UserMini|null, status, communityUsername, canCreate[], wantsTypes[],
@@ -153,12 +155,14 @@ createdAt }`. `profilePrivacy` only ever appears in the owner's own `user`, neve
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| GET | /characters?archived=false\|true\|all | default `false` → `{ characters: Character[] }` (with `inUse`, `eventCount`), newest first |
+| GET | /characters?archived=false\|true\|all&folder= | default `false` → `{ characters: Character[] }` (with `inUse`, `eventCount`), newest first |
+| GET | /characters/pets | → `{ pets: Character[] }`: the ones out as screen pets (`pet.shown`, not archived), at most `MAX_SHOWN_PETS` (4) |
+| GET | /characters/folders | → `{ folders: [{ name, count }] }`, biggest first |
 | POST | /characters | → 201 `{ character }` |
 | GET | /characters/:id | → `{ character }`, which also has `usedIn` (the events it was offered in, newest sign-up first) |
-| PATCH | /characters/:id | → `{ character }` |
+| PATCH | /characters/:id | → `{ character }`. `pet` can be partial (`{ pet: { shown: true } }` keeps the kind and colours). 409 `TOO_MANY_PETS` past four pets out, 400 for an archived character's pet |
 | DELETE | /characters/:id | → `{ ok }`, or 409 `CHARACTER_IN_USE` if any application offered it (archive instead) |
-| POST | /characters/:id/archive | → `{ character }` (archived characters can't be offered in new sign-ups) |
+| POST | /characters/:id/archive | → `{ character }` (archived characters can't be offered in new sign-ups, and their pet is put away) |
 | POST | /characters/:id/restore | → `{ character }` |
 
 ### Events: `routes/event-router.js`

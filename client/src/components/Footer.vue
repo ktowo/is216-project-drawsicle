@@ -11,6 +11,7 @@ const COLUMNS = [
     links: [
       { to: '/events', label: 'Browse events' },
       { to: '/museum', label: 'The museum' },
+      { to: '/pets', label: 'Screen pets' },
       { to: '/events/new', label: 'Create an event' },
     ],
   },
