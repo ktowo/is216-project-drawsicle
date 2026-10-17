@@ -931,7 +931,7 @@ onBeforeUnmount(() => {
               <button type="button" class="btn btn-outline btn-xs" @click="pat(pet.id)"><Hand :size="15" aria-hidden="true" /> Pet</button>
             </div>
             <div class="menu-foot">
-              <RouterLink :to="{ name: 'character-edit', params: { id: pet.id } }" @click="closeMenu(pet.id)">About {{ pet.name }}</RouterLink>
+              <RouterLink :to="{ name: 'character', params: { id: pet.id } }" @click="closeMenu(pet.id)">About {{ pet.name }}</RouterLink>
               <button type="button" class="link-button" @click="hide(pet.id)">Hide for now</button>
             </div>
           </div>
