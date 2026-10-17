@@ -58,6 +58,7 @@ const routes = [
   { path: '/users/:username', name: 'user', component: () => import('../views/UserProfileView.vue'), meta: { title: 'Artist' } },
 
   // Info pages (linked from the footer)
+  { path: '/pets', name: 'pets', component: () => import('../views/PetsView.vue'), meta: { title: 'Screen pets' } },
   { path: '/about', name: 'about', component: () => import('../views/AboutView.vue'), meta: { title: 'About' } },
   { path: '/help', name: 'help', component: () => import('../views/HelpView.vue'), meta: { title: 'Help & FAQ' } },
   { path: '/guidelines', name: 'guidelines', component: () => import('../views/GuidelinesView.vue'), meta: { title: 'Community guidelines' } },
