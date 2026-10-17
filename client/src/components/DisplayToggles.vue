@@ -1,7 +1,8 @@
 <script setup>
 import { computed } from 'vue';
-import { Sparkles, Moon, Sun } from 'lucide-vue-next';
-import { preferences, toggleTheme, toggleSparkles } from '@/stores/preferences';
+import { Sparkles, Moon, Sun, PawPrint } from 'lucide-vue-next';
+import { preferences, toggleTheme, toggleSparkles, togglePets } from '@/stores/preferences';
+import { auth } from '@/stores/auth';
 
 // The sparkle cursor only exists on mouse/trackpad devices, so its switch does too
 const hasFinePointer = typeof window !== 'undefined' && window.matchMedia?.('(pointer: fine)').matches;
@@ -21,6 +22,19 @@ const dark = computed(() => preferences.resolvedTheme === 'dark');
     >
       <Sparkles :size="19" aria-hidden="true" />
       <span class="sr-only">Sparkle cursor</span>
+    </button>
+    <!-- Screen pets only come out for people with an account -->
+    <button
+      v-if="auth.user"
+      type="button"
+      class="toggle"
+      :class="{ off: !preferences.pets }"
+      :aria-pressed="preferences.pets"
+      :title="preferences.pets ? 'Put your screen pets away' : 'Let your screen pets out'"
+      @click="togglePets"
+    >
+      <PawPrint :size="19" aria-hidden="true" />
+      <span class="sr-only">Screen pets</span>
     </button>
     <button
       type="button"
@@ -64,7 +78,7 @@ const dark = computed(() => preferences.resolvedTheme === 'dark');
 .toggle[aria-pressed='true'] {
   color: var(--pink);
 }
-/* A slash through the sparkles when they're off */
+/* A slash through the sparkles or paw when they're off */
 .toggle.off {
   color: var(--muted);
 }
