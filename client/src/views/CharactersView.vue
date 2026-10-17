@@ -17,6 +17,9 @@ import {
   Copy,
   LayoutGrid,
   Rows3,
+  Star,
+  PawPrint,
+  Folder,
 } from 'lucide-vue-next';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import TabNav from '@/components/ui/TabNav.vue';
@@ -25,10 +28,13 @@ import ErrorBlock from '@/components/ui/ErrorBlock.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue';
 import CharacterCard from '@/components/characters/CharacterCard.vue';
+import PetSprite from '@/components/pets/PetSprite.vue';
 import { api, qs } from '@/api';
 import { toast } from '@/stores/toast';
 import { pluralize } from '@/utils/format';
 import { LIMITS } from '@shared/constants.mjs';
+import { MAX_SHOWN_PETS, resolvePet } from '@shared/pets.mjs';
+import { pets, refreshPets } from '@/stores/pets';
 
 const route = useRoute();
 const router = useRouter();
@@ -113,6 +119,24 @@ load();
 
 const query = computed(() => search.value.trim().toLowerCase());
 const activeTag = ref('');
+const activeFolder = ref('');
+const onlyFavourites = ref(false);
+const onlyPets = ref(false);
+
+// Folders in this tab, biggest first
+const folderChips = computed(() => {
+  const counts = new Map();
+  for (const c of characters.value) if (c.folder) counts.set(c.folder, (counts.get(c.folder) || 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name, count]) => ({ name, count }));
+});
+watch(folderChips, (chips) => {
+  if (activeFolder.value && !chips.some((c) => c.name === activeFolder.value)) activeFolder.value = '';
+});
+const favouriteCount = computed(() => characters.value.filter((c) => c.favourite).length);
+
+// The pets out on screen right now, drawn in the strip at the top
+refreshPets();
+const petsOut = computed(() => pets.list.map((c) => ({ id: c.id, ...resolvePet(c) })));
 
 // The most common tags in this tab, for one-click filtering
 const tagChips = computed(() => {
@@ -137,26 +161,39 @@ const SORTERS = {
 
 const shown = computed(() => {
   let list = characters.value;
+  if (activeFolder.value) list = list.filter((c) => c.folder === activeFolder.value);
+  if (onlyFavourites.value) list = list.filter((c) => c.favourite);
+  if (onlyPets.value) list = list.filter((c) => c.pet?.shown);
   if (activeTag.value) list = list.filter((c) => (c.tags || []).includes(activeTag.value));
   if (query.value) {
     list = list.filter((c) =>
-      [c.name, c.species, ...(c.tags || [])].some((text) => String(text || '').toLowerCase().includes(query.value))
+      [c.name, c.species, c.pronouns, c.folder, ...(c.tags || [])].some((text) => String(text || '').toLowerCase().includes(query.value))
     );
   }
-  return [...list].sort(SORTERS[sort.value]);
+  // Favourites always come first
+  return [...list].sort((a, b) => Number(Boolean(b.favourite)) - Number(Boolean(a.favourite)) || SORTERS[sort.value](a, b));
 });
 
-const filtering = computed(() => Boolean(query.value || activeTag.value));
+const filtering = computed(() => Boolean(query.value || activeTag.value || activeFolder.value || onlyFavourites.value || onlyPets.value));
 
 function clearFilters() {
   search.value = '';
   activeTag.value = '';
+  activeFolder.value = '';
+  onlyFavourites.value = false;
+  onlyPets.value = false;
 }
 
 const resultNote = computed(() => {
   if (!filtering.value) return '';
   const n = shown.value.length;
-  const what = [query.value && `“${search.value.trim()}”`, activeTag.value && `the tag “${activeTag.value}”`]
+  const what = [
+    query.value && `“${search.value.trim()}”`,
+    activeTag.value && `the tag “${activeTag.value}”`,
+    activeFolder.value && `the folder “${activeFolder.value}”`,
+    onlyFavourites.value && 'favourites',
+    onlyPets.value && 'pets out on screen',
+  ]
     .filter(Boolean)
     .join(' and ');
   return `${pluralize(n, 'character')} ${n === 1 ? 'matches' : 'match'} ${what}`;
@@ -179,6 +216,12 @@ async function duplicate(character) {
         tags: character.tags,
         referenceLinks: character.referenceLinks,
         notesForArtists: character.notesForArtists,
+        pronouns: character.pronouns,
+        personality: character.personality,
+        colours: character.colours,
+        folder: character.folder,
+        contentWarnings: character.contentWarnings,
+        pet: { shown: false, kind: character.pet?.kind || '', palette: character.pet?.palette || '' },
       },
     });
     toast.success(`Made a copy of ${character.name}. Give it its own name and details.`);
@@ -204,6 +247,7 @@ async function archive(character) {
   try {
     const { character: updated } = await api(`/characters/${character.id}/archive`, { method: 'POST' });
     replaceInList(updated);
+    if (character.pet?.shown) refreshPets();
     toast.success(`${updated.name} archived. It won't show up in new sign-ups.`);
     return true;
   } catch (e) {
@@ -222,6 +266,23 @@ async function restore(character) {
     toast.success(`${updated.name} is back in your library.`);
   } catch (e) {
     toast.error(e.message);
+  } finally {
+    busyId.value = null;
+  }
+}
+
+// ---------- Screen pets ----------
+
+async function togglePet(character) {
+  busyId.value = character.id;
+  const out = !character.pet?.shown;
+  try {
+    const { character: updated } = await api(`/characters/${character.id}`, { method: 'PATCH', body: { pet: { shown: out } } });
+    replaceInList(updated);
+    await refreshPets();
+    toast.success(out ? `${updated.name} is out on screen. Say hi!` : `${updated.name} has gone for a nap.`);
+  } catch (e) {
+    toast.error(e.code === 'TOO_MANY_PETS' ? `You already have ${MAX_SHOWN_PETS} pets out. Put one away first.` : e.message);
   } finally {
     busyId.value = null;
   }
@@ -276,6 +337,7 @@ async function confirmDialog() {
     }
     await api(`/characters/${character.id}`, { method: 'DELETE' });
     characters.value = characters.value.filter((c) => c.id !== character.id);
+    if (character.pet?.shown) refreshPets();
     toast.success(`${character.name} deleted.`);
     dialogBusy.value = false;
     closeDialog();
@@ -326,6 +388,25 @@ const emptyCopy = computed(() => {
       </template>
     </PageHeader>
 
+    <section class="card pets-strip" aria-labelledby="pets-strip-title">
+      <div class="strip-head">
+        <h2 id="pets-strip-title" class="strip-title"><PawPrint :size="18" aria-hidden="true" /> Out on screen</h2>
+        <span class="strip-count">{{ petsOut.length }}/{{ MAX_SHOWN_PETS }}</span>
+        <RouterLink to="/pets" class="strip-link">Meet all the pets</RouterLink>
+      </div>
+      <ul v-if="petsOut.length" class="strip-pets">
+        <li v-for="p in petsOut" :key="p.id">
+          <RouterLink :to="{ name: 'character', params: { id: p.id } }" class="strip-pet">
+            <PetSprite :kind="p.kind" :palette="p.palette" state="sit" :size="48" />
+            <span>{{ p.name }}</span>
+          </RouterLink>
+        </li>
+      </ul>
+      <p v-else class="hint m-0">
+        None of your characters are out yet. Press <strong>Let out</strong> on any of them to have them wander round the edges of the site.
+      </p>
+    </section>
+
     <div class="toolbar">
       <TabNav v-model="tab" :tabs="TABS" aria-label="Show characters" />
       <div class="input-wrap search">
@@ -342,6 +423,36 @@ const emptyCopy = computed(() => {
         />
         <button v-if="search" type="button" class="clear-btn" aria-label="Clear search" @click="search = ''">
           <X :size="16" aria-hidden="true" />
+        </button>
+      </div>
+    </div>
+
+    <div v-if="characters.length && !loading" class="toolbar secondary">
+      <div class="quick-chips" role="group" aria-label="Show only">
+        <button
+          type="button"
+          class="tag-chip"
+          :class="{ on: onlyFavourites }"
+          :aria-pressed="onlyFavourites ? 'true' : 'false'"
+          :disabled="!favouriteCount && !onlyFavourites"
+          @click="onlyFavourites = !onlyFavourites"
+        >
+          <Star :size="14" aria-hidden="true" :fill="onlyFavourites ? 'currentColor' : 'none'" /> Favourites
+          <span class="tag-count">{{ favouriteCount }}</span>
+        </button>
+        <button type="button" class="tag-chip" :class="{ on: onlyPets }" :aria-pressed="onlyPets ? 'true' : 'false'" @click="onlyPets = !onlyPets">
+          <PawPrint :size="14" aria-hidden="true" /> Out on screen
+        </button>
+        <button
+          v-for="folder in folderChips"
+          :key="folder.name"
+          type="button"
+          class="tag-chip folder-chip"
+          :class="{ on: activeFolder === folder.name }"
+          :aria-pressed="activeFolder === folder.name ? 'true' : 'false'"
+          @click="activeFolder = activeFolder === folder.name ? '' : folder.name"
+        >
+          <Folder :size="14" aria-hidden="true" /> {{ folder.name }} <span class="tag-count">{{ folder.count }}</span>
         </button>
       </div>
     </div>
@@ -423,7 +534,13 @@ const emptyCopy = computed(() => {
       <p class="result-note" aria-live="polite">{{ resultNote }}</p>
       <ul class="grid" :class="{ compact }" aria-label="Characters">
         <li v-for="character in shown" :key="character.id">
-          <CharacterCard :character="character" :compact="compact" class="h-full">
+          <CharacterCard
+            :character="character"
+            :compact="compact"
+            library
+            :to="{ name: 'character', params: { id: character.id } }"
+            class="h-full"
+          >
             <p v-if="character.eventCount" class="in-use">
               <CalendarHeart :size="15" aria-hidden="true" />
               In use in {{ pluralize(character.eventCount, 'event') }}
@@ -439,6 +556,20 @@ const emptyCopy = computed(() => {
               </RouterLink>
 
               <button
+                v-if="!character.archived"
+                type="button"
+                class="btn btn-ghost btn-xs"
+                :class="{ 'pet-on': character.pet?.shown }"
+                :disabled="busyId === character.id"
+                :aria-pressed="character.pet?.shown ? 'true' : 'false'"
+                :aria-label="character.pet?.shown ? `Put ${character.name} away` : `Let ${character.name} out on screen`"
+                :title="character.pet?.shown ? 'Put this pet away' : 'Let them wander round the screen'"
+                @click="togglePet(character)"
+              >
+                <PawPrint :size="15" aria-hidden="true" /> {{ character.pet?.shown ? 'Put away' : 'Let out' }}
+              </button>
+
+              <button
                 type="button"
                 class="btn btn-ghost btn-xs"
                 :disabled="busyId === character.id"
@@ -446,7 +577,7 @@ const emptyCopy = computed(() => {
                 title="Make a copy to start a similar character"
                 @click="duplicate(character)"
               >
-                <Copy :size="15" aria-hidden="true" /> Duplicate
+                <Copy :size="15" aria-hidden="true" />
               </button>
 
               <button
@@ -467,11 +598,11 @@ const emptyCopy = computed(() => {
                 class="btn btn-ghost btn-xs"
                 :disabled="busyId === character.id"
                 :aria-label="`Archive ${character.name}`"
+                title="Archive: keep it, but out of new sign-ups"
                 @click="archive(character)"
               >
                 <Loader2 v-if="busyId === character.id" :size="15" class="spin" aria-hidden="true" />
                 <Archive v-else :size="15" aria-hidden="true" />
-                Archive
               </button>
 
               <button
@@ -569,6 +700,75 @@ const emptyCopy = computed(() => {
 .toolbar.secondary {
   margin-top: -8px;
   align-items: flex-start;
+}
+.pets-strip {
+  margin-bottom: 22px;
+  padding: 16px 20px;
+}
+.strip-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 10px;
+}
+.strip-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1.05rem;
+}
+.strip-count {
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: var(--pink-soft);
+  color: var(--pink-dark);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.strip-link {
+  margin-left: auto;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+.strip-pets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.strip-pet {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 82px;
+  padding: 6px 10px 8px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 700;
+  transition: transform 0.15s;
+}
+.strip-pet:hover {
+  transform: translateY(-3px);
+  color: var(--pink-dark);
+}
+.quick-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tag-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pet-on {
+  color: var(--pink-dark);
 }
 .tag-chips {
   display: flex;
