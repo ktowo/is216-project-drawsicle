@@ -11,8 +11,9 @@ import { demoArtDataUrl } from '@shared/demo-art.mjs';
 export const STATE_KEY = 'drawsicle-mock-v1';
 export const SESSION_KEY = 'drawsicle-mock-session';
 // Bumped when the demo data changes shape or gains something people should see (2: the
-// Museum Club's sample wings), so saved demos start over with it
-const STATE_VERSION = 2;
+// Museum Club's sample wings; 3: screen pets and the bigger character library), so saved demos
+// start over with it
+const STATE_VERSION = 3;
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
