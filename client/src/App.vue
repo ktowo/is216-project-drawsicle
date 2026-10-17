@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import Navbar from './components/Navbar.vue';
 import Footer from './components/Footer.vue';
 import ToastHost from './components/ui/ToastHost.vue';
+import PetLayer from './components/pets/PetLayer.vue';
 import { SESSION_EXPIRED_EVENT } from './api';
 import { auth, setUser } from './stores/auth';
 import { toast } from './stores/toast';
@@ -50,6 +51,7 @@ onBeforeUnmount(() => window.removeEventListener(SESSION_EXPIRED_EVENT, onSessio
       <RouterView />
     </div>
     <Footer v-if="showChrome" />
+    <PetLayer />
     <ToastHost />
     <p class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ announcement }}</p>
   </div>
