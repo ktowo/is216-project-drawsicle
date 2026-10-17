@@ -6,13 +6,8 @@ import {
   ArrowRight,
   CalendarPlus,
   Shuffle,
-  BookHeart,
   Gift,
-  WandSparkles,
-  BellRing,
-  LockKeyhole,
   LayoutDashboard,
-  ImageUp,
   Check,
   Clock,
   Compass,
@@ -25,41 +20,9 @@ import EmptyState from '@/components/ui/EmptyState.vue';
 import { auth } from '@/stores/auth';
 import LandingShowcase from '@/components/landing/LandingShowcase.vue';
 import HowItWorks from '@/components/landing/HowItWorks.vue';
+import FeaturesBento from '@/components/landing/FeaturesBento.vue';
 import { api, qs } from '@/api';
 
-const FEATURES = [
-  {
-    icon: WandSparkles,
-    title: 'Matching that respects what you can draw',
-    text: "Nobody gets a character with a species or tag they've said they can't draw, and everyone gives and receives once.",
-    link: { to: '/help#matching', label: 'How matching works' },
-  },
-  {
-    icon: BookHeart,
-    title: 'Reusable character library',
-    text: 'Stop re-pasting reference links every event. Add a character once and offer it anywhere.',
-  },
-  {
-    icon: BellRing,
-    title: 'Deadline reminders',
-    text: 'Participants get a nudge before submissions are due; organisers hear when sign-ups are about to close.',
-  },
-  {
-    icon: LockKeyhole,
-    title: 'Invite-only events',
-    text: 'Keep an exchange to your own server. Private events never show up in the public listing.',
-  },
-  {
-    icon: LayoutDashboard,
-    title: 'Organiser dashboard',
-    text: 'Applications, matches and submissions in one place, with counts that show who still owes a gift.',
-  },
-  {
-    icon: ImageUp,
-    title: 'Image uploads',
-    text: 'Participants upload finished pieces straight to the event, ready for the reveal.',
-  },
-];
 
 // Preview of events taking sign-ups
 const openEvents = ref([]);
@@ -175,23 +138,7 @@ onMounted(loadOpenEvents);
 
     <HowItWorks />
 
-    <section class="section" aria-labelledby="features-heading">
-      <header class="section-head">
-        <h2 id="features-heading" class="section-heading">Everything an exchange needs</h2>
-        <p class="section-lead">Made for hobby art communities that are tired of juggling forms, sheets and DMs.</p>
-      </header>
-
-      <ul class="feature-grid">
-        <li v-for="f in FEATURES" :key="f.title" class="card feature">
-          <span class="feature-icon" aria-hidden="true"><component :is="f.icon" :size="22" /></span>
-          <h3 class="feature-title">{{ f.title }}</h3>
-          <p class="feature-text">{{ f.text }}</p>
-          <RouterLink v-if="f.link" :to="f.link.to" class="feature-link">
-            {{ f.link.label }} <ArrowRight :size="14" aria-hidden="true" />
-          </RouterLink>
-        </li>
-      </ul>
-    </section>
+    <FeaturesBento />
 
     <section class="section" aria-labelledby="open-heading">
       <header class="section-head row">
@@ -574,49 +521,6 @@ onMounted(loadOpenEvents);
   font-weight: 600;
 }
 
-/* Features */
-.feature-grid {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
-}
-.feature {
-  padding: 24px;
-}
-.feature-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 15px;
-  display: grid;
-  place-items: center;
-  background: var(--pink);
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(236, 106, 147, 0.25);
-}
-.feature-title {
-  margin-top: 16px;
-  font-family: var(--font-body);
-  font-size: 1.1rem;
-  font-weight: 700;
-  line-height: 1.3;
-}
-.feature-text {
-  margin: 8px 0 0;
-  color: var(--muted);
-  line-height: 1.55;
-}
-.feature-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 10px;
-  font-weight: 700;
-  font-size: 0.93rem;
-}
-
 /* Open events */
 .event-grid {
   list-style: none;
@@ -774,7 +678,6 @@ onMounted(loadOpenEvents);
     width: 100%;
     margin: 0 auto;
   }
-  .feature-grid,
   .event-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -803,7 +706,6 @@ onMounted(loadOpenEvents);
   .section {
     padding: 40px 16px;
   }
-  .feature-grid,
   .event-grid {
     grid-template-columns: minmax(0, 1fr);
   }
