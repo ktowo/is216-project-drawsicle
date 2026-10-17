@@ -1,6 +1,9 @@
 // Shared museum rooms in the demo (server/routes/museum-rooms.js). The demo has only you in it,
-// so "who's here" is just the people the server would list, and chat is kept in this browser.
-import { CHAT, ROOM_KINDS, roomKey, parseChat, cooldownLeft, isRepeat } from '@shared/chat.mjs';
+// so "who's here" is just the people the server would list, and chat is kept in this browser,
+// along with the guestbook and how often the cats have been petted.
+import { CHAT, GUESTBOOK, PET_EMOTE, ROOM_KINDS, roomKey, parseChat, cleanText, cooldownLeft, isRepeat } from '@shared/chat.mjs';
+import { CATS } from '@shared/museum-cats.mjs';
+import { can } from '@shared/permissions.mjs';
 import { isId, newId } from '../db.js';
 import { findUser, miniOf } from '../model.js';
 import { cleanLook } from '@shared/looks.mjs';
@@ -12,11 +15,11 @@ const ROOM_SIZE = 10;
 
 const notFound = () => httpError(404, "That room isn't open.", 'NOT_FOUND');
 
-function enterRoom(ctx) {
+// Can this visitor come into this exchange's rooms? Returns the event.
+function enterPlace(ctx) {
   const { state } = ctx;
   const { kind, eventId } = ctx.params;
-  const room = Number(ctx.params.room);
-  if (!ROOM_KINDS.includes(kind) || !isId(eventId) || !Number.isInteger(room) || room < 0 || room > 99) throw notFound();
+  if (!ROOM_KINDS.includes(kind) || !isId(eventId)) throw notFound();
   const event = state.events.find((e) => e.id === eventId);
   const open =
     event &&
@@ -32,6 +35,14 @@ function enterRoom(ctx) {
       throw httpError(403, 'Only members of this exchange can come in.', 'ACCESS_DENIED');
     }
   }
+  return event;
+}
+
+function enterRoom(ctx) {
+  const { kind } = ctx.params;
+  const room = Number(ctx.params.room);
+  if (!Number.isInteger(room) || room < 0 || room > 99) throw notFound();
+  const event = enterPlace(ctx);
   return {
     key: roomKey(kind, event.id, room),
     event,
@@ -50,6 +61,7 @@ const chatJson = (state, m) => ({
   user: person(state, m.user),
   kind: m.kind,
   emote: m.emote || '',
+  target: m.target || '',
   text: m.text,
   createdAt: m.createdAt,
 });
@@ -140,6 +152,7 @@ export function register(router) {
       user: user.id,
       kind: parsed.kind,
       emote: parsed.emote || '',
+      target: parsed.target || '',
       text: parsed.text,
       hiddenAt: null,
       createdAt: ctx.now.toISOString(),
@@ -147,6 +160,11 @@ export function register(router) {
     state.chats.push(message);
     // Keep the demo's saved data small
     if (state.chats.length > 500) state.chats.splice(0, state.chats.length - 500);
+    if (parsed.emote === PET_EMOTE) {
+      let row = state.catPets.find((c) => c.key === parsed.target);
+      if (!row) state.catPets.push((row = { key: parsed.target, pets: 0 }));
+      Object.assign(row, { pets: row.pets + 1, lastPetAt: ctx.now.toISOString(), lastPetBy: user.id });
+    }
     ctx.status = 201;
     return { message: chatJson(state, message), cooldownMs: CHAT.gapMs };
   });
@@ -154,6 +172,92 @@ export function register(router) {
   router.post('/museum/rooms/leave', (ctx) => {
     const user = ctx.requireAuth();
     ctx.state.presence = ctx.state.presence.filter((p) => p.user !== user.id);
+    return { ok: true };
+  });
+
+  // ---------- The museum cats ----------
+
+  router.get('/museum/rooms/cats', (ctx) => {
+    const { state } = ctx;
+    return {
+      cats: CATS.map((c) => {
+        const row = state.catPets.find((r) => r.key === c.key);
+        const by = row?.lastPetBy ? findUser(state, row.lastPetBy) : null;
+        return {
+          key: c.key,
+          name: c.name,
+          pets: row?.pets || 0,
+          lastPetAt: row?.lastPetAt || null,
+          lastPetBy: by && (by.status || 'active') === 'active' ? miniOf(state, by.id) : null,
+        };
+      }),
+    };
+  });
+
+  // ---------- The guestbook ----------
+
+  const canRemoveNotes = (state, user, eventId) =>
+    Boolean(
+      user &&
+        (can(user, 'chat.moderate') ||
+          state.members.some((m) => m.event === eventId && m.user === user.id && m.roles.includes('organizer')))
+    );
+  const noteJson = (state, entry, viewer, moderator) => {
+    const mine = Boolean(viewer && entry.user === viewer.id);
+    return { id: entry.id, user: person(state, entry.user), text: entry.text, createdAt: entry.createdAt, mine, canRemove: mine || moderator };
+  };
+  const activeAuthor = (state, entry) => (findUser(state, entry.user)?.status || 'active') === 'active';
+
+  router.get('/museum/rooms/:kind/:eventId/guestbook', (ctx) => {
+    const { state } = ctx;
+    const event = enterPlace(ctx);
+    const viewer = ctx.currentUser();
+    const moderator = canRemoveNotes(state, viewer, event.id);
+    const all = state.guestbook.filter((e) => e.event === event.id && !e.hiddenAt);
+    const notes = all.filter((e) => activeAuthor(state, e)).reverse().slice(0, GUESTBOOK.shown);
+    const last = viewer ? all.filter((e) => e.user === viewer.id).pop() : null;
+    const nextAt = last ? new Date(last.createdAt).getTime() + GUESTBOOK.gapMs : 0;
+    return {
+      entries: notes.map((e) => noteJson(state, e, viewer, moderator)),
+      total: all.length,
+      nextAt: nextAt > ctx.now.getTime() ? new Date(nextAt).toISOString() : null,
+    };
+  });
+
+  router.post('/museum/rooms/:kind/:eventId/guestbook', (ctx) => {
+    const { state } = ctx;
+    const user = ctx.requireAuth();
+    const event = enterPlace(ctx);
+    const until = mutedUntil(user, ctx.now);
+    if (until) {
+      ctx.status = 403;
+      return { error: 'A moderator has paused your chat for a while.', code: 'MUTED', mutedUntil: until };
+    }
+    const text = cleanText(ctx.body?.text);
+    if (text.length < 2) throw httpError(400, 'Write a few words for the guestbook.', 'VALIDATION');
+    if (text.length > GUESTBOOK.maxLength) throw httpError(400, `Keep it under ${GUESTBOOK.maxLength} characters.`, 'VALIDATION');
+    const last = state.guestbook.filter((e) => e.event === event.id && e.user === user.id).pop();
+    const wait = last ? new Date(last.createdAt).getTime() + GUESTBOOK.gapMs - ctx.now.getTime() : 0;
+    if (wait > 0) {
+      ctx.status = 429;
+      return { error: 'You signed the guestbook a moment ago.', code: 'SLOW_DOWN', retryAfterMs: wait };
+    }
+    const entry = { id: newId(), event: event.id, user: user.id, text, createdAt: ctx.now.toISOString(), hiddenAt: null };
+    state.guestbook.push(entry);
+    ctx.status = 201;
+    return { entry: noteJson(state, entry, user, canRemoveNotes(state, user, event.id)) };
+  });
+
+  router.delete('/museum/rooms/guestbook/:entryId', (ctx) => {
+    const { state } = ctx;
+    const user = ctx.requireAuth();
+    const entry = state.guestbook.find((e) => e.id === ctx.params.entryId && !e.hiddenAt);
+    if (!entry) throw httpError(404, "That note isn't in the guestbook.", 'NOT_FOUND');
+    if (entry.user !== user.id && !canRemoveNotes(state, user, entry.event)) {
+      throw httpError(403, 'Only the person who wrote it, the organisers or a moderator can take it down.', 'ACCESS_DENIED');
+    }
+    entry.hiddenAt = ctx.now.toISOString();
+    entry.hiddenBy = user.id;
     return { ok: true };
   });
 }

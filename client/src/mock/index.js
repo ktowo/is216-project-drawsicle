@@ -23,6 +23,7 @@ import * as outreach from './handlers/outreach.js';
 import * as reports from './handlers/reports.js';
 import * as museum from './handlers/museum.js';
 import * as museumRooms from './handlers/museum-rooms.js';
+import * as favourites from './handlers/favourites.js';
 
 const router = createRouter();
 // Order matters where paths overlap: events.js adds /events/mine before /events/:eventId
@@ -40,6 +41,7 @@ for (const feature of [
   reports,
   museumRooms,
   museum,
+  favourites,
   dashboard,
   discover,
   showcase,
@@ -124,7 +126,7 @@ async function handle(path, { method, body, form }) {
         if (!user) throw new MockHttpError(401, 'Your session has expired. Please log in again.', 'SESSION_EXPIRED');
         return user;
       },
-      startSession: (user) => setSession(user),
+      startSession: (user, options) => setSession(user, options),
       endSession: () => clearSession(),
     };
 

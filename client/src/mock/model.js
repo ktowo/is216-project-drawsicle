@@ -207,6 +207,7 @@ export function serializeEvent(state, event, user, ctx = viewerContext(state, ev
     adultOnly: Boolean(event.adultOnly),
     bannerUrl: event.bannerUrl || null,
     timeZone: event.timeZone || '',
+    museumTheme: event.museumTheme || 'auto',
     publishedAt: event.publishedAt || null,
     completedAt: event.completedAt || null,
     createdAt: event.createdAt,
@@ -222,6 +223,12 @@ export function serializeEvent(state, event, user, ctx = viewerContext(state, ev
             avoidPairs: (event.matchingRules?.avoidPairs || []).map((p) => ({ a: p.a, b: p.b })),
             avoidRepeats: event.matchingRules?.avoidRepeats !== false,
             style: event.matchingRules?.style || 'off',
+          },
+          autoMatch: {
+            enabled: Boolean(event.autoMatch?.enabled),
+            mode: event.autoMatch?.mode || 'best',
+            publish: event.autoMatch?.publish !== false,
+            lastRun: event.autoMatch?.lastRun ? { ...event.autoMatch.lastRun } : null,
           },
           invitedFrom: [...(event.invitedFrom || [])],
         }

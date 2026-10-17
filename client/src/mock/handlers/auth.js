@@ -88,7 +88,7 @@ export function register(router) {
 
     const reactivated = reactivate(user);
     if (reactivated) user.updatedAt = ctx.now.toISOString();
-    ctx.startSession(user);
+    ctx.startSession(user, { remember: typeof ctx.body.remember === 'boolean' ? ctx.body.remember : undefined });
     return reactivated ? { user: userPublic(user), reactivated: true } : { user: userPublic(user) };
   });
 

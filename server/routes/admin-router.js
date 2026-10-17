@@ -17,6 +17,7 @@ const { withdrawApplications, anonymiseUser } = require('../services/accounts.js
 const { organizerIds, serializeEvent, serializeEvents, deleteEventCascade } = require('../services/events.js');
 const { notify, notifyMany } = require('../services/notify.js');
 const { describeTarget } = require('../services/reports.js');
+const { visionReport, visionTest } = require('../services/vision.js');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
 const { ALL_EVENT_STATUSES, USER_STATUSES, SITE_ROLES, REPORT_STATUSES } = require('../../shared/constants.mjs');
 
@@ -565,6 +566,20 @@ router.post('/users/:userId/unmute', may('chat.moderate'), asyncHandler(async (r
 }));
 
 // ---------- Audit log ----------
+
+// ---------- Vision (Ollama, for art style matching) ----------
+
+router.get('/vision', may('stats.view'), asyncHandler(async (req, res) => {
+  res.json({ report: await visionReport() });
+}));
+
+router.post('/vision/test', may('stats.view'), asyncHandler(async (req, res) => {
+  const report = await visionReport();
+  if (!report.reachable) {
+    return res.json({ result: { ok: false, step: 'connect', error: report.error || 'Ollama is not set up yet.', timings: {} } });
+  }
+  res.json({ result: await visionTest() });
+}));
 
 router.get('/audit', may('audit.view'), asyncHandler(async (req, res) => {
   const { page, limit, skip } = paging(req);

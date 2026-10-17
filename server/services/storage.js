@@ -36,14 +36,17 @@ function looksLikeImage(file) {
 }
 
 // Where uploads go:
+//   supabase SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set: a public Supabase Storage bucket
+//            (SUPABASE_STORAGE_BUCKET, default "drawsicle"), made on first use if it's missing
 //   azure    AZURE_STORAGE_CONNECTION_STRING is set
 //   mongodb  the database is a shared one (Atlas, or anything in DB_MONGODB_URI): files are kept
 //            next to the data in GridFS, so they work on Vercel, where the server can't write to disk
 //   local    the built-in local database: plain files in server/uploads
-// UPLOAD_STORAGE=azure|mongodb|local picks one by hand.
+// UPLOAD_STORAGE=supabase|azure|mongodb|local picks one by hand.
 function storageMode() {
   const forced = (process.env.UPLOAD_STORAGE || '').trim().toLowerCase();
-  if (['azure', 'mongodb', 'local'].includes(forced)) return forced;
+  if (['supabase', 'azure', 'mongodb', 'local'].includes(forced)) return forced;
+  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) return 'supabase';
   if (process.env.AZURE_STORAGE_CONNECTION_STRING) return 'azure';
   if (hasConnectionString()) return 'mongodb';
   return 'local';
@@ -62,6 +65,107 @@ function getContainer() {
   return containerClient;
 }
 
+// ---------- Supabase Storage ----------
+// Talks to the Storage REST API with the service role key (server only: it must never reach the
+// browser). Files are public to read, so pictures load straight from Supabase's CDN.
+
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+function supabase() {
+  const url = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  if (!url || !key) throw new Error('UPLOAD_STORAGE is supabase but SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not set.');
+  const name = process.env.SUPABASE_STORAGE_BUCKET || 'drawsicle';
+  return {
+    name,
+    publicBase: `${url}/storage/v1/object/public/${name}/`,
+    request: (path, { method = 'GET', body, headers = {} } = {}) =>
+      fetch(`${url}/storage/v1${path}`, {
+        method,
+        body,
+        headers: { Authorization: `Bearer ${key}`, apikey: key, ...headers },
+        signal: AbortSignal.timeout(30000),
+      }),
+  };
+}
+
+async function supabaseError(res, what) {
+  let detail = '';
+  try {
+    const body = await res.json();
+    detail = body.message || body.error || '';
+  } catch {
+    // No body to explain it
+  }
+  return new Error(`Supabase Storage couldn't ${what} (${res.status}${detail ? `: ${detail}` : ''})`);
+}
+
+// The bucket, made public for reading and limited to pictures, if it isn't there yet.
+// Remembered once it's known to exist.
+let bucketReady = null;
+function ensureSupabaseBucket() {
+  bucketReady ||= (async () => {
+    const sb = supabase();
+    const found = await sb.request(`/bucket/${encodeURIComponent(sb.name)}`);
+    if (found.ok) return sb.name;
+    const made = await sb.request('/bucket', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: sb.name,
+        name: sb.name,
+        public: true,
+        file_size_limit: MAX_UPLOAD_BYTES,
+        allowed_mime_types: Object.keys(FILE_TYPES),
+      }),
+    });
+    // Someone else made it in the meantime: fine
+    if (!made.ok && made.status !== 409) throw await supabaseError(made, 'create the bucket');
+    return sb.name;
+  })().catch((err) => {
+    bucketReady = null;
+    throw err;
+  });
+  return bucketReady;
+}
+
+async function saveToSupabase(fileName, buffer, contentType) {
+  await ensureSupabaseBucket();
+  const sb = supabase();
+  const res = await sb.request(`/object/${sb.name}/${fileName}`, {
+    method: 'POST',
+    body: buffer,
+    // Every upload gets a new name, so browsers and the CDN can keep it for a year
+    headers: { 'Content-Type': contentType, 'cache-control': 'max-age=31536000', 'x-upsert': 'true' },
+  });
+  if (!res.ok) throw await supabaseError(res, 'save the file');
+  return sb.publicBase + fileName;
+}
+
+// Every file under a folder ("demo/", "style/"), up to a thousand at a time
+async function removeFromSupabase(folder) {
+  const sb = supabase();
+  let removed = 0;
+  for (;;) {
+    const listed = await sb.request(`/object/list/${sb.name}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prefix: folder, limit: 1000, offset: 0 }),
+    });
+    if (!listed.ok) throw await supabaseError(listed, 'list files');
+    const names = (await listed.json()).filter((o) => o.id).map((o) => `${folder}/${o.name}`);
+    if (!names.length) return removed;
+    const gone = await sb.request(`/object/${sb.name}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prefixes: names }),
+    });
+    if (!gone.ok) throw await supabaseError(gone, 'remove files');
+    removed += names.length;
+    if (names.length < 1000) return removed;
+  }
+}
+
 function bucket() {
   return new mongoose.mongo.GridFSBucket(mongoose.connection.db, { bucketName: BUCKET });
 }
@@ -77,6 +181,8 @@ async function saveFile(folder, buffer, contentType, name) {
   const fileName = name || randomName(folder, ext);
 
   switch (storageMode()) {
+    case 'supabase':
+      return saveToSupabase(fileName, buffer, contentType);
     case 'azure': {
       const blob = getContainer().getBlockBlobClient(fileName);
       await blob.uploadData(buffer, { blobHTTPHeaders: { blobContentType: contentType } });
@@ -151,8 +257,9 @@ async function uploadImageWithThumbnail(folder, file) {
   return { src, thumb };
 }
 
-// Removes every file in a folder from the database store (the demo reset uses it)
+// Removes every file in a folder from the shared store (the demo reset uses it)
 async function removeStoredFolder(folder) {
+  if (storageMode() === 'supabase') return removeFromSupabase(folder);
   if (storageMode() !== 'mongodb' || !mongoose.connection.db) return 0;
   const files = await bucket().find({ 'metadata.folder': folder }, { projection: { _id: 1 } }).toArray();
   await Promise.all(files.map((f) => bucket().delete(f._id).catch(() => {})));
@@ -201,6 +308,12 @@ async function readImage(url) {
     const file = await openStoredFile(stored[1]);
     return file ? streamToBuffer(file.stream) : null;
   }
+  if (storageMode() === 'supabase' && url.startsWith(supabase().publicBase)) {
+    const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
+    if (!res.ok) return null;
+    if (Number(res.headers.get('content-length')) > MAX_READ_BYTES) throw new Error('File too large');
+    return Buffer.from(await res.arrayBuffer());
+  }
   if (storageMode() === 'azure' && /^https:\/\//.test(url)) {
     const container = getContainer();
     if (!url.startsWith(`${container.url}/`)) return null;
@@ -211,6 +324,7 @@ async function readImage(url) {
 }
 
 module.exports = {
+  ensureSupabaseBucket,
   uploadImage,
   readImage,
   uploadImageWithThumbnail,

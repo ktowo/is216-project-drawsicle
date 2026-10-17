@@ -10,7 +10,9 @@ import { demoArtDataUrl } from '@shared/demo-art.mjs';
 
 export const STATE_KEY = 'drawsicle-mock-v1';
 export const SESSION_KEY = 'drawsicle-mock-session';
-const STATE_VERSION = 1;
+// Bumped when the demo data changes shape or gains something people should see (2: the
+// Museum Club's sample wings), so saved demos start over with it
+const STATE_VERSION = 2;
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
@@ -174,6 +176,7 @@ export function buildState(now = new Date()) {
       statusHistory: history,
       publishedAt: iso(e.publishedAt),
       completedAt: iso(e.completedAt),
+      museumTheme: e.museumTheme || 'auto',
       // Reminders that would already have gone out by now, so they don't all fire on first load
       remindersSent: e.status === 'open' ? [] : ['signup-48h', 'signup-closed'],
       createdAt: iso(createdMs),
@@ -285,11 +288,14 @@ export function buildState(now = new Date()) {
     follows: [],
     presence: [],
     chats: [],
+    guestbook: [],
+    catPets: [],
+    favourites: [],
   };
 }
 
 // Collections added after the first release; older saved demos get them empty
-const LATER_COLLECTIONS = ['announcements', 'reports', 'follows', 'presence', 'chats'];
+const LATER_COLLECTIONS = ['announcements', 'reports', 'follows', 'presence', 'chats', 'guestbook', 'catPets', 'favourites'];
 
 // ---------- Loading and saving ----------
 
@@ -358,9 +364,19 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
 
 // ---------- Session ----------
 
+// "Remember me" keeps the demo session in localStorage; otherwise it lives in sessionStorage
+// and ends with the browser (where there's no sessionStorage, as in tests, it uses kv())
+function browserSession() {
+  try {
+    return globalThis.sessionStorage || null;
+  } catch {
+    return null;
+  }
+}
+
 export function getSession() {
   try {
-    const raw = kv().getItem(SESSION_KEY);
+    const raw = kv().getItem(SESSION_KEY) || browserSession()?.getItem(SESSION_KEY);
     const session = raw ? JSON.parse(raw) : null;
     return session && typeof session.userId === 'string' ? session : null;
   } catch {
@@ -368,14 +384,19 @@ export function getSession() {
   }
 }
 
-export function setSession(user) {
-  kv().setItem(SESSION_KEY, JSON.stringify({ userId: user.id, version: user.sessionVersion || 0 }));
+export function setSession(user, { remember } = {}) {
+  const value = JSON.stringify({ userId: user.id, version: user.sessionVersion || 0 });
+  const forNow = remember === false ? browserSession() : null;
+  clearSession();
+  (forNow || kv()).setItem(SESSION_KEY, value);
 }
 
 export function clearSession() {
-  try {
-    kv().removeItem(SESSION_KEY);
-  } catch {
-    /* already gone */
+  for (const store of [kv(), browserSession()]) {
+    try {
+      store?.removeItem(SESSION_KEY);
+    } catch {
+      /* already gone */
+    }
   }
 }
