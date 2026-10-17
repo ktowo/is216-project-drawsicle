@@ -178,6 +178,12 @@ async function seed({ reset = false, now = new Date(), artDir = DEMO_UPLOAD_DIR 
       description: c.description || '',
       referenceLinks: c.referenceLinks || [],
       notesForArtists: c.notesForArtists || '',
+      pronouns: c.pronouns || '',
+      personality: c.personality || '',
+      colours: c.colours || [],
+      folder: c.folder || '',
+      favourite: Boolean(c.favourite),
+      pet: { shown: Boolean(c.pet?.shown), kind: c.pet?.kind || '', palette: c.pet?.palette || '' },
       archivedAt: c.archived ? now : null,
     };
   });
