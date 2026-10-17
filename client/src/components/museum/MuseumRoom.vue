@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, MousePointerClick, Lightbulb, LightbulbOff } fro
 import MuseumBackdrop from './MuseumBackdrop.vue';
 import MuseumFurniture from './MuseumFurniture.vue';
 import MuseumLights from './MuseumLights.vue';
+import DoodlePattern from './DoodlePattern.vue';
 import PixelAvatar from './PixelAvatar.vue';
 import PixelCat from './PixelCat.vue';
 import ChatBubbles from './ChatBubbles.vue';
@@ -498,10 +499,16 @@ function step(now) {
   // Chat bubbles drift up a row now and then, like a lift going up
   if (bubbles.value.length && now - lastShift > BUBBLE_DRIFT_MS) shiftBubbles(now);
 }
+// Phones redraw the room at 30 frames a second: smooth enough, and half the work
+const FRAME_MS = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches ? 33 : 0;
 function tick(now) {
   if (!onScreen) {
     raf = 0;
     last = 0;
+    return;
+  }
+  if (FRAME_MS && last && now - last < FRAME_MS) {
+    raf = requestAnimationFrame(tick);
     return;
   }
   try {
@@ -817,6 +824,11 @@ defineExpose({ walkTo });
 <template>
   <div class="museum-room" :style="{ background: roomTheme.void }">
     <div class="stage">
+      <!-- Faint doodles behind the room, in their own layer so they aren't redrawn with every frame -->
+      <svg class="room-doodles" aria-hidden="true" focusable="false">
+        <defs><DoodlePattern :id="`${uid}-doodles`" colour="#ffffff" /></defs>
+        <rect width="100%" height="100%" :fill="`url(#${uid}-doodles)`" />
+      </svg>
       <svg
         ref="svgRef"
         :viewBox="view.box"
@@ -994,13 +1006,25 @@ defineExpose({ walkTo });
   flex-direction: column;
   border-radius: 18px;
   overflow: hidden;
+  /* Its own layer: rounded corners clipping a scene that changes every frame flicker on phones otherwise */
+  isolation: isolate;
+  transform: translateZ(0);
   background: #232838;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 .stage {
   position: relative;
 }
+.room-doodles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.06;
+  pointer-events: none;
+}
 .scene {
+  position: relative;
   display: block;
   width: 100%;
   height: auto;
