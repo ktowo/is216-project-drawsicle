@@ -19,10 +19,15 @@ const id = `${useId().replace(/[^a-zA-Z0-9_-]/g, '')}-doodles`;
 <style scoped>
 .doodles {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
   z-index: 0;
   width: 100%;
-  height: 100%;
+  /* The large viewport height doesn't change as a phone's address bar slides in and out,
+     so the pattern is drawn once instead of on every scroll */
+  height: 100vh;
+  height: 100lvh;
+  transform: translateZ(0);
   color: var(--text);
   opacity: 0.045;
   pointer-events: none;
