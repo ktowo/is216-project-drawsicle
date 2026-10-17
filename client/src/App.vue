@@ -4,8 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import Navbar from './components/Navbar.vue';
 import Footer from './components/Footer.vue';
 import ToastHost from './components/ui/ToastHost.vue';
-import DemoBanner from './components/DemoBanner.vue';
-import { isMockMode, SESSION_EXPIRED_EVENT } from './api';
+import { SESSION_EXPIRED_EVENT } from './api';
 import { auth, setUser } from './stores/auth';
 import { toast } from './stores/toast';
 
@@ -46,7 +45,6 @@ onBeforeUnmount(() => window.removeEventListener(SESSION_EXPIRED_EVENT, onSessio
 
 <template>
   <div class="app-shell">
-    <DemoBanner v-if="isMockMode" />
     <Navbar v-if="showChrome" />
     <div class="app-main">
       <RouterView />
