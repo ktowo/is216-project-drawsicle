@@ -5,14 +5,9 @@ import {
   Sparkles,
   ArrowRight,
   CalendarPlus,
-  Share2,
   Shuffle,
-  CalendarClock,
   BookHeart,
-  UserRoundPlus,
   Gift,
-  Upload,
-  PartyPopper,
   WandSparkles,
   BellRing,
   LockKeyhole,
@@ -29,30 +24,8 @@ import EventCard from '@/components/events/EventCard.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import { auth } from '@/stores/auth';
 import LandingShowcase from '@/components/landing/LandingShowcase.vue';
+import HowItWorks from '@/components/landing/HowItWorks.vue';
 import { api, qs } from '@/api';
-
-const ORGANISER_STEPS = [
-  { icon: CalendarPlus, title: 'Create the event', text: 'Set the theme, rules, deadlines and how many artists can join.' },
-  { icon: Share2, title: 'Share the link', text: 'Post one link in your Discord or group chat. Private events use an invite link.' },
-  {
-    icon: Shuffle,
-    title: 'Match in one click',
-    text: 'When sign-ups close, generate matches that respect what everyone can draw. Swap pairs before you publish.',
-  },
-  {
-    icon: CalendarClock,
-    title: 'Track deadlines',
-    text: 'See who has submitted, send reminders and check gifts before the big reveal.',
-  },
-];
-
-const ARTIST_STEPS = [
-  { icon: BookHeart, title: 'Save your characters once', text: 'References, species and notes for artists live in your private library.' },
-  { icon: UserRoundPlus, title: 'Sign up', text: 'Pick an event, choose characters to offer and say what you can make.' },
-  { icon: Gift, title: 'Get your match', text: "See who you're making a gift for, with their characters and wishes." },
-  { icon: Upload, title: 'Submit your gift', text: 'Upload your art or writing before the deadline. Reminders help.' },
-  { icon: PartyPopper, title: 'Enjoy the reveal', text: 'When the event wraps up, find out who made your gift.' },
-];
 
 const FEATURES = [
   {
@@ -200,48 +173,7 @@ onMounted(loadOpenEvents);
 
     <LandingShowcase />
 
-    <section class="section" aria-labelledby="how-heading">
-      <header class="section-head">
-        <h2 id="how-heading" class="section-heading">How it works</h2>
-        <p class="section-lead">One place for the organiser running it and the artists taking part.</p>
-      </header>
-
-      <div class="how-grid">
-        <article class="card how-card">
-          <span class="how-pill">For organisers</span>
-          <h3 class="how-title">Run the whole exchange from one page</h3>
-          <ol class="steps">
-            <li v-for="(step, i) in ORGANISER_STEPS" :key="step.title" class="step">
-              <span class="step-icon" aria-hidden="true">
-                <component :is="step.icon" :size="20" />
-                <span class="step-num">{{ i + 1 }}</span>
-              </span>
-              <div>
-                <p class="step-title">{{ step.title }}</p>
-                <p class="step-text">{{ step.text }}</p>
-              </div>
-            </li>
-          </ol>
-        </article>
-
-        <article class="card how-card">
-          <span class="how-pill artist">For artists</span>
-          <h3 class="how-title">Sign up in minutes, get a match you can draw</h3>
-          <ol class="steps">
-            <li v-for="(step, i) in ARTIST_STEPS" :key="step.title" class="step">
-              <span class="step-icon artist" aria-hidden="true">
-                <component :is="step.icon" :size="20" />
-                <span class="step-num">{{ i + 1 }}</span>
-              </span>
-              <div>
-                <p class="step-title">{{ step.title }}</p>
-                <p class="step-text">{{ step.text }}</p>
-              </div>
-            </li>
-          </ol>
-        </article>
-      </div>
-    </section>
+    <HowItWorks />
 
     <section class="section" aria-labelledby="features-heading">
       <header class="section-head">
@@ -642,85 +574,6 @@ onMounted(loadOpenEvents);
   font-weight: 600;
 }
 
-/* How it works */
-.how-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 22px;
-}
-.how-card {
-  padding: 30px;
-}
-.how-pill {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: var(--pink-soft);
-  color: var(--pink-dark);
-  font-size: 0.82rem;
-  font-weight: 700;
-}
-.how-pill.artist {
-  background: var(--info-soft);
-  color: var(--info);
-}
-.how-title {
-  margin-top: 14px;
-  font-size: 1.45rem;
-  font-weight: 700;
-}
-.steps {
-  list-style: none;
-  margin: 22px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-.step {
-  display: flex;
-  gap: 14px;
-}
-.step-icon {
-  position: relative;
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  display: grid;
-  place-items: center;
-  background: var(--pink-soft);
-  color: var(--pink-dark);
-}
-.step-icon.artist {
-  background: var(--info-soft);
-  color: var(--info);
-}
-.step-num {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: 0.7rem;
-  font-weight: 700;
-}
-.step-title {
-  margin: 0;
-  font-weight: 700;
-}
-.step-text {
-  margin: 2px 0 0;
-  color: var(--muted);
-  line-height: 1.55;
-}
-
 /* Features */
 .feature-grid {
   list-style: none;
@@ -926,11 +779,6 @@ onMounted(loadOpenEvents);
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
-@media (max-width: 760px) {
-  .how-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
 @media (max-width: 640px) {
   .hero-inner {
     padding: 36px 16px 44px;
@@ -954,9 +802,6 @@ onMounted(loadOpenEvents);
   }
   .section {
     padding: 40px 16px;
-  }
-  .how-card {
-    padding: 22px 18px;
   }
   .feature-grid,
   .event-grid {
