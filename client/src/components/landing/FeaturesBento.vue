@@ -147,9 +147,12 @@ const MARK = { 9: 's', 20: 'g', 27: 'r' };
 .m-prompt { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg, transparent); }
 .tree { width: 100%; height: 28px; display: block; }
 .tree path { fill: none; stroke: var(--border); stroke-width: 2; }
-.pairs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.t-match .art { container-type: inline-size; }
+.pairs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .pair { min-width: 0; display: flex; align-items: center; justify-content: center; gap: 3px; padding: 5px 4px; border-radius: 999px; font-weight: 700; font-size: .68rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pair svg { flex-shrink: 0; }
+/* Narrow tile: drop the ticks so every name fits */
+@container (max-width: 460px) { .pairs { gap: 4px; } .pair { padding: 5px 2px; letter-spacing: -0.01em; } .pair svg { display: none; } }
 .pair.ok { background: color-mix(in srgb, #a8e0c4 45%, transparent); color: #2f8f66; }
 /* Calendar */
 .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; text-align: center; }
