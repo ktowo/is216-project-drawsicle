@@ -511,11 +511,12 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
               aria-describedby="privacy-gifts-hint"
             />
             <span class="track" aria-hidden="true"><span class="thumb" /></span>
-            <span class="switch-label">Allow public display of gifts I made or received</span>
+            <span class="switch-label">Allow public display of gifts I made or received, and my thank-you notes</span>
           </label>
           <p id="privacy-gifts-hint" class="hint">
-            A gift only appears on its artist's profile when both the artist and the person it was made for allow it.
-            Turning this off hides those gifts straight away.
+            A gift only appears on its artist's profile or the home page when both the artist and the person it was made
+            for allow it. Thank-you notes you write for those gifts can appear with them. Turning this off hides them
+            straight away.
           </p>
         </div>
       </fieldset>

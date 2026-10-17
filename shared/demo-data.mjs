@@ -61,6 +61,7 @@ export function buildDemoData(now = new Date()) {
     },
     {
       key: 'juniper',
+      profilePrivacy: { showExchanges: true, showGifts: true },
       // Public artist tags (shared/taste.mjs), as if they'd taken the Find your style quiz
       artistTags: { makes: ['art', 'writing'], themes: ['spooky', 'nature', 'mythology'], activity: 'casual', cardColor: 'lavender' },
       displayName: 'Juniper',
@@ -93,6 +94,7 @@ export function buildDemoData(now = new Date()) {
     },
     {
       key: 'remy',
+      profilePrivacy: { showExchanges: true, showGifts: true },
       // Public artist tags (shared/taste.mjs), as if they'd taken the Find your style quiz
       artistTags: { makes: ['art', 'adoptable'], themes: ['food', 'cute', 'creatures'], activity: 'seasonal', cardColor: 'butter' },
       displayName: 'Remy',
@@ -109,6 +111,7 @@ export function buildDemoData(now = new Date()) {
     },
     {
       key: 'noor',
+      profilePrivacy: { showExchanges: true, showGifts: true },
       // Public artist tags (shared/taste.mjs), as if they'd taken the Find your style quiz
       artistTags: { makes: ['writing'], themes: ['mythology', 'adventure', 'nature'], activity: 'casual', cardColor: 'sage' },
       // Helps the admins: reviews reports and museum chat
@@ -145,6 +148,7 @@ export function buildDemoData(now = new Date()) {
     },
     {
       key: 'pip',
+      profilePrivacy: { showExchanges: true, showGifts: true },
       displayName: 'Pip',
       bio: 'New to exchanges! Doodles, tiny animals and chiptune music.',
       socials: { twitter: 'pipsqueak', bluesky: 'pipsqueak', discord: 'pipsqueak' },
@@ -429,6 +433,34 @@ export function buildDemoData(now = new Date()) {
       publishedAt: ago(55),
       completedAt: ago(10),
     }),
+    // Smaller finished exchanges in other communities, so the landing page has real history to show
+    ...[
+      ['moonlit', 'juniper', 'Midsummer Moth Swap', 'Moths and lanterns at midsummer', 'discord', 'Moonlit Moth Society', ['moths', 'summer'], 40],
+      ['pastel', 'remy', 'Pastel Picnic Swap', 'Picnic snacks in pastel colours', 'tumblr', 'Pastel Paws', ['picnic', 'cute'], 55],
+      ['inkwell', 'noor', 'Short Story Swap', 'A short story for someone else\'s character', 'discord', 'Inkwell Writers Guild', ['writing'], 70],
+      ['dragon', 'mika', 'Hoard Day Exchange', 'What does your character hoard?', 'toyhouse', 'Cozy Dragon Den', ['dragons', 'fantasy'], 85],
+      ['sketch', 'sol', 'Sunday Doodle Swap', 'Quick doodles, any style', 'discord', 'Sketchbook Sundays', ['doodles'], 100],
+      ['starboard', 'kit', 'Sea Shanty Swap', 'Ships, sailors and sea creatures', 'deviantart', 'Starboard Artists', ['ocean', 'adventure'], 120],
+    ].map(([key, createdBy, name, theme, platform, platformName, tags, daysAgo]) =>
+      event({
+        key,
+        status: 'completed',
+        createdBy,
+        name,
+        description: `${theme}. All gifts have been revealed.`,
+        theme,
+        tags,
+        platform,
+        platformName,
+        platformLink: `https://example.com/communities/${key}`,
+        signupDeadline: deadline(-(daysAgo + 45)),
+        submissionDeadline: deadline(-(daysAgo + 5)),
+        maxParticipants: 12,
+        inviteCode: `${key}-swap`,
+        publishedAt: ago(daysAgo + 40),
+        completedAt: ago(daysAgo),
+      })
+    ),
   ];
 
   // Sign-up forms. Types stay inside each event's allowedTypes and characters
@@ -486,10 +518,30 @@ export function buildDemoData(now = new Date()) {
     application('autumn', 'pip', ['art'], ['art'], ['pipsqueak']),
 
     application('spring', 'mika', ['art', 'writing'], ['art'], ['biscuit']),
-    application('spring', 'sol', ['art'], ['art'], ['sunny']),
+    application('spring', 'sol', ['art'], ['art'], ['ember']),
     application('spring', 'remy', ['art'], ['art'], ['marzipan']),
     application('spring', 'noor', ['writing'], ['art', 'writing'], ['saffron', 'idris']),
     application('spring', 'kit', ['art'], ['art', 'writing'], ['lantern']),
+
+    application('moonlit', 'juniper', ['art', 'writing'], ['art'], ['lumen']),
+    application('moonlit', 'sol', ['art'], ['art'], ['sunny']),
+    application('moonlit', 'kit', ['art'], ['art'], ['lantern']),
+    application('pastel', 'pip', ['art'], ['art'], ['pipsqueak']),
+    application('pastel', 'remy', ['art'], ['art'], ['gloop']),
+    application('pastel', 'mika', ['art'], ['art'], ['biscuit']),
+    application('inkwell', 'noor', ['writing'], ['writing'], ['idris']),
+    application('inkwell', 'juniper', ['writing'], ['writing'], ['wren']),
+    application('inkwell', 'mika', ['writing'], ['writing'], ['pocket']),
+    application('dragon', 'mika', ['art'], ['art'], ['biscuit']),
+    application('dragon', 'ash', ['art'], ['art'], ['cinder']),
+    application('dragon', 'kit', ['art'], ['art'], ['lantern']),
+    application('sketch', 'sol', ['art'], ['art'], ['ember']),
+    application('sketch', 'pip', ['art'], ['art'], ['pipsqueak']),
+    application('sketch', 'remy', ['art'], ['art'], ['marzipan']),
+    application('sketch', 'ash', ['art'], ['art'], ['unit7']),
+    application('starboard', 'kit', ['art'], ['art'], ['lantern']),
+    application('starboard', 'noor', ['writing'], ['art'], ['saffron']),
+    application('starboard', 'sol', ['art'], ['art', 'writing'], ['sunny']),
   ];
 
   const match = (eventKey, giver, recipient, score, reasons, status = 'assigned') => ({
@@ -519,8 +571,19 @@ export function buildDemoData(now = new Date()) {
     match('spring', 'remy', 'noor', 53, [ART, 'Can draw 1 of 2 offered characters'], 'submitted'),
     match('spring', 'noor', 'kit', 65, ['Can make writing, which they asked for', ONE], 'submitted'),
     match('spring', 'kit', 'mika', 65, [ART, ONE], 'submitted'),
+
+    match('moonlit', 'sol', 'juniper', 70, [ART, ONE], 'submitted'),
+    match('moonlit', 'juniper', 'kit', 66, [ART, ONE]),
+    match('moonlit', 'kit', 'sol', 64, [ART, ONE]),
+    match('pastel', 'pip', 'remy', 68, [ART, ONE], 'submitted'),
+    match('pastel', 'remy', 'mika', 62, [ART, ONE]),
+    match('pastel', 'mika', 'pip', 63, [ART, ONE]),
+    match('dragon', 'ash', 'mika', 60, [ART, ONE], 'submitted'),
+    match('dragon', 'mika', 'kit', 61, [ART, ONE]),
+    match('dragon', 'kit', 'ash', 59, [ART, ONE]),
   ];
 
+  // thanks: { message, reaction, days } is the recipient's thank-you note, sent `days` ago.
   // art: [{ seed, title }] draws placeholder artwork (shared/demo-art.mjs); add src to use a real
   // picture from client/public/demo-art instead (see the CREDITS.md there).
   const submission = (eventKey, giver, recipient, fields) => ({
@@ -562,6 +625,7 @@ export function buildDemoData(now = new Date()) {
     }),
 
     submission('spring', 'mika', 'sol', {
+      thanks: { message: 'I actually teared up. Ember has never looked so happy. Thank you!!', reaction: 'sparkles', days: 9 },
       title: 'Ember in the cherry blossoms',
       message: 'Happy spring, Sol! Thank you for being such a lovely part of the club.',
       art: [{ seed: 'spring-mika-sol', src: '/demo-art/spring-mika-sol.jpg', title: 'Ember in the cherry blossoms' }],
@@ -569,6 +633,7 @@ export function buildDemoData(now = new Date()) {
       verified: true,
     }),
     submission('spring', 'sol', 'remy', {
+      thanks: { message: 'The loaf shape is PERFECT. This is going on my wall.', reaction: 'heart', days: 9 },
       title: 'Marzipan nap time',
       message: 'A loaf among the tulips.',
       art: [{ seed: 'spring-sol-remy', src: '/demo-art/spring-sol-remy.jpg', title: 'Marzipan nap time' }],
@@ -576,6 +641,7 @@ export function buildDemoData(now = new Date()) {
       verified: true,
     }),
     submission('spring', 'remy', 'noor', {
+      thanks: { message: 'You even remembered the little bell. I love it so much.', reaction: 'teary', days: 9 },
       title: 'Saffron at the oasis',
       message: 'Sorry it was a little late, I hope it was worth the wait!',
       art: [
@@ -587,6 +653,7 @@ export function buildDemoData(now = new Date()) {
       verified: true,
     }),
     submission('spring', 'noor', 'kit', {
+      thanks: { message: 'A whole story AND a picture? Lantern would serve you tea forever.', reaction: 'heart', days: 9 },
       title: 'The Lantern Tea Stall',
       message: 'A short story about Lantern opening the stall on the first warm night of spring.',
       type: 'writing',
@@ -596,10 +663,35 @@ export function buildDemoData(now = new Date()) {
       verified: true,
     }),
     submission('spring', 'kit', 'mika', {
+      thanks: { message: 'The teacups!!! Biscuit is living her best life. Thank you Kit!', reaction: 'sparkles', days: 9 },
       title: 'Biscuit in bloom',
       message: 'Biscuit surrounded by spring teacups. Thank you for the lovely prompts!',
       art: [{ seed: 'spring-kit-mika', src: '/demo-art/spring-kit-mika.jpg', title: 'Biscuit in bloom' }],
       submittedAt: ago(19, 1),
+      verified: true,
+    }),
+    submission('moonlit', 'sol', 'juniper', {
+      title: 'Lumen lights the lanterns',
+      message: 'Happy midsummer! I loved drawing Lumen on the rooftops.',
+      art: [{ seed: 'moonlit-sol-juniper', src: '/demo-art/gallery-sol-juniper.jpg', title: 'Lumen lights the lanterns' }],
+      submittedAt: ago(48),
+      verified: true,
+      thanks: { message: 'You got the collar and the wing spots exactly right. Lumen looks so proud.', reaction: 'heart', days: 39 },
+    }),
+    submission('pastel', 'pip', 'remy', {
+      title: "Gloop's snack attack",
+      message: 'Gloop deserves all the snacks.',
+      art: [{ seed: 'pastel-pip-remy', src: '/demo-art/gallery-pip-remy.jpg', title: "Gloop's snack attack" }],
+      submittedAt: ago(62),
+      verified: true,
+      thanks: { message: 'GLOOP WITH THE DONUTS. I am screaming. Thank you Pip!', reaction: 'laugh', days: 54 },
+    }),
+    // Ash hasn't allowed public display, so this gift never appears on the landing page or profiles
+    submission('dragon', 'ash', 'mika', {
+      title: 'Biscuit and the teacup hoard',
+      message: 'Hope you like it!',
+      art: [{ seed: 'dragon-ash-mika', title: 'Biscuit and the teacup hoard' }],
+      submittedAt: ago(92),
       verified: true,
     }),
   ];

@@ -252,6 +252,7 @@ export function buildState(now = new Date()) {
       late: Boolean(s.late),
       verified: Boolean(s.verified),
       verifiedAt: s.verified ? submittedAt : null,
+      ...(s.thanks ? { thanks: { message: s.thanks.message, reaction: s.thanks.reaction || '', at: iso(nowMs - (s.thanks.days || 0) * DAY) } } : {}),
       createdAt: submittedAt,
       updatedAt: submittedAt,
     };

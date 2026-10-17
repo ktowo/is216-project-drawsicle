@@ -319,6 +319,7 @@ async function seed({ reset = false, now = new Date(), artDir = DEMO_UPLOAD_DIR 
       verified: Boolean(s.verified),
       verifiedAt: s.verified ? new Date(Math.min(submittedAt.getTime() + DAY, now.getTime())) : null,
       verifiedBy: s.verified ? lookup(userIds, event.createdBy, 'user') : null,
+      ...(s.thanks ? { thanks: { message: s.thanks.message, reaction: s.thanks.reaction || '', at: new Date(now.getTime() - (s.thanks.days || 0) * DAY) } } : {}),
       createdAt: submittedAt,
     });
   }
