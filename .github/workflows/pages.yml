@@ -1,0 +1,60 @@
+# Publishes the demo to GitHub Pages on every push to github-demo: the whole site running in the
+# browser (client/src/mock), with no server or database, at
+# https://<owner>.github.io/<repository>/. Hash URLs (/#/events/...) work on Pages' static hosting.
+name: GitHub Pages demo
+
+on:
+  push:
+    branches: [github-demo]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; a newer push waits for the one already going out
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the demo
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.21.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: client/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      # The demo's own API is tested here, so a broken demo never goes out
+      - run: pnpm test
+      - run: pnpm build:mock
+        env:
+          VITE_BASE: /${{ github.event.repository.name }}/
+      # Any unknown path still opens the app
+      - run: cp dist/index.html dist/404.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: client/dist
+
+  deploy:
+    name: Publish to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
