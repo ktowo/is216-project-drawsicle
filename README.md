@@ -11,9 +11,15 @@ IS216 Web Application Development II project (SMU).
 
 - **Accounts that last between events**: a profile, default answers for sign-up forms, notification
   settings, and deactivation with a 30-day grace period.
-- **A private character library**: name, species, tags, description, reference links (Toyhou.se, Google
-  Docs...) and notes for artists. Reuse characters in every event; ones that were offered in an event can
-  be archived but not deleted.
+- **A private character library**: name, species, pronouns, tags, description, personality, a colour
+  palette, reference links (Toyhou.se, Google Docs...) and notes for artists, sorted into folders with
+  favourites pinned to the top. Each character has its own page. Reuse characters in every event; ones that
+  were offered in an event can be archived but not deleted.
+- **Screen pets**: any character can come out as a little cartoon pet (cat, dog, fox, bunny, mouse,
+  bear, penguin, bird, dragon, slime, frog or hedgehog, in the character's own colours or one of twelve
+  palettes). Up to four at once wander along the bottom of the screen beside the page, now and then hop
+  up onto a card, say something short, and can be picked up, thrown, fed and petted. The paw button in
+  the navbar puts them away; `/pets` shows every kind.
 - **Events for organisers**: name, theme, rules, sign-up and submission deadlines, participant limits,
   allowed gift types (art, adoptables, writing), the community platform, public or invite-only, with
   optional application review. Lifecycle: *Draft → Open → Matching → Active → Completed*.
@@ -118,6 +124,8 @@ simply killed can lose them. If the database doesn't answer, the script falls ba
 
 Every demo account uses the password **drawsicle123**. Dates are relative to when the demo data was
 created, so deadlines always look current.
+Every account also has a character library (97 characters across the demo, with folders, colour
+palettes and personalities), and most have a screen pet or two out. Mika has three.
 
 | Email | Name | Organises | Takes part in |
 | --- | --- | --- | --- |
