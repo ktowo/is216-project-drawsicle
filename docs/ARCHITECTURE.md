@@ -11,7 +11,7 @@ is216-project/
 │       ├── router/index.js      every page route
 │       ├── stores/              reactive() stores: auth.js, notifications.js, toast.js
 │       ├── views/               one file per page (XxxView.vue)
-│       ├── components/          Navbar, Footer, NotificationBell, ...; ui/ (generic), events/ (event pages)
+│       ├── components/          Navbar, Footer, NotificationBell, ...; ui/ (generic), events/ (event pages), landing/ (landing page showcase sections, see docs/specs/showcase.md)
 │       ├── utils/               format.js (dates, numbers), calendar.js (.ics files), eventTemplates.js (event presets), social.js (profile links)
 │       └── mock/                in-browser copy of the API (VITE_API_MODE=mock, for static hosting)
 ├── server/          Express 5 + Mongoose 9 (CommonJS)
