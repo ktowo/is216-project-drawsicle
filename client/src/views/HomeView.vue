@@ -28,6 +28,7 @@ import {
 import EventCard from '@/components/events/EventCard.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import { auth } from '@/stores/auth';
+import LandingShowcase from '@/components/landing/LandingShowcase.vue';
 import { api, qs } from '@/api';
 
 const ORGANISER_STEPS = [
@@ -196,6 +197,8 @@ onMounted(loadOpenEvents);
         </div>
       </div>
     </section>
+
+    <LandingShowcase />
 
     <section class="section" aria-labelledby="how-heading">
       <header class="section-head">
