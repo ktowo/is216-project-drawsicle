@@ -6,6 +6,7 @@ import BaseModal from '@/components/ui/BaseModal.vue';
 import PersonLink from '@/components/events/PersonLink.vue';
 import SubmissionDetails from '@/components/events/SubmissionDetails.vue';
 import ReportButton from '@/components/ReportButton.vue';
+import FavouriteButton from '@/components/FavouriteButton.vue';
 import { auth } from '@/stores/auth';
 
 // A closer look at one artwork in the museum, with the ones either side a click away
@@ -32,7 +33,10 @@ const nameOf = (user) => user?.displayName || 'Someone';
       </p>
       <SubmissionDetails :submission="sub" :caption="`From ${nameOf(item.giver)} to ${nameOf(item.recipient)}`" :show-title="false" />
       <div class="foot">
-        <span class="count">Artwork {{ index + 1 }} of {{ items.length }}</span>
+        <span class="count">
+          <FavouriteButton :submission-id="sub.id" :title="sub.title || 'this gift'" with-label />
+          Artwork {{ index + 1 }} of {{ items.length }}
+        </span>
         <div class="nav">
           <button type="button" class="btn btn-outline btn-sm" :disabled="index <= 0" @click="emit('update:index', index - 1)">
             <ArrowLeft :size="16" aria-hidden="true" /> Previous
@@ -87,6 +91,9 @@ const nameOf = (user) => user?.displayName || 'Someone';
   gap: 10px;
 }
 .count {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   font-size: 0.88rem;
   color: var(--muted);
   font-weight: 600;

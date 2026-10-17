@@ -35,6 +35,8 @@ const {
   DISCORD_WEBHOOK_RE,
   isTimeZone,
 } = require('../../shared/constants.mjs');
+const { MUSEUM_THEME_CHOICES } = require('../../shared/museum-themes.mjs');
+const { MATCH_MODES } = require('../../shared/matching.mjs');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
 
 const router = Router();
@@ -189,6 +191,14 @@ function readEventInput(body) {
       throw invalid('Paste a Discord webhook link (it starts with https://discord.com/api/webhooks/).');
     }
     input.discordWebhookUrl = url;
+  }
+  // Automatic matching (services/match-making.js): { enabled, mode, publish }, any of them
+  if (src.autoMatch !== undefined) {
+    const auto = src.autoMatch && typeof src.autoMatch === 'object' ? src.autoMatch : null;
+    if (!auto) throw invalid('autoMatch must be an object.');
+    if (auto.enabled !== undefined) input['autoMatch.enabled'] = readBoolean(auto.enabled, 'Automatic matching');
+    if (auto.publish !== undefined) input['autoMatch.publish'] = readBoolean(auto.publish, 'Publish automatically');
+    if (auto.mode !== undefined) input['autoMatch.mode'] = readChoice(auto.mode, MATCH_MODES, 'Pick best fit or random matching.');
   }
   return input;
 }
@@ -610,6 +620,16 @@ router.post('/:eventId/status', ...organizerOnly, asyncHandler(async (req, res) 
   res.json({ event: await serializeEvent(event, req.user, { ctx: req.viewer }) });
 }));
 
+// The museum's room design. Unlike the other settings it can change after the event is over,
+// since that's when its museum opens.
+router.put('/:eventId/museum-theme', ...organizerOnly, asyncHandler(async (req, res) => {
+  const choice = req.body?.museumTheme;
+  if (!MUSEUM_THEME_CHOICES.includes(choice)) throw invalid('Pick one of the room designs.');
+  req.event.museumTheme = choice;
+  await req.event.save();
+  res.json({ museumTheme: req.event.museumTheme });
+}));
+
 router.post('/:eventId/invite/regenerate', ...organizerOnly, asyncHandler(async (req, res) => {
   const inviteCode = req.event.regenerateInviteCode();
   await req.event.save();
@@ -621,7 +641,7 @@ router.post('/:eventId/invite/regenerate', ...organizerOnly, asyncHandler(async 
 // Settings copied into a new draft. People, matches, gifts and the invite code are not.
 const COPIED_FIELDS = [
   'description', 'theme', 'season', 'rules', 'tags', 'platform', 'platformName', 'platformLink', 'timeZone', 'discordWebhookUrl',
-  'minParticipants', 'maxParticipants', 'allowedTypes', 'publicity', 'requireApproval', 'adultOnly', 'bannerUrl',
+  'minParticipants', 'maxParticipants', 'allowedTypes', 'publicity', 'requireApproval', 'adultOnly', 'bannerUrl', 'museumTheme',
 ];
 const DUPLICATE_SIGNUP_DAYS = 14;
 

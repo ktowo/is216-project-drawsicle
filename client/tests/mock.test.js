@@ -86,9 +86,22 @@ describe('demo data', () => {
     // Sorted by sign-up deadline: Moth (6 days) before Winter (10 days)
     expect(open.events[0].name).toBe('Moth & Lantern Exchange');
 
-    expect((await ok('/events?status=completed')).events.map((e) => e.name).sort()).toEqual(
-      ['Hoard Day Exchange', 'Midsummer Moth Swap', 'Pastel Picnic Swap', 'Sea Shanty Swap', 'Short Story Swap', 'Spring Bloom Exchange', 'Sunday Doodle Swap']
-    );
+    // Most recently finished first: Spring Bloom, the Museum Club's sample wings, then the showcase communities
+    expect((await ok('/events?status=completed&limit=50')).events.map((e) => e.name)).toEqual([
+      'Spring Bloom Exchange',
+      'Petal Post Swap',
+      'Midnight Lantern Gallery',
+      'Greenhouse Doodle Swap',
+      'Lavender Letters Exchange',
+      'Golden Hour Sketch Trade',
+      'White Cube Mini Show',
+      'Midsummer Moth Swap',
+      'Pastel Picnic Swap',
+      'Short Story Swap',
+      'Hoard Day Exchange',
+      'Sunday Doodle Swap',
+      'Sea Shanty Swap',
+    ]);
     expect((await ok('/events?season=summer')).events.map((e) => e.name)).toEqual(['Summer Splash Swap']);
     // Organiser names count in the search
     expect((await ok('/events?q=kit')).events.map((e) => e.name).sort()).toEqual(['Moth & Lantern Exchange', 'Sea Shanty Swap']);
@@ -96,7 +109,7 @@ describe('demo data', () => {
     expect((await ok('/events?sort=popular')).events[0].participantCount).toBe(6);
 
     const page = await ok('/events?limit=2&page=2');
-    expect(page).toMatchObject({ total: 11, page: 2, pages: 6 });
+    expect(page).toMatchObject({ total: 17, page: 2, pages: 9 });
     expect(page.events).toHaveLength(2);
 
     expect((await fails('/events?status=nope')).code).toBe('VALIDATION');
@@ -457,7 +470,7 @@ describe('accounts', () => {
 
 describe('build-out additions', () => {
   it("sorts the listing by each event's next deadline, with completed events last", async () => {
-    const { events } = await ok('/events?sort=deadline');
+    const { events } = await ok('/events?sort=deadline&limit=50');
     // Autumn's gifts are due in 5 days, Moth's sign-ups close in 6, Winter's in 10, Summer's gifts in 25
     expect(events.map((e) => e.name)).toEqual([
       'Autumn Leaves Art Trade',
@@ -466,6 +479,12 @@ describe('build-out additions', () => {
       'Summer Splash Swap',
       // Finished exchanges last, most recently finished first
       'Spring Bloom Exchange',
+      'Petal Post Swap',
+      'Midnight Lantern Gallery',
+      'Greenhouse Doodle Swap',
+      'Lavender Letters Exchange',
+      'Golden Hour Sketch Trade',
+      'White Cube Mini Show',
       'Midsummer Moth Swap',
       'Pastel Picnic Swap',
       'Short Story Swap',
@@ -473,7 +492,7 @@ describe('build-out additions', () => {
       'Sunday Doodle Swap',
       'Sea Shanty Swap',
     ]);
-    expect((await ok('/events')).events.map((e) => e.name)).toEqual(events.map((e) => e.name));
+    expect((await ok('/events?limit=50')).events.map((e) => e.name)).toEqual(events.map((e) => e.name));
   });
 
   it('shows public artist profiles by username, any case, or id', async () => {

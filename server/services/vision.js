@@ -313,4 +313,109 @@ async function analyseUser(userId, { force = false } = {}) {
   return profile;
 }
 
-module.exports = { colourFeatures, averageFeatures, visionStatus, analyseUser, describeWithOllama, embed };
+// ---------- Checking on Ollama (the admin page's Vision tab) ----------
+
+// Everything about the connection, checked now: where it points (the host only, never the
+// token), whether it answers and how fast, its version, which models it has and whether the
+// two Drawsicle needs are there, and how many style profiles used the vision model.
+async function visionReport() {
+  const base = OLLAMA_URL();
+  const report = {
+    configured: Boolean(base),
+    host: '',
+    protected: Boolean(process.env.CF_ACCESS_CLIENT_ID && process.env.CF_ACCESS_CLIENT_SECRET),
+    reachable: false,
+    latencyMs: null,
+    version: '',
+    error: '',
+    models: [],
+    visionModel: { name: VISION_MODEL(), installed: false },
+    embedModel: { name: EMBED_MODEL(), installed: false },
+    checkedAt: new Date(),
+  };
+  try {
+    report.host = base ? new URL(base).host : '';
+  } catch {
+    report.error = "OLLAMA_URL isn't a valid address.";
+  }
+  if (base && !report.error) {
+    const started = Date.now();
+    try {
+      const [{ models = [] }, version] = await Promise.all([
+        ollama('/api/tags', null, 8000),
+        ollama('/api/version', null, 8000).catch(() => ({})),
+      ]);
+      report.reachable = true;
+      report.latencyMs = Date.now() - started;
+      report.version = version.version || '';
+      report.models = models.map((m) => ({
+        name: m.name,
+        sizeGb: m.size ? Math.round((m.size / 1e9) * 10) / 10 : null,
+        modifiedAt: m.modified_at || null,
+      }));
+      const names = report.models.map((m) => m.name);
+      const has = (want) => names.some((n) => n === want || n === `${want}:latest` || n.split(':')[0] === want);
+      report.visionModel.installed = has(VISION_MODEL());
+      report.embedModel.installed = has(EMBED_MODEL());
+    } catch (err) {
+      report.error = /\b30[1-8]\b/.test(err.message)
+        ? 'Cloudflare Access turned the request away. Check CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET.'
+        : err.name === 'TimeoutError'
+          ? 'Ollama took too long to answer. Is the computer running it awake, and the tunnel up?'
+          : `Couldn't reach Ollama: ${err.message}`;
+    }
+  }
+  // Refresh the cached status everyone else sees
+  statusCache = {
+    at: Date.now(),
+    value: {
+      configured: report.configured,
+      reachable: report.reachable,
+      vision: report.visionModel.installed,
+      embeddings: report.embedModel.installed,
+      visionModel: VISION_MODEL(),
+      embedModel: EMBED_MODEL(),
+    },
+  };
+  const [total, withVision, latest] = await Promise.all([
+    StyleProfile.countDocuments(),
+    StyleProfile.countDocuments({ visionModel: { $nin: ['', null] } }),
+    StyleProfile.findOne().sort({ analysedAt: -1 }).select('analysedAt'),
+  ]);
+  report.profiles = { total, withVision, colourOnly: total - withVision, lastAnalysedAt: latest?.analysedAt || null };
+  return report;
+}
+
+// Look at one generated test picture with the vision model, and embed what it said, timing
+// each step. Says which step failed when one does.
+async function visionTest() {
+  const { demoArtSvg } = await import('../../shared/demo-art.mjs');
+  const png = await sharp(Buffer.from(demoArtSvg({ seed: 'vision-test', title: 'Vision test' }))).flatten({ background: '#ffffff' }).png().toBuffer();
+  const result = { ok: false, step: 'colour', colour: null, tags: [], summary: '', vectorLength: 0, timings: {} };
+  let started = Date.now();
+  try {
+    const features = await colourFeatures(png);
+    const { featureWords } = await import('../../shared/style.mjs');
+    result.colour = featureWords(features);
+    result.timings.colourMs = Date.now() - started;
+
+    result.step = 'vision';
+    started = Date.now();
+    const described = await describeWithOllama(png);
+    result.tags = described.tags;
+    result.summary = described.summary;
+    result.timings.visionMs = Date.now() - started;
+
+    result.step = 'embedding';
+    started = Date.now();
+    result.vectorLength = (await embed([...described.tags, described.summary].join(', '))).length;
+    result.timings.embedMs = Date.now() - started;
+    result.ok = true;
+    result.step = 'done';
+  } catch (err) {
+    result.error = err.name === 'TimeoutError' ? 'It took too long to answer.' : err.message;
+  }
+  return result;
+}
+
+module.exports = { colourFeatures, averageFeatures, visionStatus, visionReport, visionTest, analyseUser, describeWithOllama, embed };

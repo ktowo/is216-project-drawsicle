@@ -11,7 +11,7 @@ import { STYLE_MODES, STYLE_MODE_LABELS } from '@shared/style.mjs';
 const props = defineProps({
   event: { type: Object, required: true },
 });
-const emit = defineEmits(['updated']);
+const emit = defineEmits(['updated', 'scanned']); // scanned: a scan just finished
 
 const uid = useId();
 const mode = ref(props.event.matchingRules?.style || 'off');
@@ -26,11 +26,13 @@ watch(
 );
 
 async function load() {
+  const wasRunning = info.value?.scan?.status === 'running';
   try {
     info.value = await api(`/events/${props.event.id}/matches/style-scan`);
   } catch {
     info.value = null;
   }
+  if (wasRunning && info.value?.scan?.status === 'done') emit('scanned');
   clearTimeout(timer);
   if (info.value?.scan?.status === 'running') timer = setTimeout(load, 2500);
 }

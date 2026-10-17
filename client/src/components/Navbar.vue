@@ -2,7 +2,6 @@
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
 import {
-  Palette,
   Plus,
   Menu,
   X,
@@ -22,6 +21,7 @@ import {
   Landmark,
   Users,
   Shirt,
+  Heart,
 } from 'lucide-vue-next';
 import { can } from '@shared/permissions.mjs';
 import NotificationBell from './NotificationBell.vue';
@@ -33,6 +33,8 @@ import { toast } from '@/stores/toast';
 
 const route = useRoute();
 const router = useRouter();
+// The popsicle logo (client/public), wherever the site is hosted
+const logoUrl = `${import.meta.env.BASE_URL}drawsicle.svg`;
 
 const userMenuOpen = ref(false);
 const mobileOpen = ref(false);
@@ -60,6 +62,7 @@ const accountLinks = computed(() => [
   ...(can(auth.user, 'admin.access') ? [{ to: '/admin', label: adminLabel.value, icon: ShieldCheck }] : []),
   { to: '/profile', label: 'Your profile', icon: UserRound },
   { to: '/friends', label: 'Friends', icon: Users },
+  { to: '/saved', label: 'Saved art', icon: Heart },
   { to: '/avatar', label: 'Museum avatar', icon: Shirt },
   ...(auth.user?.username
     ? [{ to: `/users/${encodeURIComponent(auth.user.username)}`, label: 'View public profile', icon: Eye }]
@@ -193,7 +196,7 @@ watch(
     <a href="#main" class="skip-link" @click.prevent="skipToContent">Skip to content</a>
     <div class="bar">
       <RouterLink :to="homeLink" class="brand" aria-label="Drawsicle home">
-        <span class="brand-tile"><Palette :size="24" aria-hidden="true" /></span>
+        <img :src="logoUrl" alt="" class="brand-logo" width="46" height="46" />
         <span class="brand-name">Drawsicle</span>
       </RouterLink>
 
@@ -409,15 +412,19 @@ watch(
 .brand:hover {
   color: var(--text);
 }
-.brand-tile {
+.brand-logo {
   width: 46px;
   height: 46px;
-  border-radius: 50%;
-  background: var(--pink);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  box-shadow: 0 3px 10px rgba(236, 106, 147, 0.28);
+  filter: drop-shadow(0 3px 6px rgba(236, 106, 147, 0.25));
+  transition: transform 0.2s;
+}
+.brand:hover .brand-logo {
+  transform: rotate(-8deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand-logo {
+    transition: none;
+  }
 }
 .brand-name {
   font-family: var(--font-display);
@@ -664,7 +671,7 @@ watch(
   .right {
     gap: 4px;
   }
-  .brand-tile {
+  .brand-logo {
     width: 40px;
     height: 40px;
   }

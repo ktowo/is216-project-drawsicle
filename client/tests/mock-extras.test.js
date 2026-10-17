@@ -489,8 +489,8 @@ describe('landing showcase', () => {
     expect(body.feed.every((r) => r.event.name !== 'Studio Club Swap' && r.event.name !== 'Valentine Doodle Swap')).toBe(true);
 
     const titles = body.gifts.map((g) => g.submission.title);
-    expect(titles).toContain("Gloop's snack attack");
-    expect(titles).toContain('Lumen lights the lanterns');
+    expect(titles.length).toBeLessThanOrEqual(12); // newest 12 consented gifts
+    expect(body.gifts.filter((g) => g.thanks).length).toBeGreaterThanOrEqual(3);
     expect(titles).not.toContain('Biscuit and the teacup hoard'); // Ash hasn't agreed
     const ember = body.gifts.find((g) => g.submission.title === 'Ember in the cherry blossoms');
     expect(ember.characterName).toBe('Ember');
@@ -504,5 +504,112 @@ describe('event search by community', () => {
   it('finds exchanges by their community name', async () => {
     const { events } = await ok('/events?status=all&q=moonlit');
     expect(events.map((e) => e.name)).toEqual(['Midsummer Moth Swap']);
+  });
+});
+
+describe('museum extras', () => {
+  it('counts pets, keeps a guestbook, and lets organisers pick the room design', async () => {
+    const { wings } = await ok('/museum');
+    const id = wings[0].event.id;
+    const place = `/museum/rooms/wing/${id}`;
+
+    await loginAs('mika');
+    const { message } = await ok(`${place}/0/chat`, { method: 'POST', body: { text: '/pet Biscuit' } });
+    expect([message.emote, message.target, message.text]).toEqual(['pet', 'biscuit', 'pets Biscuit']);
+    expect((await fails(`${place}/0/chat`, { method: 'POST', body: { text: '/pet nobody' } })).code).toBe('VALIDATION');
+    const { cats } = await ok('/museum/rooms/cats');
+    expect(cats.find((c) => c.key === 'biscuit')).toMatchObject({ pets: 1, lastPetBy: { displayName: 'Mika' } });
+
+    const { entry } = await ok(`${place}/guestbook`, { method: 'POST', body: { text: 'Such a cosy wing' } });
+    expect(entry).toMatchObject({ text: 'Such a cosy wing', mine: true, canRemove: true });
+    expect((await fails(`${place}/guestbook`, { method: 'POST', body: { text: 'Again!' } })).code).toBe('SLOW_DOWN');
+    expect((await ok(`${place}/guestbook`)).total).toBe(1);
+
+    // Only the organisers choose the design, from the list
+    expect((await fails(`/events/${id}/museum-theme`, { method: 'PUT', body: { museumTheme: 'midnight' } })).status).toBe(403);
+    await loginAs('juniper');
+    expect((await fails(`/events/${id}/museum-theme`, { method: 'PUT', body: { museumTheme: 'disco' } })).code).toBe('VALIDATION');
+    await ok(`/events/${id}/museum-theme`, { method: 'PUT', body: { museumTheme: 'midnight' } });
+    expect((await ok(`/museum/${id}`)).event.museumTheme).toBe('midnight');
+    // Organisers can take any note down
+    await ok(`/museum/rooms/guestbook/${entry.id}`, { method: 'DELETE' });
+    expect((await ok(`${place}/guestbook`)).entries).toEqual([]);
+  });
+});
+
+describe('questions for your giftee', () => {
+  it('lets a secret artist ask, and the recipient answer without learning who asked', async () => {
+    const autumn = await eventByName('Autumn Leaves Art Trade');
+    const base = `/events/${autumn.id}`;
+
+    // Mika is making Sol's gift
+    await loginAs('mika');
+    expect((await fails(`${base}/my-match/questions`, { method: 'POST', body: { text: '?' } })).code).toBe('VALIDATION');
+    const { questions } = await ok(`${base}/my-match/questions`, { method: 'POST', body: { text: 'Day or night scene?' } });
+    expect(questions.map((q) => [q.text, q.answer])).toEqual([['Day or night scene?', '']]);
+
+    await loginAs('sol');
+    const mine = await ok(`${base}/questions-for-me`);
+    expect(mine.canAnswer).toBe(true);
+    expect(Object.keys(mine.questions[0]).sort()).toEqual(['answer', 'answeredAt', 'askedAt', 'id', 'text']);
+    const { items } = await ok('/notifications');
+    expect(items.find((n) => n.type === 'gift_question').title).toBe('Your secret artist has a question');
+    await ok(`${base}/questions-for-me/${mine.questions[0].id}/answer`, { method: 'POST', body: { answer: 'Night, with lanterns!' } });
+
+    await loginAs('mika');
+    expect((await ok(`${base}/my-match`)).match.questions[0].answer).toBe('Night, with lanterns!');
+  });
+});
+
+describe('saved art', () => {
+  it('saves gifts you can see, and only those', async () => {
+    const spring = await eventByName('Spring Bloom Exchange');
+    await loginAs('mika'); // took part in Spring Bloom
+    const { gallery } = await ok(`/events/${spring.id}/results`);
+    const gift = gallery.find((g) => g.submission).submission;
+
+    await ok(`/favourites/${gift.id}`, { method: 'PUT' });
+    await ok(`/favourites/${gift.id}`, { method: 'PUT' }); // twice is fine
+    const saved = await ok('/favourites');
+    expect(saved.ids).toEqual([gift.id]);
+    expect(saved.items[0]).toMatchObject({ submission: { id: gift.id }, event: { name: 'Spring Bloom Exchange' } });
+    expect(saved.items[0].submission.message).toBeUndefined();
+
+    await ok(`/favourites/${gift.id}`, { method: 'DELETE' });
+    expect((await ok('/favourites')).items).toEqual([]);
+    expect((await fails('/favourites/0123456789abcdef01234567', { method: 'PUT' })).status).toBe(404);
+    await mockRequest('/auth/logout', { method: 'POST' });
+    expect((await fails('/favourites')).status).toBe(401);
+  });
+});
+
+describe('automatic and random matching', () => {
+  it('draws at random, and matches an event by itself once sign-ups close', async () => {
+    await loginAs('mika');
+    const summer = await eventByName('Summer Splash Swap'); // in matching, run by Mika
+    const random = await ok(`/events/${summer.id}/matches/generate`, { method: 'POST', body: { mode: 'random', seed: 4 } });
+    expect(random.result.stats.mode).toBe('random');
+    expect(random.matches.every((m) => m.reasons[0] === 'Drawn at random')).toBe(true);
+    expect((await fails(`/events/${summer.id}/matches/generate`, { method: 'POST', body: { mode: 'hat' } })).code).toBe('VALIDATION');
+
+    const { event } = await ok(`/events/${summer.id}/auto-match`, { method: 'PUT', body: { enabled: true, mode: 'best', publish: true } });
+    expect(event.autoMatch).toMatchObject({ enabled: true, mode: 'best', publish: true, lastRun: null });
+    // Sign-ups are already closed, so the next job run (every request, in the demo) matches it
+    const { event: after } = await ok(`/events/${summer.id}`);
+    expect(after.status).toBe('active');
+    expect(after.autoMatch.lastRun.outcome).toBe('published');
+    expect((await fails(`/events/${summer.id}/auto-match/run`, { method: 'POST' })).code).toBe('WRONG_STATUS');
+
+    // Turned on while creating an event
+    const { event: created } = await ok('/events', {
+      method: 'POST',
+      body: {
+        name: 'Hands-off Swap',
+        signupDeadline: new Date(Date.now() + 5 * 86400000).toISOString(),
+        submissionDeadline: new Date(Date.now() + 30 * 86400000).toISOString(),
+        autoMatch: { enabled: true, mode: 'random' },
+      },
+    });
+    expect(created.autoMatch).toMatchObject({ enabled: true, mode: 'random', publish: true });
   });
 });

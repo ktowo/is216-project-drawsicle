@@ -10,6 +10,8 @@ const {
   normalizeTags,
 } = require('../../shared/constants.mjs');
 const { STYLE_MODES } = require('../../shared/style.mjs');
+const { MUSEUM_THEME_CHOICES } = require('../../shared/museum-themes.mjs');
+const { MATCH_MODES } = require('../../shared/matching.mjs');
 
 const newInviteCode = () => crypto.randomBytes(8).toString('base64url');
 
@@ -84,6 +86,21 @@ const eventSchema = new mongoose.Schema(
       // Pair similar or contrasting art styles (shared/style.mjs); people can ask for their own at sign-up
       style: { type: String, enum: STYLE_MODES, default: 'off' },
     },
+    // Matching by itself: once sign-ups close, the deadline job (services/reminders.js) checks art
+    // styles when they matter, makes matches (best fit or at random) and publishes them, or
+    // leaves them for the organisers to check (services/match-making.js runAutoMatch)
+    autoMatch: {
+      enabled: { type: Boolean, default: false },
+      mode: { type: String, enum: MATCH_MODES, default: 'best' },
+      publish: { type: Boolean, default: true },
+      lastRun: {
+        _id: false,
+        type: { outcome: { type: String, enum: ['published', 'drafted', 'failed'] }, message: String, at: Date },
+        default: null,
+      },
+    },
+    // How the exchange's museum rooms look (shared/museum-themes.mjs); 'auto' changes room by room
+    museumTheme: { type: String, enum: MUSEUM_THEME_CHOICES, default: 'auto' },
     // The organisers' last "scan art styles" run (match-router.js)
     styleScan: {
       _id: false,
@@ -200,6 +217,7 @@ eventSchema.methods.toPublic = function ({
     adultOnly: Boolean(this.adultOnly),
     bannerUrl: this.bannerUrl || null,
     timeZone: this.timeZone || '',
+    museumTheme: this.museumTheme || 'auto',
     publishedAt: this.publishedAt,
     completedAt: this.completedAt,
     cancelledAt: this.cancelledAt,
@@ -220,6 +238,14 @@ eventSchema.methods.toPublic = function ({
             avoidPairs: (this.matchingRules?.avoidPairs || []).map((p) => ({ a: String(p.a), b: String(p.b) })),
             avoidRepeats: this.matchingRules?.avoidRepeats !== false,
             style: this.matchingRules?.style || 'off',
+          },
+          autoMatch: {
+            enabled: Boolean(this.autoMatch?.enabled),
+            mode: this.autoMatch?.mode || 'best',
+            publish: this.autoMatch?.publish !== false,
+            lastRun: this.autoMatch?.lastRun?.outcome
+              ? { outcome: this.autoMatch.lastRun.outcome, message: this.autoMatch.lastRun.message || '', at: this.autoMatch.lastRun.at }
+              : null,
           },
           invitedFrom: (this.invitedFrom || []).map(String),
         }

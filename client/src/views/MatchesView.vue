@@ -36,6 +36,8 @@ import { toast } from '@/stores/toast';
 import { formatDateTime } from '@/utils/format';
 import { eventCalendarEntries, downloadIcs } from '@/utils/calendar';
 import ProgressPicker from '@/components/events/ProgressPicker.vue';
+import GiftQuestions from '@/components/events/GiftQuestions.vue';
+import InspirationCard from '@/components/InspirationCard.vue';
 import ReportButton from '@/components/ReportButton.vue';
 import {
   eventLink,
@@ -69,6 +71,9 @@ const submitLink = computed(() =>
 );
 const progressUrl = computed(() =>
   backupId.value ? `/events/${route.params.id}/backups/${backupId.value}/progress` : `/events/${route.params.id}/my-match/progress`
+);
+const questionsUrl = computed(() =>
+  backupId.value ? `/events/${route.params.id}/backups/${backupId.value}/questions` : `/events/${route.params.id}/my-match/questions`
 );
 const backTo = computed(() =>
   invite.value ? { path: eventLink(route.params.id), query: { invite: invite.value } } : eventLink(route.params.id)
@@ -289,6 +294,13 @@ async function copyUsername() {
               </div>
             </section>
 
+            <GiftQuestions
+              v-model:questions="match.questions"
+              :endpoint="questionsUrl"
+              :recipient-name="recipientName"
+              :can-ask="isActive && !match.handedOver"
+            />
+
             <section class="card panel" aria-labelledby="chars-heading">
               <h2 id="chars-heading" class="panel-title">Their characters</h2>
               <p class="muted intro">Make something featuring one or more of these. Check the reference links and notes before you start.</p>
@@ -365,6 +377,13 @@ async function copyUsername() {
               :url="progressUrl"
               :progress="match.progress"
               @saved="match.progress = $event"
+            />
+
+            <InspirationCard
+              v-if="isActive && !submission"
+              :title="`Ideas for ${recipientName}`"
+              :characters="characters.map((c) => c.name)"
+              :likes="recipient.likes"
             />
 
             <section v-if="backups.length" class="card panel tools" aria-labelledby="backups-heading">

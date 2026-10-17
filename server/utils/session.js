@@ -1,7 +1,16 @@
 const jwt = require('jsonwebtoken');
 
 const COOKIE = 'drawsicle_token';
-const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const DAY_MS = 24 * 60 * 60 * 1000;
+// How long a log-in lasts:
+//   remember: true   30 days, even after the browser closes ("Remember me" ticked)
+//   remember: false  until the browser closes (and never more than 12 hours)
+//   not said         7 days (signing up, Google/Discord, password resets)
+const LENGTHS = {
+  remembered: { cookieMs: 30 * DAY_MS, token: '30d' },
+  browser: { cookieMs: null, token: '12h' },
+  usual: { cookieMs: 7 * DAY_MS, token: '7d' },
+};
 
 function secret() {
   const s = process.env.JWT_SECRET;
@@ -18,11 +27,13 @@ function cookieOptions() {
   };
 }
 
-function startSession(res, user) {
+function startSession(res, user, { remember } = {}) {
+  const length = remember === true ? LENGTHS.remembered : remember === false ? LENGTHS.browser : LENGTHS.usual;
   const token = jwt.sign({ sub: user._id.toString(), v: user.sessionVersion || 0 }, secret(), {
-    expiresIn: '7d',
+    expiresIn: length.token,
   });
-  res.cookie(COOKIE, token, { ...cookieOptions(), maxAge: MAX_AGE_MS });
+  // No maxAge makes it a browser-session cookie, gone when the browser closes
+  res.cookie(COOKIE, token, { ...cookieOptions(), ...(length.cookieMs ? { maxAge: length.cookieMs } : {}) });
 }
 
 function endSession(res) {

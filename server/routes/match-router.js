@@ -1,23 +1,21 @@
-const crypto = require('node:crypto');
 const { Router } = require('express');
 const mongoose = require('mongoose');
 const Application = require('../models/Application.js');
-const EventMember = require('../models/EventMember.js');
 const Match = require('../models/Match.js');
-const User = require('../models/User.js');
 const Submission = require('../models/Submission.js');
 const { userMini } = require('../models/User.js');
 const { requireAuth, loadEvent, requireEventRole } = require('../middleware/auth.js');
 const { serializeEvent, viewerContext } = require('../services/events.js');
 const { notify, notifyMany } = require('../services/notify.js');
-const { announceMilestone } = require('../services/discord.js');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
-const { generateMatches, scorePair, skippedAccountsWarning } = require('../../shared/matching.mjs');
+const { scorePair, MATCH_MODES } = require('../../shared/matching.mjs');
+const { pairRules, toParticipant, generateForEvent, publishForEvent, scanStyles, runAutoMatch } = require('../services/match-making.js');
 const { LIMITS, PROGRESS_VALUES } = require('../../shared/constants.mjs');
+const { readQuestion, readAnswer, askingProblem, questionJson } = require('../../shared/gift-questions.mjs');
 const StyleProfile = require('../models/StyleProfile.js');
 const Event = require('../models/Event.js');
 const { STYLE_MODES } = require('../../shared/style.mjs');
-const { analyseUser, visionStatus } = require('../services/vision.js');
+const { visionStatus } = require('../services/vision.js');
 const { waitUntil } = require('@vercel/functions');
 
 // Mounted at /api/events/:eventId. Every route names its own middleware, because the
@@ -86,75 +84,6 @@ async function adminMatchList(eventId) {
   return rows.map((r) => r.admin);
 }
 
-// Who each person mustn't be matched with, and who they already made gifts for:
-//   personal  their own block lists, applied both ways (private; organisers can't override them)
-//   blocked   personal plus the organisers' "never pair these two" rules
-//   previous  recipients from the same organisers' earlier exchanges (avoided when possible)
-async function pairRules(event, userIds) {
-  const ids = userIds.map(String);
-  const inEvent = new Set(ids);
-  const personal = new Map(ids.map((id) => [id, new Set()]));
-  const users = await User.find({ _id: { $in: ids } }).select('blockedUsers');
-  for (const user of users) {
-    for (const other of user.blockedUsers || []) {
-      const otherId = other.toString();
-      if (!inEvent.has(otherId)) continue;
-      personal.get(user._id.toString()).add(otherId);
-      personal.get(otherId).add(user._id.toString());
-    }
-  }
-
-  const blocked = new Map([...personal].map(([id, set]) => [id, new Set(set)]));
-  for (const { a, b } of event.matchingRules?.avoidPairs || []) {
-    const [x, y] = [String(a), String(b)];
-    if (inEvent.has(x) && inEvent.has(y)) {
-      blocked.get(x).add(y);
-      blocked.get(y).add(x);
-    }
-  }
-
-  const previous = new Map(ids.map((id) => [id, new Set()]));
-  if (event.matchingRules?.avoidRepeats !== false) {
-    const organisers = await EventMember.find({ event: event._id, roles: 'organizer' }).distinct('user');
-    const earlier = (await EventMember.find({ user: { $in: organisers }, roles: 'organizer' }).distinct('event')).filter(
-      (id) => !id.equals(event._id)
-    );
-    if (earlier.length) {
-      const rows = await Match.find({ event: { $in: earlier }, published: true, giver: { $in: ids } }).select('giver recipient');
-      for (const row of rows) previous.get(row.giver.toString())?.add(row.recipient.toString());
-    }
-  }
-  // Art styles, when the organisers or the people themselves asked to match on them
-  const profiles = await StyleProfile.find({ user: { $in: ids } });
-  const styles = new Map(profiles.map((p) => [p.user.toString(), p.forMatching()]));
-  return { personal, blocked, previous, styles, styleMode: event.matchingRules?.style || 'off' };
-}
-
-// The matching algorithm only sees types the event allows, so nobody is matched on
-// something they couldn't submit. rules: from pairRules(), or leave out.
-function toParticipant(application, allowedTypes, rules = null) {
-  const allowed = new Set(allowedTypes);
-  const id = (application.user?._id || application.user).toString();
-  const ownWish = application.stylePreference && application.stylePreference !== 'any' ? application.stylePreference : null;
-  const eventWish = rules?.styleMode && rules.styleMode !== 'off' ? rules.styleMode : null;
-  return {
-    id,
-    blockedIds: [...(rules?.blocked.get(id) || [])],
-    previousRecipients: [...(rules?.previous.get(id) || [])],
-    style: rules?.styles?.get(id) || null,
-    styleWish: ownWish || eventWish,
-    name: application.user ? userMini(application.user).displayName : '',
-    canCreate: (application.canCreate || []).filter((t) => allowed.has(t)),
-    wantsTypes: (application.wantsTypes || []).filter((t) => allowed.has(t)),
-    cannotDraw: [...(application.cannotDraw || [])],
-    likes: application.likes || '',
-    avoid: application.avoid || '',
-    characters: (application.offeredCharacters || [])
-      .filter((c) => c && c._id)
-      .map((c) => ({ id: c._id.toString(), name: c.name, species: c.species || '', tags: [...(c.tags || [])] })),
-  };
-}
-
 // Guards shared with the submission router -------------------------------------------
 
 // Must be an accepted participant. Sets req.viewer.
@@ -180,76 +109,42 @@ const loadMyMatch = asyncHandler(async (req, res, next) => {
 // Routes -----------------------------------------------------------------------------
 
 router.post('/matches/generate', ...organizerOnly, asyncHandler(async (req, res) => {
+  const mode = req.body?.mode === undefined ? 'best' : req.body.mode;
+  const { result } = await generateForEvent(req.event, { seed: req.body?.seed, mode });
+  res.json({ matches: await adminMatchList(req.event._id), result });
+}));
+
+// Automatic matching: once sign-ups close, the event checks art styles, makes matches and
+// publishes them (or leaves them for review) by itself (services/match-making.js)
+router.put('/auto-match', ...organizerOnly, asyncHandler(async (req, res) => {
+  const event = req.event;
+  if (!['draft', 'open', 'matching'].includes(event.status)) {
+    throw httpError(409, 'Matches are already published, so there is nothing left to match.', 'WRONG_STATUS');
+  }
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const update = {};
+  for (const key of ['enabled', 'publish']) {
+    if (body[key] === undefined) continue;
+    if (typeof body[key] !== 'boolean') throw httpError(400, `${key} must be true or false.`, 'VALIDATION');
+    update[`autoMatch.${key}`] = body[key];
+  }
+  if (body.mode !== undefined) {
+    if (!MATCH_MODES.includes(body.mode)) throw httpError(400, `mode must be one of: ${MATCH_MODES.join(', ')}.`, 'VALIDATION');
+    update['autoMatch.mode'] = body.mode;
+  }
+  await Event.updateOne({ _id: event._id }, { $set: update });
+  res.json({ event: await serializeEvent(await Event.findById(event._id), req.user) });
+}));
+
+// Run automatic matching now, without waiting for the deadline job
+router.post('/auto-match/run', ...organizerOnly, asyncHandler(async (req, res) => {
   const event = req.event;
   if (event.status !== 'matching') {
-    throw httpError(409, 'Close sign-ups before generating matches.', 'WRONG_STATUS');
+    throw httpError(409, 'Close sign-ups first; automatic matching runs once they are closed.', 'WRONG_STATUS');
   }
-
-  const accepted = (
-    await Application.find({ event: event._id, status: 'accepted' })
-      .sort({ createdAt: 1 })
-      .populate('user', `${USER_FIELDS} status`)
-      .populate('offeredCharacters')
-  ).filter((a) => a.user);
-  // Deactivating withdraws sign-ups, but older ones can still be here; they can't make a gift
-  const skipped = accepted.filter((a) => a.user.status === 'deactivated');
-  const applications = accepted.filter((a) => a.user.status !== 'deactivated');
-
-  const needed = Math.max(2, event.minParticipants || 2);
-  if (applications.length < needed) {
-    throw httpError(
-      409,
-      `You need at least ${needed} accepted participants to generate matches (there are ${applications.length}).`,
-      'NOT_ENOUGH_PARTICIPANTS'
-    );
-  }
-
-  const rawSeed = req.body?.seed;
-  const given = rawSeed === undefined || rawSeed === null || rawSeed === '' ? NaN : Number(rawSeed);
-  const seed = Number.isFinite(given) ? Math.floor(given) : crypto.randomInt(1, 2 ** 31 - 1);
-
-  const rules = await pairRules(event, applications.map((a) => a.user._id));
-  const result = generateMatches(
-    applications.map((a) => toParticipant(a, event.allowedTypes, rules)),
-    { seed }
-  );
-
-  const appByUser = new Map(applications.map((a) => [a.user._id.toString(), a]));
-  await Match.deleteMany({ event: event._id, published: false });
-  try {
-    await Match.insertMany(
-      result.pairs.map((p) => ({
-        event: event._id,
-        giver: p.giverId,
-        recipient: p.recipientId,
-        giverApplication: appByUser.get(p.giverId)._id,
-        recipientApplication: appByUser.get(p.recipientId)._id,
-        score: p.score,
-        reasons: p.reasons,
-        published: false,
-        status: 'assigned',
-      }))
-    );
-  } catch (err) {
-    // Two generate requests at once: the other one's matches are already in
-    if (err?.code === 11000) {
-      throw httpError(409, 'Matches were just generated by someone else. Refresh to see them.', 'MATCHES_CHANGED');
-    }
-    throw err;
-  }
-
-  const warnings = [...result.warnings];
-  if (skipped.length) warnings.push(skippedAccountsWarning(skipped.map((a) => userMini(a.user).displayName)));
-
-  const { participants, matched, totalScore, averageScore, cycles, seed: usedSeed } = result.stats;
-  res.json({
-    matches: await adminMatchList(event._id),
-    result: {
-      unmatched: result.unmatched.map((id) => userMini(appByUser.get(id)?.user)),
-      warnings,
-      stats: { participants, matched, totalScore, averageScore, cycles, seed: usedSeed },
-    },
-  });
+  const run = await runAutoMatch(event);
+  const fresh = await Event.findById(event._id);
+  res.json({ run, event: await serializeEvent(fresh, req.user), matches: await adminMatchList(event._id) });
 }));
 
 // The organisers' matching rules: people to keep apart, and whether to avoid repeat pairs
@@ -367,84 +262,8 @@ router.post('/matches/swap', ...organizerOnly, asyncHandler(async (req, res) => 
 }));
 
 router.post('/matches/publish', ...organizerOnly, asyncHandler(async (req, res) => {
-  const event = req.event;
-  if (event.status !== 'matching') {
-    throw httpError(409, 'Matches can only be published while the event is in matching.', 'WRONG_STATUS');
-  }
-
-  const [matches, acceptedRows] = await Promise.all([
-    Match.find({ event: event._id, published: false }).populate('recipient', USER_FIELDS),
-    Application.find({ event: event._id, status: 'accepted' }).populate('user', `${USER_FIELDS} status`),
-  ]);
-  if (!matches.length) throw httpError(409, 'Generate matches before publishing them.', 'NO_MATCHES');
-  // Same people generate used: deactivated accounts were left out there
-  const accepted = acceptedRows.filter((a) => a.user?.status !== 'deactivated');
-
-  // Everyone accepted right now must give exactly once and receive exactly once
-  const gives = new Map();
-  const receives = new Map();
-  for (const m of matches) {
-    gives.set(m.giver.toString(), (gives.get(m.giver.toString()) || 0) + 1);
-    const r = (m.recipient?._id || m.recipient).toString();
-    receives.set(r, (receives.get(r) || 0) + 1);
-  }
-  const acceptedIds = new Set(accepted.map((a) => (a.user?._id || a.user).toString()));
-  const notPlaced = accepted.filter((a) => {
-    const id = (a.user?._id || a.user).toString();
-    return gives.get(id) !== 1 || receives.get(id) !== 1;
-  });
-  const stale = [...gives.keys(), ...receives.keys()].some((id) => !acceptedIds.has(id));
-
-  if (notPlaced.length) {
-    const names = notPlaced.slice(0, 3).map((a) => userMini(a.user).displayName);
-    const more = notPlaced.length > 3 ? ` and ${notPlaced.length - 3} more` : '';
-    throw httpError(
-      409,
-      `Not every accepted participant has a match (${names.join(', ')}${more}). This happens when someone is accepted ` +
-        "after matches were generated, or can't be matched. Generate matches again, or remove anyone who can't be placed.",
-      'MATCHES_INCOMPLETE'
-    );
-  }
-  if (stale) {
-    throw httpError(
-      409,
-      'Some matches include people who are no longer accepted participants. Generate matches again.',
-      'MATCHES_INCOMPLETE'
-    );
-  }
-
-  // Claim the publish first so a double click can't publish (and notify) twice
-  const claimed = await Match.updateMany({ event: event._id, published: false }, { $set: { published: true } });
-  if (claimed.modifiedCount === 0) {
-    throw httpError(409, 'These matches were already published.', 'ALREADY_PUBLISHED');
-  }
-  try {
-    event.setStatus('active', req.user._id);
-    event.publishedAt = new Date();
-    await event.save();
-  } catch (err) {
-    await Match.updateMany({ event: event._id }, { $set: { published: false } });
-    throw err;
-  }
-
-  announceMilestone(event, 'matches_out');
-  const due = event.submissionDeadline.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-  const results = await Promise.allSettled(
-    matches.map((m) =>
-      notify(m.giver, {
-        type: 'match_assigned',
-        title: `Your match for ${event.name} is ready`,
-        message: `You're making a gift for ${userMini(m.recipient).displayName}. It's due by ${due}.`,
-        link: `/events/${event._id}/matches`,
-        email: 'matches',
-      })
-    )
-  );
-  for (const r of results) {
-    if (r.status === 'rejected') console.error('Match notification failed:', r.reason?.message);
-  }
-
-  res.json({ event: await serializeEvent(event, req.user), matches: await adminMatchList(event._id) });
+  await publishForEvent(req.event, req.user._id);
+  res.json({ event: await serializeEvent(req.event, req.user), matches: await adminMatchList(req.event._id) });
 }));
 
 // The giver's view of their match: who they're making a gift for and what that person
@@ -481,6 +300,7 @@ async function myMatchJson(event, match, { asBackup = false } = {}) {
     },
     // The original giver doesn't see the backup's gift
     submission: submission && (asBackup || !match.backupGiver) ? submission.toPublic() : null,
+    questions: (match.questions || []).map(questionJson),
   };
 }
 
@@ -513,6 +333,69 @@ const rejectIfHandedOver = (req, res, next) =>
 
 router.put('/my-match/progress', requireAuth, loadEvent, requireParticipant, loadMyMatch, rejectIfHandedOver, requireActiveEvent, asyncHandler(saveProgress));
 
+// ---------- Asking the recipient ----------
+// The person making a gift can ask its recipient a few questions ("warm or cool colours?").
+// The recipient answers on the event page and never learns who asked.
+
+const questionsOpen = (req, res, next) =>
+  req.event.status === 'active'
+    ? next()
+    : next(httpError(409, 'Questions can only be asked and answered while gifts are being made.', 'WRONG_STATUS'));
+
+async function askQuestion(req, res) {
+  const { text, error } = readQuestion(req.body?.text);
+  if (error) throw httpError(400, error, 'VALIDATION');
+  const problem = askingProblem(req.match.questions);
+  if (problem) throw httpError(409, problem, 'TOO_MANY_QUESTIONS');
+  req.match.questions.push({ text, askedBy: req.user._id, askedAt: new Date() });
+  await req.match.save();
+  const question = req.match.questions[req.match.questions.length - 1];
+  await notify(req.match.recipient, {
+    type: 'gift_question',
+    title: 'Your secret artist has a question',
+    message: `About your gift in ${req.event.name}: "${text.length > 200 ? `${text.slice(0, 199)}…` : text}"`,
+    link: `/events/${req.event._id}#gift-questions`,
+  }).catch((e) => console.error('Question notification failed:', e.message));
+  res.status(201).json({ question: questionJson(question), questions: req.match.questions.map(questionJson) });
+}
+
+router.post('/my-match/questions', requireAuth, loadEvent, requireParticipant, loadMyMatch, rejectIfHandedOver, questionsOpen, asyncHandler(askQuestion));
+
+// The match whose gift is for the viewer
+async function matchForMe(req) {
+  if (!['active', 'completed'].includes(req.event.status)) return null;
+  return Match.findOne({ event: req.event._id, recipient: req.user._id, published: true });
+}
+
+router.get('/questions-for-me', requireAuth, loadEvent, requireParticipant, asyncHandler(async (req, res) => {
+  const match = await matchForMe(req);
+  res.json({ questions: (match?.questions || []).map(questionJson), canAnswer: req.event.status === 'active' });
+}));
+
+router.post('/questions-for-me/:questionId/answer', requireAuth, loadEvent, requireParticipant, questionsOpen, asyncHandler(async (req, res) => {
+  const match = await matchForMe(req);
+  const question = match && mongoose.isValidObjectId(req.params.questionId) ? match.questions.id(req.params.questionId) : null;
+  if (!question) throw httpError(404, "That question isn't for you.", 'NOT_FOUND');
+  const { text, error } = readAnswer(req.body?.answer);
+  if (error) throw httpError(400, error, 'VALIDATION');
+  const first = !question.answer;
+  question.answer = text;
+  question.answeredAt = new Date();
+  await match.save();
+  // Whoever is making the gift now hears back (a backup artist, if one took it over)
+  const maker = match.backupGiver || match.giver;
+  const link = match.backupGiver ? `/events/${req.event._id}/matches?backup=${match._id}` : `/events/${req.event._id}/matches`;
+  if (first) {
+    await notify(maker, {
+      type: 'gift_answer',
+      title: `${userMini(req.user).displayName} answered your question`,
+      message: `"${question.text.length > 120 ? `${question.text.slice(0, 119)}…` : question.text}"`,
+      link,
+    }).catch((e) => console.error('Answer notification failed:', e.message));
+  }
+  res.json({ question: questionJson(question) });
+}));
+
 // ---------- Backup artists ----------
 // Accepted participants who ticked "I can be a backup" can take over a gift whose giver dropped
 // out. The organisers pick them; the backup then sees the recipient and submits the gift.
@@ -538,6 +421,7 @@ router.get('/backups/:matchId', requireAuth, loadEvent, requireParticipant, load
 }));
 
 router.put('/backups/:matchId/progress', requireAuth, loadEvent, requireParticipant, loadBackupMatch, requireActiveEvent, asyncHandler(saveProgress));
+router.post('/backups/:matchId/questions', requireAuth, loadEvent, requireParticipant, loadBackupMatch, questionsOpen, asyncHandler(askQuestion));
 
 // Volunteers for one match, for the organisers' "Find a backup" list
 router.get('/backups/volunteers/:matchId', ...organizerOnly, asyncHandler(async (req, res) => {
@@ -681,6 +565,23 @@ router.get('/matches/style-scan', ...organizerOnly, asyncHandler(async (req, res
   res.json(await styleScanJson(req.event));
 }));
 
+// Each accepted participant's art style as the scan worked it out (descriptions only, never
+// their pictures), for the organisers' Art styles tab. A style preference they gave at sign-up
+// is shown too.
+router.get('/matches/style-profiles', ...organizerOnly, asyncHandler(async (req, res) => {
+  const apps = await Application.find({ event: req.event._id, status: 'accepted' })
+    .select('user stylePreference')
+    .populate('user', 'displayName username avatarUrl status');
+  const people = apps.filter((a) => a.user);
+  const profiles = await StyleProfile.find({ user: { $in: people.map((a) => a.user._id) } });
+  const byUser = new Map(profiles.map((p) => [p.user.toString(), p.toPublic()]));
+  res.json({
+    people: people
+      .map((a) => ({ user: userMini(a.user), preference: a.stylePreference || 'any', style: byUser.get(a.user._id.toString()) || null }))
+      .sort((x, y) => x.user.displayName.localeCompare(y.user.displayName)),
+  });
+}));
+
 router.post('/matches/style-scan', ...organizerOnly, asyncHandler(async (req, res) => {
   const event = req.event;
   if (!['open', 'matching'].includes(event.status)) {
@@ -691,27 +592,13 @@ router.post('/matches/style-scan', ...organizerOnly, asyncHandler(async (req, re
   if (scan?.status === 'running' && Date.now() - new Date(scan.startedAt).getTime() < 10 * 60 * 1000) {
     return res.status(202).json(await styleScanJson(event));
   }
-  const users = await Application.find({ event: event._id, status: 'accepted' }).distinct('user');
-  const status = await visionStatus({ fresh: true });
-  const force = req.body?.force === true;
+  // Mark it running before answering, so the page shows progress straight away
+  const total = await Application.countDocuments({ event: event._id, status: 'accepted' });
   await Event.updateOne(
     { _id: event._id },
-    { $set: { styleScan: { status: 'running', total: users.length, done: 0, failed: 0, withVision: status.vision, startedAt: new Date(), finishedAt: null } } }
+    { $set: { styleScan: { status: 'running', total, done: 0, failed: 0, withVision: false, startedAt: new Date(), finishedAt: null } } }
   );
-
-  const work = (async () => {
-    for (const userId of users) {
-      let failed = 0;
-      try {
-        await analyseUser(userId, { force });
-      } catch (err) {
-        failed = 1;
-        console.error('Style scan failed for', String(userId), err.message);
-      }
-      await Event.updateOne({ _id: event._id }, { $inc: { 'styleScan.done': 1, 'styleScan.failed': failed } });
-    }
-    await Event.updateOne({ _id: event._id }, { $set: { 'styleScan.status': 'done', 'styleScan.finishedAt': new Date() } });
-  })().catch((err) => console.error('Style scan stopped:', err.message));
+  const work = scanStyles(event, { force: req.body?.force === true }).catch((err) => console.error('Style scan stopped:', err.message));
   waitUntil(work); // on Vercel, keep going after the response
 
   res.status(202).json(await styleScanJson(await Event.findById(event._id)));

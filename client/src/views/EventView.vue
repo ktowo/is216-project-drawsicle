@@ -48,6 +48,7 @@ import {
 } from '@/utils/events';
 import { eventCalendarEntries, downloadIcs } from '@/utils/calendar';
 import AnnouncementsPanel from '@/components/events/AnnouncementsPanel.vue';
+import QuestionsForMe from '@/components/events/QuestionsForMe.vue';
 import ReportButton from '@/components/ReportButton.vue';
 
 const route = useRoute();
@@ -296,6 +297,12 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
           </section>
 
           <AnnouncementsPanel :event="event" :invite="invite || ''" />
+
+          <QuestionsForMe
+            v-if="applicationStatus === 'accepted' && ['active', 'completed'].includes(event.status)"
+            :key="event.id"
+            :event="event"
+          />
 
           <section class="card panel" aria-labelledby="progress-heading">
             <h2 id="progress-heading" class="panel-title">Progress</h2>
