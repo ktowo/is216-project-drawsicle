@@ -247,6 +247,10 @@ pnpm dev:mock     # or: ./Start-all.sh --mock / Start-all.bat --mock
 pnpm build:mock   # static build in client/dist
 ```
 
+**Live demo:** https://ktowo.github.io/is216-project-drawsicle/ runs mock mode on GitHub Pages. It is rebuilt by
+`.github/workflows/pages.yml` whenever the `github-demo` branch is pushed (`git push origin dev:github-demo`), and
+the build only goes out if the client tests pass.
+
 A banner at the top shows the demo login and a *Reset demo data* button. Uploaded images are shrunk and kept
 in the browser too, so the browser's storage limit (about 5 MB) applies. Google/Discord sign-in, real emails
 and password-reset links need the real server.
@@ -256,7 +260,11 @@ and password-reset links need the real server.
 ```sh
 cd server && pnpm test   # API tests against a throwaway MongoDB (downloads MongoDB on the first run)
 cd client && pnpm test   # Vitest, including a full exchange driven through the mock API
+cd client && pnpm test:e2e   # Playwright: an exchange and the museum in a real browser
 ```
+
+GitHub runs all three, plus both client builds, on every push to `dev` or `main` and on every pull request
+(`.github/workflows/checks.yml`).
 
 ## Project structure
 
@@ -300,3 +308,4 @@ reminder schedule. `GET /api/health` tells you whether the API and database are 
 - `main`: the stable version. Only tested, working code is merged here.
 - `dev`: where everyone's work comes together. Branch off `dev` for new work and open pull requests into it;
   `dev` is merged into `main` when it's stable.
+- `github-demo`: what the GitHub Pages demo is built from. Push `dev` to it when you want the demo updated.
