@@ -2,7 +2,7 @@
 // Shown in production only once the author has agreed (permission: true). Highlighted parts are
 // wrapped in [[double brackets]].
 export const ON_THE_RECORD = {
-  permission: false,
+  permission: true, // the author agreed to be quoted
   date: '2025-05-08',
   headline: "An exchange organiser on why they'll never run one again.",
   author: 'u/carceryvale',

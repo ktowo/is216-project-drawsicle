@@ -8,9 +8,8 @@ describe('On the record', () => {
     ]);
   });
 
-  it('stays hidden in production until the author has agreed', () => {
-    // Flip this to true only after the author says yes
-    expect(ON_THE_RECORD.permission).toBe(false);
+  it('is shown because the author agreed, and links to the original post', () => {
+    expect(ON_THE_RECORD.permission).toBe(true);
     expect(ON_THE_RECORD.url).toMatch(/^https:\/\//);
   });
 });
