@@ -1,3 +1,4 @@
+import { CHARACTER_DETAILS, moreCharacters } from './demo-characters.mjs';
 // Demo accounts, characters and events. Used by server/scripts/seed.js (local database)
 // and by the in-browser mock API (client/src/mock), so both show the same little world.
 // Records point at each other by `key`; each side swaps keys for real ids when it loads them.
@@ -340,6 +341,10 @@ export function buildDemoData(now = new Date()) {
       'Keep the palette to black, white and red if you can.',
       [ref('vera', 'dot')]),
   ];
+
+  // Pronouns, colours, folders and screen pets, plus everyone's bigger library (demo-characters.mjs)
+  for (const c of characters) Object.assign(c, { pet: { shown: false, kind: '', palette: '' } }, CHARACTER_DETAILS[c.key] || {});
+  characters.push(...moreCharacters());
 
   const ALL_TYPES = ['art', 'adoptable', 'writing'];
   const event = (fields) => ({
