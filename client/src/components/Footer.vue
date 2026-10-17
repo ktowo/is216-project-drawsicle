@@ -70,6 +70,9 @@ const COLUMNS = [
 
 <style scoped>
 .site-footer {
+  /* Above the museum's full-screen doodles, which shouldn't show through here */
+  position: relative;
+  z-index: 2;
   margin-top: 40px;
   border-top: 1px solid var(--border);
   background: var(--surface);
