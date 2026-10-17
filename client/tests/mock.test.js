@@ -86,15 +86,17 @@ describe('demo data', () => {
     // Sorted by sign-up deadline: Moth (6 days) before Winter (10 days)
     expect(open.events[0].name).toBe('Moth & Lantern Exchange');
 
-    expect((await ok('/events?status=completed')).events.map((e) => e.name)).toEqual(['Spring Bloom Exchange']);
+    expect((await ok('/events?status=completed')).events.map((e) => e.name).sort()).toEqual(
+      ['Hoard Day Exchange', 'Midsummer Moth Swap', 'Pastel Picnic Swap', 'Sea Shanty Swap', 'Short Story Swap', 'Spring Bloom Exchange', 'Sunday Doodle Swap']
+    );
     expect((await ok('/events?season=summer')).events.map((e) => e.name)).toEqual(['Summer Splash Swap']);
     // Organiser names count in the search
-    expect((await ok('/events?q=kit')).events.map((e) => e.name)).toEqual(['Moth & Lantern Exchange']);
+    expect((await ok('/events?q=kit')).events.map((e) => e.name).sort()).toEqual(['Moth & Lantern Exchange', 'Sea Shanty Swap']);
     expect((await ok('/events?minParticipants=6')).events.map((e) => e.name)).toEqual(['Summer Splash Swap']);
     expect((await ok('/events?sort=popular')).events[0].participantCount).toBe(6);
 
     const page = await ok('/events?limit=2&page=2');
-    expect(page).toMatchObject({ total: 5, page: 2, pages: 3 });
+    expect(page).toMatchObject({ total: 11, page: 2, pages: 6 });
     expect(page.events).toHaveLength(2);
 
     expect((await fails('/events?status=nope')).code).toBe('VALIDATION');
@@ -462,7 +464,14 @@ describe('build-out additions', () => {
       'Moth & Lantern Exchange',
       'Winter Secret Santa 2026',
       'Summer Splash Swap',
+      // Finished exchanges last, most recently finished first
       'Spring Bloom Exchange',
+      'Midsummer Moth Swap',
+      'Pastel Picnic Swap',
+      'Short Story Swap',
+      'Hoard Day Exchange',
+      'Sunday Doodle Swap',
+      'Sea Shanty Swap',
     ]);
     expect((await ok('/events')).events.map((e) => e.name)).toEqual(events.map((e) => e.name));
   });
@@ -474,9 +483,9 @@ describe('build-out additions', () => {
     expect(Object.values(profile.socials).filter(Boolean).length).toBeGreaterThanOrEqual(2);
     expect(profile).not.toHaveProperty('email');
     expect(profile.createdAt).toBeTruthy();
-    expect(organizing.map((e) => e.name)).toEqual(['Moth & Lantern Exchange']);
+    expect(organizing.map((e) => e.name)).toEqual(['Moth & Lantern Exchange', 'Sea Shanty Swap']);
     expect(organizing[0].viewer).toBeNull();
-    expect(stats).toEqual({ eventsOrganized: 1, followers: 0, following: 0, exchangesCompleted: 1 });
+    expect(stats).toEqual({ eventsOrganized: 2, followers: 0, following: 0, exchangesCompleted: 4 });
 
     expect((await ok('/users/@KIT')).profile.id).toBe(profile.id);
     expect((await ok(`/users/${profile.id}`)).profile.username).toBe('kit');
@@ -487,7 +496,7 @@ describe('build-out additions', () => {
     expect(mika.organizing.map((e) => e.name)).not.toContain('Studio Club Swap');
     expect(mika.stats.eventsOrganized).toBe(mika.organizing.length);
     const juniper = await ok('/users/juniper');
-    expect(juniper.organizing.map((e) => e.name)).toEqual(['Spring Bloom Exchange']);
+    expect(juniper.organizing.map((e) => e.name)).toEqual(['Spring Bloom Exchange', 'Midsummer Moth Swap']);
 
     const missing = await mockRequest('/users/nobody_here');
     expect(missing).toMatchObject({ status: 404, data: { code: 'USER_NOT_FOUND' } });
@@ -510,7 +519,7 @@ describe('build-out additions', () => {
   });
 
   it('saves profile privacy settings and keeps them off the public profile', async () => {
-    await loginAs('pip');
+    await loginAs('ash'); // Ash keeps the defaults in the demo data
     expect((await ok('/auth/me')).user.profilePrivacy).toEqual({ showExchanges: true, showGifts: false, listInDiscover: true });
 
     const { user } = await ok('/profile', { method: 'PATCH', body: { profilePrivacy: { showGifts: true } } });
@@ -519,7 +528,7 @@ describe('build-out additions', () => {
       'VALIDATION'
     );
     expect((await ok('/profile/export')).user.profilePrivacy).toEqual({ showExchanges: true, showGifts: true, listInDiscover: true });
-    expect((await ok('/users/pip')).profile).not.toHaveProperty('profilePrivacy');
+    expect((await ok('/users/ash')).profile).not.toHaveProperty('profilePrivacy');
   });
 
   it('lists exchanges joined unless the artist hides them', async () => {
@@ -535,7 +544,7 @@ describe('build-out additions', () => {
     await logout();
     const hidden = await ok('/users/kit');
     expect(hidden).not.toHaveProperty('exchanges');
-    expect(hidden.stats).toEqual({ eventsOrganized: 1, followers: 0, following: 0 });
+    expect(hidden.stats).toEqual({ eventsOrganized: 2, followers: 0, following: 0 });
   });
 
   it('shows only gifts both people agreed to, newest first, in pages', async () => {
@@ -557,9 +566,10 @@ describe('build-out additions', () => {
     expect(JSON.stringify(mika)).not.toMatch(/Happy spring, Sol/);
     expect((await ok('/users/mika')).hasGifts).toBe(true);
 
-    expect((await ok('/users/sol/gifts')).items).toEqual([]); // made for Remy, who didn't agree
-    expect((await ok('/users/noor/gifts')).items).toEqual([]); // Noor didn't agree
-    expect((await ok('/users/noor')).hasGifts).toBe(false);
+    // Ash hasn't allowed public display, so the gift Ash made for Mika never shows
+    expect((await ok('/users/ash/gifts')).items).toEqual([]);
+    expect((await ok('/users/ash')).hasGifts).toBe(false);
+    expect((await ok('/users/sol/gifts')).items.map((i) => i.recipient.username).sort()).toEqual(['juniper', 'remy']);
 
     const page = await ok('/users/kit/gifts?limit=1');
     expect(page).toMatchObject({ hasMore: false });
@@ -598,6 +608,8 @@ describe('build-out additions', () => {
     const { character } = await ok(`/characters/${biscuit.id}`);
     expect(character.usedIn.map((u) => u.eventName).sort()).toEqual([
       'Autumn Leaves Art Trade',
+      'Hoard Day Exchange',
+      'Pastel Picnic Swap',
       'Spring Bloom Exchange',
       'Summer Splash Swap',
     ]);
