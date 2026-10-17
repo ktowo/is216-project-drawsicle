@@ -251,7 +251,7 @@ pnpm build:mock   # static build in client/dist
 `.github/workflows/pages.yml` whenever the `github-demo` branch is pushed (`git push origin dev:github-demo`), and
 the build only goes out if the client tests pass.
 
-A banner at the top shows the demo login and a *Reset demo data* button. Uploaded images are shrunk and kept
+The login page has a **Test accounts** dropdown listing every demo account (site staff, organisers, artists): pick one to fill in the form, or *Sign in as* to log straight in. On the GitHub Pages build it also has a *Reset test data* link. It is a testing aid and will be removed before finals: build with `VITE_TEST_LOGINS=false` to hide it, or delete `client/src/utils/testLogins.js`, `client/src/components/TestLogins.vue` and their lines in `LoginView.vue`. Uploaded images are shrunk and kept
 in the browser too, so the browser's storage limit (about 5 MB) applies. Google/Discord sign-in, real emails
 and password-reset links need the real server.
 
