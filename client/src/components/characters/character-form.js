@@ -3,6 +3,11 @@ import { LIMITS, normalizeTags } from '@shared/constants.mjs';
 // Helpers for the character form (CharacterFields) used by the library and the event sign-up page.
 
 const URL_RE = /^https?:\/\/\S+$/i;
+const HEX_RE = /^#[0-9a-f]{6}$/i;
+
+export function emptyPet() {
+  return { shown: false, kind: '', palette: '' };
+}
 
 export function isHttpUrl(value) {
   return URL_RE.test(String(value ?? '').trim());
@@ -10,7 +15,21 @@ export function isHttpUrl(value) {
 
 // Blank form value for <CharacterFields v-model="...">
 export function emptyCharacter() {
-  return { name: '', species: '', tags: [], description: '', referenceLinks: [], notesForArtists: '', contentWarnings: [] };
+  return {
+    name: '',
+    species: '',
+    pronouns: '',
+    tags: [],
+    description: '',
+    personality: '',
+    colours: [],
+    referenceLinks: [],
+    notesForArtists: '',
+    contentWarnings: [],
+    folder: '',
+    favourite: false,
+    pet: emptyPet(),
+  };
 }
 
 // Character from the API -> form value (copies arrays so edits don't touch the original)
@@ -19,26 +38,39 @@ export function characterToForm(character) {
   return {
     name: c.name || '',
     species: c.species || '',
+    pronouns: c.pronouns || '',
     tags: [...(c.tags || [])],
     description: c.description || '',
+    personality: c.personality || '',
+    colours: [...(c.colours || [])],
     referenceLinks: (c.referenceLinks || []).map((l) => ({ label: l.label || '', url: l.url || '' })),
     notesForArtists: c.notesForArtists || '',
     contentWarnings: [...(c.contentWarnings || [])],
+    folder: c.folder || '',
+    favourite: Boolean(c.favourite),
+    pet: { ...emptyPet(), ...(c.pet || {}) },
   };
 }
 
-// Form value -> request body. Empty link rows are dropped.
+// Form value -> request body. Empty link rows are dropped; colours are lower-cased and de-duplicated.
 export function characterPayload(form) {
+  const pet = { ...emptyPet(), ...(form.pet || {}) };
   return {
     name: String(form.name || '').trim(),
     species: String(form.species || '').trim(),
+    pronouns: String(form.pronouns || '').trim(),
     tags: normalizeTags(form.tags || []),
     description: String(form.description || '').trim(),
+    personality: String(form.personality || '').trim(),
+    colours: [...new Set((form.colours || []).map((c) => String(c || '').trim().toLowerCase()).filter(Boolean))],
     referenceLinks: (form.referenceLinks || [])
       .map((l) => ({ label: String(l.label || '').trim(), url: String(l.url || '').trim() }))
       .filter((l) => l.url || l.label),
     notesForArtists: String(form.notesForArtists || '').trim(),
     contentWarnings: [...new Set(form.contentWarnings || [])],
+    folder: String(form.folder || '').trim(),
+    favourite: Boolean(form.favourite),
+    pet: { shown: Boolean(pet.shown), kind: pet.kind || '', palette: pet.palette || '' },
   };
 }
 
@@ -51,6 +83,13 @@ export function validateCharacter(form) {
   else if (data.name.length > LIMITS.characterName) errors.name = `Keep the name under ${LIMITS.characterName} characters.`;
 
   if (data.species.length > LIMITS.species) errors.species = `Keep this under ${LIMITS.species} characters.`;
+  if (data.pronouns.length > LIMITS.pronouns) errors.pronouns = `Keep pronouns under ${LIMITS.pronouns} characters.`;
+  if (data.folder.length > LIMITS.folder) errors.folder = `Keep the folder name under ${LIMITS.folder} characters.`;
+  if (data.personality.length > LIMITS.personality) {
+    errors.personality = `Personality is too long (max ${LIMITS.personality} characters).`;
+  }
+  if (data.colours.length > LIMITS.colours) errors.colours = `Up to ${LIMITS.colours} colours.`;
+  else if (data.colours.some((c) => !HEX_RE.test(c))) errors.colours = 'Colours need to look like #f6a5c0.';
   if (data.description.length > LIMITS.characterDescription) {
     errors.description = `Description is too long (max ${LIMITS.characterDescription} characters).`;
   }
