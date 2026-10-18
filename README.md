@@ -269,8 +269,10 @@ pnpm build:mock   # static build in client/dist
 the build only goes out if the client tests pass.
 
 The login page has a **Test accounts** dropdown listing every demo account (site staff, organisers, artists): pick one to fill in the form, or *Sign in as* to log straight in. On the GitHub Pages build it also has a *Reset test data* link. It is a testing aid and will be removed before finals: build with `VITE_TEST_LOGINS=false` to hide it, or delete `client/src/utils/testLogins.js`, `client/src/components/TestLogins.vue` and their lines in `LoginView.vue`. Uploaded images are shrunk and kept
-in the browser too, so the browser's storage limit (about 5 MB) applies. Google/Discord sign-in, real emails
-and password-reset links need the real server.
+in the browser too, so the browser's storage limit (about 5 MB) applies. The site admin tools work in the demo
+too (log in as ada@demo.test; a few reports are waiting). Google/Discord sign-in, real emails, password-reset
+links, Discord posts and art style scanning need the real server. A picture that can't load anywhere on the
+site is swapped for generated artwork instead of showing as broken.
 
 ## Tests
 

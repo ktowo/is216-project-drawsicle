@@ -313,7 +313,7 @@ export function register(router) {
     }
 
     const rows = state.events
-      .filter((e) => e.publicity === 'public' && LIST_STATUSES[status].includes(e.status))
+      .filter((e) => e.publicity === 'public' && !e.disabledAt && LIST_STATUSES[status].includes(e.status))
       .filter((e) => !season || e.season === season)
       .filter(
         (e) =>

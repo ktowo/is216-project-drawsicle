@@ -171,6 +171,7 @@ export function viewerContext(state, event, user) {
 // Drafts: organisers only. Private: members, applicants, or the right invite code.
 export function canViewEvent(event, ctx, inviteCode) {
   if (ctx.isOrganizer) return true;
+  if (event.disabledAt) return false; // hidden by a site admin
   if (event.status === 'draft') return false;
   if (event.publicity === 'private') {
     return ctx.roles.length > 0 || Boolean(ctx.application) || (Boolean(inviteCode) && inviteCode === event.inviteCode);
@@ -217,6 +218,9 @@ export function serializeEvent(state, event, user, ctx = viewerContext(state, ev
     museumTheme: event.museumTheme || 'auto',
     publishedAt: event.publishedAt || null,
     completedAt: event.completedAt || null,
+    cancelledAt: event.cancelledAt || null,
+    cancelReason: event.cancelReason || '',
+    disabled: Boolean(event.disabledAt),
     createdAt: event.createdAt,
     updatedAt: event.updatedAt,
     participantCount: participantCount(state, event.id),
@@ -225,6 +229,8 @@ export function serializeEvent(state, event, user, ctx = viewerContext(state, ev
     ...(ctx.isOrganizer
       ? {
           inviteCode: event.inviteCode,
+          disabledAt: event.disabledAt || null,
+          disabledReason: event.disabledReason || '',
           discordWebhookUrl: event.discordWebhookUrl || '',
           matchingRules: {
             avoidPairs: (event.matchingRules?.avoidPairs || []).map((p) => ({ a: p.a, b: p.b })),
