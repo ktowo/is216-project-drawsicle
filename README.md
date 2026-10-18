@@ -21,6 +21,10 @@ IS216 Web Application Development II project (SMU).
   palettes). Up to four at once wander along the bottom of the screen beside the page, now and then hop
   up onto a card, say something short, and can be picked up, thrown, fed and petted. The paw button in
   the navbar puts them away; `/pets` shows every kind.
+- **Sound effects**: small cute sounds made in the browser (no audio files): taps and pops for buttons,
+  chimes and dings for good news and notifications, a voice for each kind of screen pet, footsteps, doors,
+  cats and every emote in the museum, and a fanfare when gifts are unwrapped or matches are made. The
+  speaker button in the navbar turns them off.
 - **Events for organisers**: name, theme, rules, sign-up and submission deadlines, participant limits,
   allowed gift types (art, adoptables, writing), the community platform, public or invite-only, with
   optional application review. Lifecycle: *Draft → Open → Matching → Active → Completed*.

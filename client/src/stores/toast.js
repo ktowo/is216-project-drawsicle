@@ -1,4 +1,5 @@
 import { reactive } from 'vue';
+import { play } from '@/effects/sfx';
 
 // Small pop-up messages. ToastHost (mounted once in App.vue) shows them.
 //   import { toast } from '@/stores/toast';
@@ -17,7 +18,8 @@ function startTimer(id, ms = DURATION) {
   timers.set(id, setTimeout(() => dismiss(id), ms));
 }
 
-function show(type, message, { duration = DURATION } = {}) {
+// quiet: no sound (when whatever happened already played its own)
+function show(type, message, { duration = DURATION, quiet = false } = {}) {
   const text = String(message ?? '').trim();
   if (!text) return null;
 
@@ -30,6 +32,7 @@ function show(type, message, { duration = DURATION } = {}) {
 
   const id = nextId++;
   toastState.items.push({ id, type, message: text, duration });
+  if (!quiet) play(type === 'success' ? 'chime' : type === 'error' ? 'bonk' : 'ding');
   while (toastState.items.length > MAX_VISIBLE) dismiss(toastState.items[0].id);
   startTimer(id, duration);
   return id;
