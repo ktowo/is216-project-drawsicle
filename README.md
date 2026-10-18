@@ -12,7 +12,8 @@ IS216 Web Application Development II project (SMU).
 - **Accounts that last between events**: a profile, default answers for sign-up forms, notification
   settings, and deactivation with a 30-day grace period.
 - **A private character library**: name, species, pronouns, tags, description, personality, a colour
-  palette, reference links (Toyhou.se, Google Docs...) and notes for artists, sorted into folders with
+  palette, reference links (Toyhou.se, Google Docs...) each with a comment like "skip the tradables
+  folder", and notes for artists, sorted into folders with
   favourites pinned to the top. Each character has its own page. Reuse characters in every event; ones that
   were offered in an event can be archived but not deleted.
 - **Screen pets**: any character can come out as a little cartoon pet (cat, dog, fox, bunny, mouse,
@@ -24,7 +25,8 @@ IS216 Web Application Development II project (SMU).
   allowed gift types (art, adoptables, writing), the community platform, public or invite-only, with
   optional application review. Lifecycle: *Draft → Open → Matching → Active → Completed*.
 - **Sign-ups for participants**: an event-specific form with preset options, characters to offer (or new
-  ones added on the spot), what you can make and what you'd like, and things you can't draw.
+  ones added on the spot), what you can make and what you'd like, an adopt wishlist when you ask for
+  adoptables, whether you'll be a backup artist, and things you can't draw.
 - **Automatic matching**: one big gift loop where possible, so nobody makes a gift for the person making
   theirs. It respects "can't draw" tags and gift types. Organisers can swap pairs before publishing.
 - **Deadlines and reminders**: automatic reminders before sign-ups close and before gifts are due,
@@ -124,8 +126,15 @@ simply killed can lose them. If the database doesn't answer, the script falls ba
 
 Every demo account uses the password **drawsicle123**. Dates are relative to when the demo data was
 created, so deadlines always look current.
-Every account also has a character library (97 characters across the demo, with folders, colour
-palettes and personalities), and most have a screen pet or two out. Mika has three.
+Every account also has a character library (with folders, colour palettes and personalities), and most
+have a screen pet or two out. Mika has three.
+
+**OC Secret Santa 2026** (open, organised by Mika) has 192 sign-ups taken from a real community Secret
+Santa's sign-up sheet: every answer is theirs (backup artist or not, what they can draw, art or adopts,
+adopt wishlists, the characters they offered and the comments they wrote on each link), but every name
+is made up and every link points at one of the demo's own reference pictures in
+`client/public/demo-refs` (public-domain artworks, credited in its CREDITS.md). Each of those accounts
+logs in with the same password; the login page lists a few of them.
 
 | Email | Name | Organises | Takes part in |
 | --- | --- | --- | --- |

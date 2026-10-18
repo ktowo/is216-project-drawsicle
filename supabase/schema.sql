@@ -28,6 +28,7 @@ alter table public.applications add column if not exists "can_create" text[];
 alter table public.applications add column if not exists "wants_types" text[];
 alter table public.applications add column if not exists "offered_characters" text[];
 alter table public.applications add column if not exists "likes" text;
+alter table public.applications add column if not exists "adopt_wishlist" text;
 alter table public.applications add column if not exists "avoid" text;
 alter table public.applications add column if not exists "cannot_draw" text[];
 alter table public.applications add column if not exists "notes" text;

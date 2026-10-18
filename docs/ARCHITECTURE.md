@@ -71,11 +71,12 @@ Event         { id, name, description, theme, season, rules, tags[], platform, p
                 inviteCode? }                // organisers only
 Character     { id, ownerId, name, description, species, pronouns, personality, colours[] ('#rrggbb', max 6),
                 folder, favourite, pet: { shown, kind, palette },   // kind/palette '' = worked out from the character
-                tags[], referenceLinks: [{label,url}], notesForArtists,
+                tags[], referenceLinks: [{label,url,note}], notesForArtists,   // url: http(s) or /demo-refs/<file>
                 archived, archivedAt, createdAt, updatedAt, inUse?, eventCount?,
                 usedIn? }                    // GET /characters/:id only: [{ eventId, eventName, eventStatus, applicationStatus }]
 Application   { id, eventId, userId, user: UserMini|null, status, communityUsername, canCreate[], wantsTypes[],
-                offeredCharacterIds[], offeredCharacters: Character[]|null, likes, avoid, cannotDraw[], notes,
+                offeredCharacterIds[], offeredCharacters: Character[]|null, likes, adoptWishlist, avoid, cannotDraw[], notes,
+                canBackup,
                 reviewedAt, createdAt, updatedAt }
 MatchAdmin    { id, giver: UserMini, recipient: UserMini, score, reasons[], status: 'assigned'|'submitted',
                 published, submission: null | { id, submittedAt, late, verified } }
@@ -189,7 +190,7 @@ createdAt }`. `profilePrivacy` only ever appears in the owner's own `user`, neve
 | Method | Path | Notes |
 | --- | --- | --- |
 | GET | /application | (auth) → `{ application: Application\|null }` (mine, with offeredCharacters) |
-| PUT | /application | (auth) create/update while sign-ups are open. Body: `{ communityUsername, canCreate[], wantsTypes[], offeredCharacterIds[], newCharacters: [{ name, species, tags, description, referenceLinks, notesForArtists }], likes, avoid, cannotDraw[], notes, saveAsDefault }` → `{ application, createdCharacters: Character[] }` (201 when new). New characters are saved to the library first. New applications are `accepted` unless the event `requireApproval` (then `pending`, organisers notified). Errors: 409 `SIGNUPS_CLOSED`, 409 `EVENT_FULL`, 403 `APPLICATION_REJECTED`, 400 for types outside `allowedTypes` or characters that aren't yours / are archived |
+| PUT | /application | (auth) create/update while sign-ups are open. Body: `{ communityUsername, canCreate[], wantsTypes[], offeredCharacterIds[], newCharacters: [{ name, species, tags, description, referenceLinks, notesForArtists }], likes, adoptWishlist, avoid, cannotDraw[], notes, canBackup, saveAsDefault }` → `{ application, createdCharacters: Character[] }` (201 when new). New characters are saved to the library first. New applications are `accepted` unless the event `requireApproval` (then `pending`, organisers notified). Errors: 409 `SIGNUPS_CLOSED`, 409 `EVENT_FULL`, 403 `APPLICATION_REJECTED`, 400 for types outside `allowedTypes` or characters that aren't yours / are archived |
 | DELETE | /application | (auth) withdraw while sign-ups are open → `{ ok }` |
 | GET | /applications?status= | (org) → `{ applications: Application[], counts: { pending, accepted, rejected, withdrawn } }` |
 | PATCH | /applications/:applicationId | (org) `{ status: 'accepted'\|'rejected' }` while open or matching (before publish) → `{ application }`; notifies the applicant; 409 `EVENT_FULL` |

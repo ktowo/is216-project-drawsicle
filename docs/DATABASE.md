@@ -72,7 +72,7 @@ erDiagram
         boolean favourite
         object pet "shown kind palette (max 4 shown per owner)"
         array tags "lowercase, used by matching"
-        array referenceLinks "label + url, external only"
+        array referenceLinks "label + url + note (a comment), web or /demo-refs"
         string notesForArtists
         date archivedAt "soft delete once used"
     }
@@ -115,6 +115,7 @@ erDiagram
         array wantsTypes "what they would like"
         array offeredCharacters FK "Character ids"
         string likes
+        string adoptWishlist "kept when they ask for adoptables"
         string avoid
         array cannotDraw "tags/species, used by matching"
         string notes "for organisers"
