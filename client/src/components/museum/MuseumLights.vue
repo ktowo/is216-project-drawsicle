@@ -193,6 +193,14 @@ const lamp = computed(() => {
 .glow {
   mix-blend-mode: screen;
 }
+/* Blending over a scene that moves every frame makes phones flicker; plain light looks close enough */
+@media (pointer: coarse) {
+  .beam polygon,
+  .glow {
+    mix-blend-mode: normal;
+    opacity: 0.55;
+  }
+}
 @media (prefers-reduced-motion: no-preference) {
   .beam {
     animation: lights-on 0.9s ease-out both;

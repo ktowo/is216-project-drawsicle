@@ -1,13 +1,18 @@
 <script setup>
 import { computed } from 'vue';
-import { ExternalLink, Check, Archive, StickyNote, TriangleAlert } from 'lucide-vue-next';
+import { RouterLink } from 'vue-router';
+import { ExternalLink, Check, Archive, StickyNote, TriangleAlert, Star, PawPrint, Folder } from 'lucide-vue-next';
 import { CONTENT_WARNINGS } from '@shared/constants.mjs';
+import { resolvePet } from '@shared/pets.mjs';
+import PetSprite from '@/components/pets/PetSprite.vue';
 
 const WARNING_LABELS = Object.fromEntries(CONTENT_WARNINGS.map((w) => [w.value, w.label]));
 
 // One character from someone's library. With `selectable` the whole card toggles
 // (click, Space or Enter) for picking characters in the event sign-up form.
 // The `actions` slot is for buttons along the bottom (edit, archive...).
+// The tile shows the character as their little screen pet. `library` adds the owner-only bits
+// (favourite star, folder, whether their pet is out); `to` makes the name a link.
 const props = defineProps({
   character: { type: Object, required: true },
   selectable: { type: Boolean, default: false },
@@ -15,6 +20,8 @@ const props = defineProps({
   compact: { type: Boolean, default: false },
   showLinks: { type: Boolean, default: true },
   disabled: { type: Boolean, default: false },
+  library: { type: Boolean, default: false },
+  to: { type: [String, Object], default: null },
 });
 const emit = defineEmits(['toggle']);
 
@@ -29,7 +36,9 @@ const tileIndex = computed(() => {
   for (const ch of name) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
   return hash % TILE_COLOURS.length;
 });
-const initial = computed(() => (props.character.name || '?').trim().charAt(0).toUpperCase() || '?');
+const pet = computed(() => resolvePet(props.character));
+const colours = computed(() => (props.character.colours || []).filter((c) => /^#[0-9a-f]{6}$/i.test(c)));
+const subtitle = computed(() => [props.character.species, props.character.pronouns].filter(Boolean).join(' · '));
 
 // Only show real web links (never javascript: or similar)
 const links = computed(() =>
@@ -78,17 +87,18 @@ function onKeydown(e) {
     @keydown="onKeydown"
   >
     <div class="head">
-      <span
-        class="tile"
-        :style="{ background: TILE_COLOURS[tileIndex], color: TILE_TEXT[tileIndex] }"
-        aria-hidden="true"
-      >
-        {{ initial }}
+      <span class="tile" :style="{ background: TILE_COLOURS[tileIndex], color: TILE_TEXT[tileIndex] }" aria-hidden="true">
+        <PetSprite :kind="pet.kind" :palette="pet.palette" state="sit" :size="compact ? 36 : 44" />
       </span>
       <div class="title-block">
-        <h3 class="name">{{ character.name }}</h3>
-        <p v-if="character.species" class="species">{{ character.species }}</p>
+        <h3 class="name">
+          <RouterLink v-if="to" :to="to" class="name-link">{{ character.name }}</RouterLink>
+          <template v-else>{{ character.name }}</template>
+          <Star v-if="library && character.favourite" :size="16" class="fav" fill="currentColor" aria-label="Favourite" />
+        </h3>
+        <p v-if="subtitle" class="species">{{ subtitle }}</p>
       </div>
+
       <span v-if="character.archived" class="badge badge-muted archived-badge">
         <Archive :size="13" aria-hidden="true" /> Archived
       </span>
@@ -97,7 +107,18 @@ function onKeydown(e) {
       </span>
     </div>
 
+    <p v-if="library && (character.folder || (character.pet?.shown && !character.archived))" class="meta">
+      <span v-if="character.folder" class="folder"><Folder :size="13" aria-hidden="true" /> {{ character.folder }}</span>
+      <span v-if="character.pet?.shown && !character.archived" class="pet-badge"><PawPrint :size="13" aria-hidden="true" /> Out on screen</span>
+    </p>
+
     <p v-if="character.description && !compact" class="description">{{ character.description }}</p>
+
+    <ul v-if="colours.length" class="colours" aria-label="Colour palette">
+      <li v-for="c in colours" :key="c" class="colour" :style="{ background: c }" :title="c">
+        <span class="sr-only">{{ c }}</span>
+      </li>
+    </ul>
 
     <ul v-if="character.tags?.length" class="tags" aria-label="Tags">
       <li v-for="tag in compact ? character.tags.slice(0, 5) : character.tags" :key="tag" class="tag">{{ tag }}</li>
@@ -195,21 +216,73 @@ function onKeydown(e) {
   min-width: 0;
 }
 .tile {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
   display: grid;
-  place-items: center;
+  place-items: end center;
   flex-shrink: 0;
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 1.3rem;
+  overflow: hidden;
+  padding-bottom: 2px;
 }
 .compact .tile {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
-  font-size: 1.1rem;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+}
+.name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.name-link {
+  color: inherit;
+}
+.name-link:hover {
+  color: var(--pink-dark);
+}
+.fav {
+  flex-shrink: 0;
+  color: var(--warning);
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -4px 0 0;
+}
+.folder,
+.pet-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.pet-badge {
+  background: var(--pink-soft);
+  color: var(--pink-dark);
+}
+.colours {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 4px;
+}
+.colour {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+.compact .colour {
+  width: 16px;
+  height: 16px;
 }
 .title-block {
   min-width: 0;
