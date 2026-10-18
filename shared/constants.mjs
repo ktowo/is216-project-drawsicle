@@ -173,6 +173,8 @@ export const LIMITS = {
   tags: 20,
   tagLength: 30,
   referenceLinks: 10,
+  linkLabel: 60,
+  linkNote: 300,
   notesForArtists: 1000,
   pronouns: 40,
   personality: 1000,
@@ -181,6 +183,7 @@ export const LIMITS = {
   offeredCharactersMin: 1,
   offeredCharactersMax: 5,
   formText: 1000,
+  adoptWishlist: 2000,
   communityUsername: 100,
   submissionTitle: 120,
   submissionMessage: 2000,
@@ -285,3 +288,7 @@ export function isTimeZone(value) {
     return false;
   }
 }
+
+// A reference link: a web address, or one of the site's own demo reference pictures
+// (client/public/demo-refs), which the demo characters and wishlists point at.
+export const REFERENCE_URL_RE = /^(https?:\/\/\S+|\/demo-refs\/[\w.-]+)$/i;

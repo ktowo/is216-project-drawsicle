@@ -1,5 +1,5 @@
 // Small helpers shared by the mock handlers: errors, input reading, dates.
-import { LIMITS, normalizeTags, CONTENT_WARNING_VALUES } from '@shared/constants.mjs';
+import { LIMITS, normalizeTags, CONTENT_WARNING_VALUES, REFERENCE_URL_RE } from '@shared/constants.mjs';
 import { PET_KIND_VALUES, PET_PALETTE_VALUES } from '@shared/pets.mjs';
 
 const HEX_RE = /^#[0-9a-f]{6}$/;
@@ -49,8 +49,9 @@ export function readBoolean(value, label) {
   throw invalid(`${label} must be true or false.`);
 }
 
-// [{ label, url }] rows; rows with an empty url are dropped so forms can send blank rows
-export function readLinks(value, { max, what = 'Links', labelMax = 60, urlMax = 500 } = {}) {
+// [{ label, url }] rows; rows with an empty url are dropped so forms can send blank rows.
+// reference: character reference links, which also take the demo's own pictures and a comment
+export function readLinks(value, { max, what = 'Links', labelMax = 60, urlMax = 500, reference = false } = {}) {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value)) throw invalid(`${what} must be a list.`);
   const links = [];
@@ -61,9 +62,15 @@ export function readLinks(value, { max, what = 'Links', labelMax = 60, urlMax = 
     if (!url) continue;
     const label = typeof raw.label === 'string' ? raw.label.trim() : '';
     if (url.length > urlMax) throw invalid(`One of the ${what.toLowerCase()} is too long.`);
-    if (!URL_RE.test(url)) throw invalid(`${what} must start with http:// or https://`);
+    if (!(reference ? REFERENCE_URL_RE : URL_RE).test(url)) throw invalid(`${what} must start with http:// or https://`);
     if (label.length > labelMax) throw invalid(`Link labels can be up to ${labelMax} characters.`);
-    links.push({ label, url });
+    if (!reference) {
+      links.push({ label, url });
+      continue;
+    }
+    const note = typeof raw.note === 'string' ? raw.note.trim() : '';
+    if (note.length > LIMITS.linkNote) throw invalid(`Link comments can be up to ${LIMITS.linkNote} characters.`);
+    links.push({ label, url, note });
   }
   if (max !== undefined && links.length > max) throw invalid(`Up to ${max} ${what.toLowerCase()}.`);
   return links;
@@ -87,7 +94,7 @@ export function readCharacterInput(body) {
   }
   if (body.tags !== undefined) input.tags = normalizeTags(body.tags ?? []);
   if (body.referenceLinks !== undefined) {
-    input.referenceLinks = readLinks(body.referenceLinks, { max: LIMITS.referenceLinks, what: 'Reference links' });
+    input.referenceLinks = readLinks(body.referenceLinks, { max: LIMITS.referenceLinks, what: 'Reference links', reference: true });
   }
   if (body.contentWarnings !== undefined) {
     const list = body.contentWarnings ?? [];

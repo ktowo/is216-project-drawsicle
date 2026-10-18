@@ -31,6 +31,7 @@ import { api } from '@/api';
 import { toast } from '@/stores/toast';
 import { refreshPets, fullnessOf, feedPet } from '@/stores/pets';
 import { pluralize } from '@/utils/format';
+import { isReferenceUrl, linkHref, linkText } from '@/utils/links';
 
 // One character from your library, with their screen pet to play with
 const route = useRoute();
@@ -68,18 +69,9 @@ watch(
 
 const pet = computed(() => (character.value ? resolvePet(character.value) : null));
 const subtitle = computed(() => [character.value?.species, character.value?.pronouns].filter(Boolean).join(' · '));
-const links = computed(() => (character.value?.referenceLinks || []).filter((l) => /^https?:\/\//i.test(String(l.url || ''))));
+const links = computed(() => (character.value?.referenceLinks || []).filter((l) => isReferenceUrl(l.url)));
 const warnings = computed(() => (character.value?.contentWarnings || []).map((w) => WARNING_LABELS[w] || w));
 const hearts = computed(() => Math.round(full.value / 20));
-
-function linkText(link) {
-  if (link.label) return link.label;
-  try {
-    return new URL(link.url).hostname.replace(/^www\./, '');
-  } catch {
-    return link.url;
-  }
-}
 
 async function patch(body) {
   const { character: updated } = await api(`/characters/${encodeURIComponent(character.value.id)}`, { method: 'PATCH', body });
@@ -212,11 +204,17 @@ async function copyColour(hex) {
               <span><strong>Heads up, the references show:</strong> {{ warnings.join(', ') }}</span>
             </p>
             <ul v-if="links.length" class="links" aria-label="Reference links">
-              <li v-for="(link, i) in links" :key="`${i}-${link.url}`">
-                <a :href="link.url" target="_blank" rel="noopener noreferrer" class="ref-link">
-                  <ExternalLink :size="14" aria-hidden="true" /> {{ linkText(link) }}
-                  <span class="sr-only">(opens in a new tab)</span>
+              <li v-for="(link, i) in links" :key="`${i}-${link.url}`" class="link-row">
+                <a v-if="link.url.startsWith('/')" :href="linkHref(link.url)" target="_blank" rel="noopener noreferrer" class="ref-thumb">
+                  <img :src="linkHref(link.url)" :alt="`${linkText(link)} for ${character.name}`" loading="lazy" />
                 </a>
+                <div class="link-body">
+                  <a :href="linkHref(link.url)" target="_blank" rel="noopener noreferrer" class="ref-link">
+                    <ExternalLink :size="14" aria-hidden="true" /> {{ linkText(link) }}
+                    <span class="sr-only">(opens in a new tab)</span>
+                  </a>
+                  <p v-if="link.note" class="link-note">{{ link.note }}</p>
+                </div>
               </li>
             </ul>
             <div v-if="character.notesForArtists" class="notes">
@@ -396,6 +394,31 @@ async function copyColour(hex) {
 }
 .links {
   margin: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+.link-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.ref-thumb img {
+  display: block;
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.link-body {
+  min-width: 0;
+}
+.link-note {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
 }
 .ref-link {
   display: inline-flex;

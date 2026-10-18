@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { LIMITS, normalizeTags, CONTENT_WARNING_VALUES } = require('../../shared/constants.mjs');
+const { LIMITS, normalizeTags, CONTENT_WARNING_VALUES, REFERENCE_URL_RE } = require('../../shared/constants.mjs');
 const { PET_KIND_VALUES, PET_PALETTE_VALUES, MAX_SHOWN_PETS } = require('../../shared/pets.mjs');
 
 const HEX_RE = /^#[0-9a-f]{6}$/;
@@ -19,19 +19,21 @@ const characterSchema = new mongoose.Schema(
     species: { type: String, trim: true, default: '', maxlength: LIMITS.species },
     // Used by matching: artists list tags they can't draw (e.g. "mecha", "feral")
     tags: { type: [String], default: [] },
-    // External only (Toyhou.se, Google Docs, image hosts...)
+    // Toyhou.se, Google Docs, image hosts... (or the demo's own reference pictures), each with an
+    // optional comment such as "only the outfits in the second folder"
     referenceLinks: {
       type: [
         {
           _id: false,
-          label: { type: String, trim: true, default: '', maxlength: 60 },
+          label: { type: String, trim: true, default: '', maxlength: LIMITS.linkLabel },
           url: {
             type: String,
             required: true,
             trim: true,
             maxlength: 500,
-            match: [/^https?:\/\/\S+$/i, 'Reference links must start with http:// or https://'],
+            match: [REFERENCE_URL_RE, 'Reference links must start with http:// or https://'],
           },
+          note: { type: String, trim: true, default: '', maxlength: LIMITS.linkNote },
         },
       ],
       default: [],
@@ -97,7 +99,7 @@ characterSchema.methods.toPublic = function (extra = {}) {
     description: this.description || '',
     species: this.species || '',
     tags: [...(this.tags || [])],
-    referenceLinks: (this.referenceLinks || []).map((l) => ({ label: l.label || '', url: l.url })),
+    referenceLinks: (this.referenceLinks || []).map((l) => ({ label: l.label || '', url: l.url, note: l.note || '' })),
     notesForArtists: this.notesForArtists || '',
     contentWarnings: [...(this.contentWarnings || [])],
     pronouns: this.pronouns || '',

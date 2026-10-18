@@ -1,4 +1,4 @@
-import { LIMITS, normalizeTags } from '@shared/constants.mjs';
+import { LIMITS, normalizeTags, REFERENCE_URL_RE } from '@shared/constants.mjs';
 
 // Helpers for the character form (CharacterFields) used by the library and the event sign-up page.
 
@@ -11,6 +11,11 @@ export function emptyPet() {
 
 export function isHttpUrl(value) {
   return URL_RE.test(String(value ?? '').trim());
+}
+
+// Web links, or the demo's own reference pictures
+export function isReferenceUrl(value) {
+  return REFERENCE_URL_RE.test(String(value ?? '').trim());
 }
 
 // Blank form value for <CharacterFields v-model="...">
@@ -43,7 +48,7 @@ export function characterToForm(character) {
     description: c.description || '',
     personality: c.personality || '',
     colours: [...(c.colours || [])],
-    referenceLinks: (c.referenceLinks || []).map((l) => ({ label: l.label || '', url: l.url || '' })),
+    referenceLinks: (c.referenceLinks || []).map((l) => ({ label: l.label || '', url: l.url || '', note: l.note || '' })),
     notesForArtists: c.notesForArtists || '',
     contentWarnings: [...(c.contentWarnings || [])],
     folder: c.folder || '',
@@ -64,8 +69,8 @@ export function characterPayload(form) {
     personality: String(form.personality || '').trim(),
     colours: [...new Set((form.colours || []).map((c) => String(c || '').trim().toLowerCase()).filter(Boolean))],
     referenceLinks: (form.referenceLinks || [])
-      .map((l) => ({ label: String(l.label || '').trim(), url: String(l.url || '').trim() }))
-      .filter((l) => l.url || l.label),
+      .map((l) => ({ label: String(l.label || '').trim(), url: String(l.url || '').trim(), note: String(l.note || '').trim() }))
+      .filter((l) => l.url || l.label || l.note),
     notesForArtists: String(form.notesForArtists || '').trim(),
     contentWarnings: [...new Set(form.contentWarnings || [])],
     folder: String(form.folder || '').trim(),
@@ -104,11 +109,13 @@ export function validateCharacter(form) {
   (form.referenceLinks || []).forEach((link, i) => {
     const url = String(link.url || '').trim();
     const label = String(link.label || '').trim();
-    if (!url && !label) return;
+    const note = String(link.note || '').trim();
+    if (!url && !label && !note) return;
     if (!url) errors[`referenceLinks.${i}`] = 'Add the link, or remove this row.';
-    else if (!isHttpUrl(url)) errors[`referenceLinks.${i}`] = 'Links need to start with http:// or https://';
+    else if (!isReferenceUrl(url)) errors[`referenceLinks.${i}`] = 'Links need to start with http:// or https://';
     else if (url.length > 500) errors[`referenceLinks.${i}`] = 'That link is too long.';
-    else if (label.length > 60) errors[`referenceLinks.${i}`] = 'Keep the label under 60 characters.';
+    else if (label.length > LIMITS.linkLabel) errors[`referenceLinks.${i}`] = `Keep the label under ${LIMITS.linkLabel} characters.`;
+    else if (note.length > LIMITS.linkNote) errors[`referenceLinks.${i}`] = `Keep the comment under ${LIMITS.linkNote} characters.`;
   });
 
   return errors;

@@ -75,7 +75,7 @@ function updateLink(index, field, value) {
 async function addLink() {
   const current = latest.referenceLinks || [];
   if (current.length >= LIMITS.referenceLinks) return;
-  update('referenceLinks', [...current, { label: '', url: '' }]);
+  update('referenceLinks', [...current, { label: '', url: '', note: '' }]);
   await nextTick();
   document.getElementById(fid(`link-url-${links.value.length - 1}`))?.focus();
 }
@@ -268,7 +268,10 @@ const count = (value) => String(value || '').length;
         <span :id="fid('links-label')" class="label">Reference links</span>
         <span class="hint">{{ links.length }}/{{ LIMITS.referenceLinks }}</span>
       </div>
-      <p class="hint links-hint">Toyhou.se profiles, Google Docs, image hosts. Links must start with https://</p>
+      <p class="hint links-hint">
+        Toyhou.se profiles, Google Docs, image hosts. Add a comment to say what to look at, like "only the
+        folder of outfits" or "not my tradables". Links must start with https://
+      </p>
 
       <ul v-if="links.length" class="links" :aria-labelledby="fid('links-label')">
         <li v-for="(link, i) in links" :key="i" class="link-row">
@@ -308,6 +311,17 @@ const count = (value) => String(value || '').length;
             >
               <Trash2 :size="18" aria-hidden="true" />
             </button>
+          </div>
+          <div class="input-wrap note-input">
+            <input
+              :id="fid(`link-note-${i}`)"
+              class="input"
+              :value="link.note"
+              :maxlength="LIMITS.linkNote"
+              placeholder="Comment (optional), e.g. please skip the tradables folder"
+              :aria-label="`Link ${i + 1} comment`"
+              @input="updateLink(i, 'note', $event.target.value)"
+            />
           </div>
           <p v-if="errors[`referenceLinks.${i}`]" :id="fid(`link-error-${i}`)" class="field-error">
             {{ errors[`referenceLinks.${i}`] }}
@@ -420,8 +434,12 @@ const count = (value) => String(value || '').length;
   gap: 8px;
   align-items: center;
 }
-.link-inputs .input {
+.link-inputs .input,
+.note-input .input {
   padding: 11px 0;
+}
+.note-input {
+  margin-top: 6px;
 }
 .link-row .field-error {
   margin: 6px 0 0;

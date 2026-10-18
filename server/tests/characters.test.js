@@ -64,7 +64,7 @@ test('creating a character keeps only the allowed fields and cleans them up', as
   assert.equal(character.name, 'Pip');
   assert.equal(character.ownerId, user.id);
   assert.deepEqual(character.tags, ['fluffy', 'feral']);
-  assert.deepEqual(character.referenceLinks, [{ label: 'Toyhouse', url: 'https://toyhou.se/123.pip' }]);
+  assert.deepEqual(character.referenceLinks, [{ label: 'Toyhouse', url: 'https://toyhou.se/123.pip', note: '' }]);
   assert.equal(character.notesForArtists, 'Scarf is always red.');
   assert.equal(character.archived, false);
   assert.equal(character.inUse, false);
@@ -143,7 +143,7 @@ test('updating a character only touches editable fields', async () => {
   assert.equal(res.body.character.name, 'Pip');
   assert.equal(res.body.character.description, 'Now with a hat.');
   assert.deepEqual(res.body.character.tags, ['fox', 'hat']);
-  assert.deepEqual(res.body.character.referenceLinks, [{ label: '', url: 'https://docs.google.com/document/d/abc' }]);
+  assert.deepEqual(res.body.character.referenceLinks, [{ label: '', url: 'https://docs.google.com/document/d/abc', note: '' }]);
   assert.equal(res.body.character.ownerId, user.id);
   assert.notEqual(res.body.character.createdAt, '2000-01-01T00:00:00.000Z');
 

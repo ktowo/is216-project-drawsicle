@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const Character = require('../models/Character.js');
 const Application = require('../models/Application.js');
 const { requireAuth } = require('../middleware/auth.js');
-const { LIMITS, normalizeTags, CONTENT_WARNING_VALUES } = require('../../shared/constants.mjs');
+const { LIMITS, normalizeTags, CONTENT_WARNING_VALUES, REFERENCE_URL_RE } = require('../../shared/constants.mjs');
 const { PET_KIND_VALUES, PET_PALETTE_VALUES, MAX_SHOWN_PETS } = require('../../shared/pets.mjs');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
 
@@ -20,9 +20,9 @@ const TEXT_FIELDS = {
   folder: { label: 'Folder', max: LIMITS.folder },
 };
 const HEX_RE = /^#[0-9a-f]{6}$/;
-const LINK_LABEL_MAX = 60;
+const LINK_LABEL_MAX = LIMITS.linkLabel;
 const LINK_URL_MAX = 500;
-const URL_RE = /^https?:\/\/\S+$/i;
+const URL_RE = REFERENCE_URL_RE;
 
 function readText(value, label, max) {
   if (value === null) return '';
@@ -52,7 +52,11 @@ function readLinks(value) {
     if (label.length > LINK_LABEL_MAX) {
       throw httpError(400, `Link labels can be up to ${LINK_LABEL_MAX} characters.`, 'VALIDATION');
     }
-    links.push({ label, url });
+    const note = typeof raw.note === 'string' ? raw.note.trim() : '';
+    if (note.length > LIMITS.linkNote) {
+      throw httpError(400, `Link comments can be up to ${LIMITS.linkNote} characters.`, 'VALIDATION');
+    }
+    links.push({ label, url, note });
   }
   if (links.length > LIMITS.referenceLinks) {
     throw httpError(400, `Up to ${LIMITS.referenceLinks} reference links.`, 'VALIDATION');

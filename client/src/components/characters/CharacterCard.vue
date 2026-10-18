@@ -5,6 +5,7 @@ import { ExternalLink, Check, Archive, StickyNote, TriangleAlert, Star, PawPrint
 import { CONTENT_WARNINGS } from '@shared/constants.mjs';
 import { resolvePet } from '@shared/pets.mjs';
 import PetSprite from '@/components/pets/PetSprite.vue';
+import { isReferenceUrl, linkHref, linkText } from '@/utils/links';
 
 const WARNING_LABELS = Object.fromEntries(CONTENT_WARNINGS.map((w) => [w.value, w.label]));
 
@@ -40,19 +41,8 @@ const pet = computed(() => resolvePet(props.character));
 const colours = computed(() => (props.character.colours || []).filter((c) => /^#[0-9a-f]{6}$/i.test(c)));
 const subtitle = computed(() => [props.character.species, props.character.pronouns].filter(Boolean).join(' · '));
 
-// Only show real web links (never javascript: or similar)
-const links = computed(() =>
-  (props.character.referenceLinks || []).filter((l) => /^https?:\/\//i.test(String(l.url || '')))
-);
-
-function linkText(link) {
-  if (link.label) return link.label;
-  try {
-    return new URL(link.url).hostname.replace(/^www\./, '');
-  } catch {
-    return link.url;
-  }
-}
+// Only show real web links or the demo's own pictures (never javascript: or similar)
+const links = computed(() => (props.character.referenceLinks || []).filter((l) => isReferenceUrl(l.url)));
 
 const warnings = computed(() => (props.character.contentWarnings || []).map((w) => WARNING_LABELS[w] || w));
 
@@ -131,12 +121,13 @@ function onKeydown(e) {
     </p>
 
     <ul v-if="showLinks && links.length" class="links" aria-label="Reference links">
-      <li v-for="(link, i) in links" :key="`${i}-${link.url}`">
-        <a :href="link.url" target="_blank" rel="noopener noreferrer" class="ref-link" @click.stop>
+      <li v-for="(link, i) in links" :key="`${i}-${link.url}`" :class="{ 'has-note': link.note && !compact }">
+        <a :href="linkHref(link.url)" target="_blank" rel="noopener noreferrer" class="ref-link" :title="link.note || undefined" @click.stop>
           <ExternalLink :size="14" aria-hidden="true" />
           <span>{{ linkText(link) }}</span>
           <span class="sr-only">(opens in a new tab)</span>
         </a>
+        <span v-if="link.note && !compact" class="link-note">{{ link.note }}</span>
       </li>
     </ul>
 
@@ -376,6 +367,18 @@ function onKeydown(e) {
 }
 .ref-link:hover {
   background: var(--pink-line);
+}
+.links li.has-note {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+.link-note {
+  color: var(--muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
 }
 .notes {
   display: flex;
