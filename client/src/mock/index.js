@@ -135,7 +135,7 @@ async function handle(path, { method, body, form }) {
     // Drop anything the failed request changed before it threw
     discardChanges();
     if (err instanceof MockHttpError) {
-      const data = { error: err.message };
+      const data = { ...(err.extra || {}), error: err.message };
       if (err.code) data.code = err.code;
       return { status: err.status, data };
     }

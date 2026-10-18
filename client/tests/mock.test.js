@@ -654,6 +654,7 @@ describe('build-out additions', () => {
     expect(Object.keys(data).sort()).toEqual([
       'applications',
       'characters',
+      'eventReminders',
       'exportedAt',
       'notifications',
       'submissions',

@@ -22,7 +22,8 @@ IS216 Web Application Development II project (SMU).
 - **Automatic matching**: one big gift loop where possible, so nobody makes a gift for the person making
   theirs. It respects "can't draw" tags and gift types. Organisers can swap pairs before publishing.
 - **Deadlines and reminders**: automatic reminders before sign-ups close and before gifts are due,
-  plus reminders organisers can send themselves.
+  plus reminders organisers can send themselves. Not ready to sign up? "Remind me before it closes" on
+  an open event sends a notification 48 hours before its sign-ups close.
 - **Submissions and the reveal**: upload images and links, organisers verify them, and once the event is
   completed everyone sees who their Secret Santa was and the whole gallery.
 - **Browse events**: filter by status, season and size, search by name or organiser. The default order

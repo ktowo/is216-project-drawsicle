@@ -97,7 +97,7 @@ const DATE_FIELDS = {
 
 // Event.remindersSent keys tied to each deadline (services/reminders.js)
 const DEADLINE_REMINDERS = {
-  signupDeadline: [REMINDER_KEYS.signupWarning],
+  signupDeadline: [REMINDER_KEYS.signupWarning, REMINDER_KEYS.watchersWarning],
   submissionDeadline: [REMINDER_KEYS.submission72h, REMINDER_KEYS.submission24h, REMINDER_KEYS.overdue],
 };
 
@@ -441,6 +441,23 @@ router.post('/', requireAuth, asyncHandler(async (req, res) => {
 
 router.get('/:eventId', optionalAuth, loadEvent, requireVisible, asyncHandler(async (req, res) => {
   res.json({ event: await serializeEvent(req.event, req.user, { ctx: req.viewer }) });
+}));
+
+// ---------- "Remind me before sign-ups close" ----------
+// Saves the event on the person's account; the reminder job tells them 48 h before the
+// sign-up deadline unless they've signed up by then (services/reminders.js).
+
+router.post('/:eventId/watch', requireAuth, loadEvent, requireVisible, asyncHandler(async (req, res) => {
+  if (req.event.status !== 'open') {
+    throw httpError(409, 'Reminders are only for events that are open for sign-ups.', 'NOT_OPEN');
+  }
+  await User.updateOne({ _id: req.user._id }, { $addToSet: { watchedEvents: req.event._id } });
+  res.json({ watching: true });
+}));
+
+router.delete('/:eventId/watch', requireAuth, loadEvent, asyncHandler(async (req, res) => {
+  await User.updateOne({ _id: req.user._id }, { $pull: { watchedEvents: req.event._id } });
+  res.json({ watching: false });
 }));
 
 // Only changeable while people can still sign up, because matching depends on them
