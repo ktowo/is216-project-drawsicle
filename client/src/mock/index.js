@@ -11,6 +11,7 @@ import * as auth from './handlers/auth.js';
 import * as profile from './handlers/profile.js';
 import * as users from './handlers/users.js';
 import * as discover from './handlers/discover.js';
+import * as showcase from './handlers/showcase.js';
 import * as notifications from './handlers/notifications.js';
 import * as characters from './handlers/characters.js';
 import * as events from './handlers/events.js';
@@ -43,6 +44,7 @@ for (const feature of [
   favourites,
   dashboard,
   discover,
+  showcase,
 ]) {
   feature.register(router);
 }
