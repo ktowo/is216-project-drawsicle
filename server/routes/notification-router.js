@@ -4,6 +4,11 @@ const Notification = require('../models/Notification.js');
 const { requireAuth } = require('../middleware/auth.js');
 const { notify } = require('../services/notify.js');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
+const {
+  NOTIFICATION_GROUP_KEYS,
+  isNotificationGroup,
+  groupFilterTypes,
+} = require('../../shared/notification-groups.mjs');
 
 const router = Router();
 router.use(requireAuth);
@@ -18,23 +23,63 @@ function readBefore(value) {
   return date;
 }
 
+// ?group=matches keeps one filter group (see shared/notification-groups.mjs)
+function readGroup(value) {
+  if (value === undefined || value === '') return '';
+  if (typeof value !== 'string' || !isNotificationGroup(value)) {
+    throw httpError(400, `group must be one of: ${NOTIFICATION_GROUP_KEYS.join(', ')}.`, 'VALIDATION');
+  }
+  return value;
+}
+
+const readFlag = (value) => value === '1' || value === 'true';
+
+function typeCondition(group) {
+  const types = groupFilterTypes(group);
+  return types.in ? { type: { $in: types.in } } : { type: { $nin: types.notIn } };
+}
+
 // My latest notifications + unread count. hasMore says whether an older page exists.
+//   ?limit=20            page size (1-50)
+//   ?before=<ISO date>   older than this (the next page)
+//   ?unread=1            unread ones only
+//   ?group=reminders     one filter group only
+//   ?counts=1            also send how many there are in each group (for the filter chips),
+//                        counting unread ones only when ?unread=1
 router.get('/', asyncHandler(async (req, res) => {
   const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
   const before = readBefore(req.query.before);
-  const filter = { user: req.user._id };
+  const group = readGroup(req.query.group);
+  const unreadOnly = readFlag(req.query.unread);
+
+  const base = { user: req.user._id };
+  if (unreadOnly) base.readAt = null;
+  const filter = { ...base, ...(group ? typeCondition(group) : {}) };
   if (before) filter.createdAt = { $lt: before };
+
   // One extra row tells us if there is another page without a second query
-  const [rows, unreadCount] = await Promise.all([
+  const [rows, unreadCount, counts] = await Promise.all([
     Notification.find(filter).sort({ createdAt: -1, _id: -1 }).limit(limit + 1),
     Notification.countDocuments({ user: req.user._id, readAt: null }),
+    readFlag(req.query.counts) ? groupCounts(base) : null,
   ]);
-  res.json({
+  const body = {
     items: rows.slice(0, limit).map((n) => n.toPublic()),
     unreadCount,
     hasMore: rows.length > limit,
-  });
+  };
+  if (counts) body.counts = counts;
+  res.json(body);
 }));
+
+// { all: 31, signups: 4, matches: 9, reminders: 6, events: 12 }
+async function groupCounts(base) {
+  const [all, ...perGroup] = await Promise.all([
+    Notification.countDocuments(base),
+    ...NOTIFICATION_GROUP_KEYS.map((g) => Notification.countDocuments({ ...base, ...typeCondition(g) })),
+  ]);
+  return Object.fromEntries([['all', all], ...NOTIFICATION_GROUP_KEYS.map((g, i) => [g, perGroup[i]])]);
+}
 
 router.get('/unread-count', asyncHandler(async (req, res) => {
   const unreadCount = await Notification.countDocuments({ user: req.user._id, readAt: null });

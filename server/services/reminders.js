@@ -2,6 +2,7 @@
 //   - closes sign-ups on open events whose sign-up deadline has passed (-> matching)
 //   - matches events set to match themselves, once their sign-ups are closed (runAutoMatch)
 //   - warns organisers 48 h before sign-ups close
+//   - tells people who tapped "Remind me" on an event that its sign-ups close in 48 h
 //   - reminds givers without a submission 72 h and 24 h before the submission deadline
 //   - tells organisers how many gifts are missing once the submission deadline passes
 //   - anonymises accounts deactivated more than LIMITS.deactivationGraceDays ago
@@ -13,7 +14,7 @@ const Application = require('../models/Application.js');
 const Match = require('../models/Match.js');
 const Submission = require('../models/Submission.js');
 const JobRun = require('../models/JobRun.js');
-const { organizerIds } = require('./events.js');
+const { organizerIds, participantCount } = require('./events.js');
 const { notifyMany } = require('./notify.js');
 const { announceMilestone } = require('./discord.js');
 const { runAutoMatch } = require('./match-making.js');
@@ -27,6 +28,7 @@ const JOB = 'reminders'; // its JobRun record
 
 const KEYS = {
   signupWarning: 'signup-48h',
+  watchersWarning: 'watchers-48h',
   signupClosed: 'signup-closed',
   autoMatched: 'auto-matched',
   submission72h: 'submission-72h',
@@ -181,6 +183,48 @@ async function warnSignupsClosing(now, summary) {
   });
 }
 
+// People who asked to be reminded about an open event ("Remind me" on the event page), 48 h
+// before sign-ups close. Anyone who has signed up (or organises it) by then is skipped.
+async function remindWatchers(now, summary) {
+  const events = await Event.find({
+    disabledAt: null,
+    status: 'open',
+    signupDeadline: { $gt: now, $lte: new Date(now.getTime() + 48 * HOUR) },
+    remindersSent: { $ne: KEYS.watchersWarning },
+  });
+
+  await eachEvent(events, 'watcher reminder', async (event) => {
+    // Nobody watching yet: leave it unclaimed so someone who taps "Remind me" later still hears
+    const watchers = await User.find({ watchedEvents: event._id, status: 'active' }).distinct('_id');
+    if (!watchers.length) return;
+    if (!(await claim(event._id, KEYS.watchersWarning))) return;
+
+    const [applied, organizers, count] = await Promise.all([
+      Application.find({ event: event._id, user: { $in: watchers } }).distinct('user'),
+      organizerIds(event._id),
+      participantCount(event._id),
+    ]);
+    const skip = new Set([...applied, ...organizers].map(String));
+    const toRemind = watchers.filter((id) => !skip.has(String(id)));
+    if (!toRemind.length) return;
+
+    const left = event.maxParticipants ? Math.max(0, event.maxParticipants - count) : null;
+    let message;
+    if (left === 0) message = 'Every spot is taken right now, but you can still join the waitlist.';
+    else if (left !== null) message = `${plural(left, 'spot is', 'spots are')} still open. Sign up before it closes.`;
+    else message = 'There is still time to sign up. Sign up before it closes.';
+
+    const created = await notifyMany(toRemind, {
+      type: 'event_closing_soon',
+      title: `Sign-ups for ${event.name} close ${timeLeft(event.signupDeadline, now)}`,
+      message,
+      link: `/events/${event._id}`,
+      email: 'reminders',
+    });
+    summary.watcherReminders += created.length;
+  });
+}
+
 async function remindGivers(now, summary) {
   const events = await Event.find({
     disabledAt: null, // disabled events are frozen
@@ -271,6 +315,7 @@ async function purgeDeactivated(now, summary) {
             bio: '',
             socials,
             defaultForm: { communityUsername: '', canCreate: [], wantsTypes: [], likes: '', avoid: '', cannotDraw: [] },
+            watchedEvents: [],
           },
           $unset: {
             username: 1,
@@ -294,12 +339,22 @@ async function purgeDeactivated(now, summary) {
 // One full pass. Returns what it did, e.g. { autoClosed: 1, signupWarnings: 0, ... }:
 //   autoClosed, autoMatched, signupWarnings, overdueNotices: events handled
 //   submissionReminders: givers reminded
+//   watcherReminders: people reminded about events they asked to hear about
 //   purged: accounts anonymised
 async function runReminders(now = new Date()) {
-  const summary = { autoClosed: 0, autoMatched: 0, signupWarnings: 0, submissionReminders: 0, overdueNotices: 0, purged: 0 };
+  const summary = {
+    autoClosed: 0,
+    autoMatched: 0,
+    signupWarnings: 0,
+    watcherReminders: 0,
+    submissionReminders: 0,
+    overdueNotices: 0,
+    purged: 0,
+  };
   await autoCloseSignups(now, summary);
   await autoMatchEvents(now, summary);
   await warnSignupsClosing(now, summary);
+  await remindWatchers(now, summary);
   await remindGivers(now, summary);
   await reportOverdue(now, summary);
   await purgeDeactivated(now, summary);

@@ -11,7 +11,6 @@ import {
   ChevronRight,
   ChevronDown,
   Filter,
-  CalendarSearch,
 } from 'lucide-vue-next';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import TabNav from '@/components/ui/TabNav.vue';
@@ -20,8 +19,13 @@ import ErrorBlock from '@/components/ui/ErrorBlock.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import {
   notifications,
+  filtered,
+  groupCounts,
   loadNotifications,
   loadMoreNotifications,
+  loadFiltered,
+  loadMoreFiltered,
+  loadGroupCounts,
   markRead,
   markAllRead,
   removeNotification,
@@ -64,6 +68,7 @@ watch(
 );
 
 const filtersOn = computed(() => show.value !== 'all' || Boolean(type.value));
+const currentFilter = () => ({ show: show.value, group: type.value });
 
 function clearFilters() {
   show.value = 'all';
@@ -82,8 +87,9 @@ async function load() {
   loading.value = true;
   error.value = '';
   moreError.value = '';
+  loadGroupCounts(show.value);
   try {
-    await loadNotifications(PAGE);
+    await Promise.all([loadNotifications(PAGE), filtersOn.value ? loadFiltered(currentFilter(), PAGE) : null]);
   } catch (e) {
     error.value = e.message;
   } finally {
@@ -95,11 +101,26 @@ onMounted(load);
 async function loadMore() {
   moreError.value = '';
   try {
-    await loadMoreNotifications(PAGE);
+    if (filtersOn.value) await loadMoreFiltered(currentFilter(), PAGE);
+    else await loadMoreNotifications(PAGE);
   } catch (e) {
     moreError.value = e.message;
   }
 }
+
+// Changing a filter asks the server for that filter's first page (and the chip counts for All/Unread)
+const filterError = ref('');
+watch([show, type], async ([s], [prevShow]) => {
+  moreError.value = '';
+  filterError.value = '';
+  if (s !== prevShow) loadGroupCounts(s);
+  if (!filtersOn.value) return;
+  try {
+    await loadFiltered(currentFilter(), PAGE);
+  } catch (e) {
+    filterError.value = e.message;
+  }
+});
 
 // "3 hours ago" stays right while the page is open
 const now = ref(Date.now());
@@ -113,21 +134,24 @@ const tabs = computed(() => [
   { key: 'unread', label: 'Unread', count: notifications.unreadCount },
 ]);
 
-const byReadState = computed(() =>
-  show.value === 'unread' ? notifications.items.filter((n) => !n.read) : notifications.items
+// With a filter on, the list comes from the server already filtered; without one it's the shared list
+const list = computed(() => (filtersOn.value ? filtered.items : notifications.items));
+const listHasMore = computed(() => (filtersOn.value ? filtered.hasMore : notifications.hasMore));
+const listLoadingMore = computed(() => (filtersOn.value ? filtered.loadingMore : notifications.loadingMore));
+const filterLoading = computed(
+  () => filtersOn.value && filtered.loading && filtered.key !== '' && !filtered.items.length
 );
 
-const typeOptions = computed(() => [
-  { key: '', label: 'Every type', count: byReadState.value.length },
-  ...NOTIFICATION_GROUPS.map((g) => ({
-    ...g,
-    count: byReadState.value.filter((n) => notificationKind(n.type).group === g.key).length,
-  })),
-]);
+// Totals from the server, so they count everything and not just what's loaded
+const typeOptions = computed(() => {
+  const counts = groupCounts.key === show.value ? groupCounts.counts : null;
+  return [
+    { key: '', label: 'Every type', count: counts?.all },
+    ...NOTIFICATION_GROUPS.map((g) => ({ ...g, count: counts?.[g.key] })),
+  ];
+});
 
-const shown = computed(() =>
-  type.value ? byReadState.value.filter((n) => notificationKind(n.type).group === type.value) : byReadState.value
-);
+const shown = list;
 
 // Today / Yesterday / This week / Earlier, in the browser's time zone
 const SECTIONS = [
@@ -178,9 +202,7 @@ const emptyCopy = computed(() => {
   return {
     icon: Filter,
     title: 'Nothing matches these filters',
-    message: notifications.hasMore
-      ? `No ${show.value === 'unread' ? 'unread ' : ''}${typeName || ''} notifications in what's loaded so far. Older ones might have some.`
-      : `No ${show.value === 'unread' ? 'unread ' : ''}${typeName || ''} notifications right now.`,
+    message: `No ${show.value === 'unread' ? 'unread ' : ''}${typeName || ''} notifications right now.`,
   };
 });
 
@@ -233,7 +255,8 @@ const PREFS = [
   {
     key: 'emailReminders',
     label: 'Deadline reminders',
-    description: 'Sign-ups closing soon and submission deadlines for gifts you still owe.',
+    description:
+      'Sign-ups closing soon (including events you asked to be reminded about) and submission deadlines for gifts you still owe.',
   },
   {
     key: 'emailMatches',
@@ -315,8 +338,10 @@ async function togglePref(key) {
           @click="type = option.key"
         >
           {{ option.label }}
-          <span class="type-count" aria-hidden="true">{{ option.count }}</span>
-          <span class="sr-only">({{ option.count }} loaded)</span>
+          <template v-if="typeof option.count === 'number'">
+            <span class="type-count" aria-hidden="true">{{ option.count }}</span>
+            <span class="sr-only">({{ option.count }})</span>
+          </template>
         </button>
       </div>
 
@@ -328,19 +353,18 @@ async function togglePref(key) {
         <p v-if="error" class="alert alert-error list-alert" role="alert">
           Couldn't refresh: {{ error }}
         </p>
+        <p v-if="filterError" class="alert alert-error list-alert" role="alert">
+          Couldn't load this filter: {{ filterError }}
+        </p>
 
-        <EmptyState v-if="!shown.length" :icon="emptyCopy.icon" :title="emptyCopy.title" :message="emptyCopy.message">
-          <button
-            v-if="notifications.hasMore && filtersOn"
-            type="button"
-            class="btn btn-primary btn-sm"
-            :disabled="notifications.loadingMore"
-            @click="loadMore"
-          >
-            <Loader2 v-if="notifications.loadingMore" :size="16" class="spin" aria-hidden="true" />
-            <CalendarSearch v-else :size="16" aria-hidden="true" />
-            Look further back
-          </button>
+        <LoadingBlock v-if="filterLoading" label="Loading notifications…" />
+
+        <EmptyState
+          v-else-if="!shown.length"
+          :icon="emptyCopy.icon"
+          :title="emptyCopy.title"
+          :message="emptyCopy.message"
+        >
           <button v-if="filtersOn" type="button" class="btn btn-outline btn-sm" @click="clearFilters">
             Show everything
           </button>
@@ -417,21 +441,21 @@ async function togglePref(key) {
           </section>
         </div>
 
-        <div v-if="notifications.items.length" class="list-foot">
+        <div v-if="shown.length && !filterLoading" class="list-foot">
           <p v-if="moreError" class="alert alert-error" role="alert">{{ moreError }}</p>
           <button
-            v-if="notifications.hasMore && (shown.length || !filtersOn)"
+            v-if="listHasMore"
             type="button"
             class="btn btn-outline btn-sm"
-            :disabled="notifications.loadingMore"
+            :disabled="listLoadingMore"
             @click="loadMore"
           >
-            <Loader2 v-if="notifications.loadingMore" :size="16" class="spin" aria-hidden="true" />
+            <Loader2 v-if="listLoadingMore" :size="16" class="spin" aria-hidden="true" />
             <ChevronDown v-else :size="16" aria-hidden="true" />
-            {{ notifications.loadingMore ? 'Loading…' : 'Load older notifications' }}
+            {{ listLoadingMore ? 'Loading…' : 'Load older notifications' }}
           </button>
-          <p v-else-if="!notifications.hasMore" class="hint end-note">
-            That's everything: {{ pluralize(notifications.items.length, 'notification') }}.
+          <p v-else class="hint end-note">
+            That's everything{{ filtersOn ? ' for this filter' : '' }}: {{ pluralize(shown.length, 'notification') }}.
           </p>
         </div>
       </template>
