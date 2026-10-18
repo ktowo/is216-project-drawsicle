@@ -21,14 +21,17 @@ export async function loadTestAccounts() {
   const accounts = data.users.map((u) => {
     const count = organises.get(u.key) || 0;
     const note = ROLE_NOTES[u.role] || (count ? `organises ${count} event${count === 1 ? '' : 's'}` : 'artist');
-    return { email: u.email, name: u.displayName, role: u.role, organises: count, note };
+    return { email: u.email, name: u.displayName, role: u.role, organises: count, note, community: Boolean(u.community) };
   });
   // Site admin first, then moderators
   const staff = accounts.filter((a) => ROLE_NOTES[a.role]).sort((a, b) => (b.role === 'admin') - (a.role === 'admin'));
   const organisers = accounts
     .filter((a) => !ROLE_NOTES[a.role] && a.organises)
     .sort((a, b) => b.organises - a.organises);
-  const artists = accounts.filter((a) => !ROLE_NOTES[a.role] && !a.organises);
+  const artists = accounts.filter((a) => !ROLE_NOTES[a.role] && !a.organises && !a.community);
+  // The OC Secret Santa crowd is 192 accounts: a few of them is plenty for trying things out
+  const crowd = accounts.filter((a) => a.community);
+  const crowdSample = crowd.slice(0, 6).map((a) => ({ ...a, note: 'OC Secret Santa sign-up' }));
 
   return {
     password: DEMO_PASSWORD,
@@ -36,6 +39,7 @@ export async function loadTestAccounts() {
       { label: 'Site staff', accounts: staff },
       { label: 'Organisers', accounts: organisers },
       { label: 'Artists', accounts: artists },
+      { label: `OC Secret Santa sign-ups (6 of ${crowd.length})`, accounts: crowdSample },
     ].filter((g) => g.accounts.length),
   };
 }

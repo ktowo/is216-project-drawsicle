@@ -1,4 +1,5 @@
 import { CHARACTER_DETAILS, moreCharacters } from './demo-characters.mjs';
+import { SIGNUP_RESPONSES } from './demo-signups.mjs';
 // Demo accounts, characters and events. Used by server/scripts/seed.js (local database)
 // and by the in-browser mock API (client/src/mock), so both show the same little world.
 // Records point at each other by `key`; each side swaps keys for real ids when it loads them.
@@ -230,6 +231,42 @@ export function buildDemoData(now = new Date()) {
     },
   ].map((u) => ({ ...u, email: `${u.key}@demo.test`, username: u.key, role: u.role || 'user' }));
 
+  // ---------- The OC Secret Santa crowd ----------
+  // 192 people signed up to a real community Secret Santa with these answers (shared/demo-signups.mjs:
+  // names made up, links swapped for the demo's own reference pictures). Each gets an account, a
+  // character library from what they offered, and a sign-up for the OC Secret Santa below.
+  const KIND_WORDS = { humanoid: 'humans and humanoids', anthro: 'anthros', feral: 'ferals' };
+  const listWords = (list) => (list.length > 1 ? `${list.slice(0, -1).join(', ')} and ${list.at(-1)}` : list[0] || '');
+  const crowd = SIGNUP_RESPONSES.map((s) => {
+    const drawsAll = s.draws.length === 3;
+    const bio = [
+      drawsAll ? 'Happy to draw anything: humans, anthros and ferals.' : `Draws ${listWords(s.draws.map((k) => KIND_WORDS[k]))}.`,
+      s.wants.includes('adoptable') && s.wants.includes('art') ? 'Hoping for art or an adopt this season.' : s.wants.includes('adoptable') ? 'Here for the adopts.' : 'Here for the art.',
+      s.backup === 'yes' ? 'Always up for being a backup artist.' : 'OCs live on my Toyhouse.',
+    ].join(' ');
+    return {
+      key: s.username,
+      community: true,
+      displayName: s.displayName,
+      bio,
+      socials: { toyhouse: s.toyhouse, discord: s.username.replace(/_/g, '.') },
+      profilePrivacy: { showExchanges: true, showGifts: false },
+      defaultForm: {
+        communityUsername: s.toyhouse,
+        canCreate: ['art', 'adoptable'],
+        wantsTypes: [...s.wants],
+        likes: s.wantNote,
+        adoptWishlist: s.adopt,
+        avoid: '',
+        cannotDraw: [...s.cannotDraw],
+      },
+      email: `${s.username}@demo.test`,
+      username: s.username,
+      role: 'user',
+    };
+  });
+  users.push(...crowd);
+
   const character = (owner, key, name, species, tags, description, notesForArtists, links, archived = false) => ({
     key,
     owner,
@@ -350,6 +387,30 @@ export function buildDemoData(now = new Date()) {
   for (const c of characters) Object.assign(c, { pet: { shown: false, kind: '', palette: '' } }, CHARACTER_DETAILS[c.key] || {});
   characters.push(...moreCharacters());
 
+  // What the OC Secret Santa crowd offered: one character per link they gave, the comment they
+  // wrote beside it kept with the link
+  const crowdCharacters = new Map(); // username -> character keys
+  SIGNUP_RESPONSES.forEach((s) => {
+    const keys = s.characters.map((c, k) => {
+      const key = `${s.username}-${k + 1}`;
+      characters.push({
+        key,
+        owner: s.username,
+        name: c.name,
+        species: c.species,
+        tags: [c.kind],
+        description: c.description,
+        referenceLinks: c.links.map((l) => ({ label: l.label, url: l.url, note: l.note })),
+        notesForArtists: '',
+        archived: false,
+        folder: 'Secret Santa',
+        pet: { shown: false, kind: '', palette: '' },
+      });
+      return key;
+    });
+    crowdCharacters.set(s.username, keys);
+  });
+
   const ALL_TYPES = ['art', 'adoptable', 'writing'];
   const event = (fields) => ({
     description: '',
@@ -393,6 +454,29 @@ export function buildDemoData(now = new Date()) {
       maxParticipants: 40,
       inviteCode: 'wintr-26-snow',
       banner: { seed: 'winter-secret-santa', title: 'Winter Secret Santa 2026' },
+    }),
+    event({
+      key: 'ocsanta',
+      status: 'open',
+      createdBy: 'mika',
+      name: 'OC Secret Santa 2026',
+      description:
+        "A big community Secret Santa for original characters. Sign up with your OCs or an adopt wishlist, and you'll be matched with someone whose characters you're happy to draw. Backup artists step in if anyone drops out.",
+      theme: 'Gifts for our OCs',
+      season: 'christmas',
+      rules:
+        "Art or an adoptable, whichever your match asked for.\nOnly draw the characters and folders your match pointed you to.\nNo NSFW. If you can't finish, tell an organiser early so a backup artist can help.",
+      tags: ['secret santa', 'ocs', 'adopts'],
+      platform: 'toyhouse',
+      platformName: 'Toyhouse OC community',
+      platformLink: 'https://toyhou.se/~browse/recent',
+      signupDeadline: deadline(8),
+      submissionDeadline: deadline(42),
+      minParticipants: 3,
+      maxParticipants: 250,
+      allowedTypes: ['art', 'adoptable'],
+      inviteCode: 'oc-santa-26',
+      banner: { seed: 'oc-secret-santa', title: 'OC Secret Santa 2026' },
     }),
     event({
       key: 'valentine',
@@ -637,6 +721,26 @@ export function buildDemoData(now = new Date()) {
     application('starboard', 'noor', ['writing'], ['art'], ['saffron']),
     application('starboard', 'sol', ['art'], ['art', 'writing'], ['sunny']),
   ];
+
+  // Everyone from the OC Secret Santa sheet, signed up with their own answers
+  SIGNUP_RESPONSES.forEach((s) => {
+    const notes = [s.drawNote && `About what I can draw: ${s.drawNote}`, s.extra].filter(Boolean).join('\n\n');
+    applications.push({
+      event: 'ocsanta',
+      user: s.username,
+      status: 'accepted',
+      communityUsername: s.toyhouse,
+      canCreate: ['art', 'adoptable'],
+      wantsTypes: [...s.wants],
+      offeredCharacters: crowdCharacters.get(s.username),
+      likes: s.wantNote,
+      adoptWishlist: s.wants.includes('adoptable') ? s.adopt : '',
+      avoid: '',
+      cannotDraw: [...s.cannotDraw],
+      notes: notes.slice(0, 1000),
+      canBackup: s.backup !== 'no',
+    });
+  });
 
   const match = (eventKey, giver, recipient, score, reasons, status = 'assigned') => ({
     event: eventKey,

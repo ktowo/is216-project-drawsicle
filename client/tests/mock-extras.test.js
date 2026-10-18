@@ -358,11 +358,24 @@ describe('museum rooms', () => {
   });
 });
 
+// Every page of a Discover listing (there are 200-odd demo artists)
+async function everyArtist(query = '') {
+  const items = [];
+  let cursor = '';
+  for (let i = 0; i < 20; i++) {
+    const page = await ok(`/discover/artists?limit=48${query}${cursor ? `&cursor=${cursor}` : ''}`);
+    items.push(...page.items);
+    if (!page.nextCursor) return { items, total: page.total };
+    cursor = page.nextCursor;
+  }
+  throw new Error('too many pages');
+}
+
 describe('discover artists', () => {
   const names = (body) => body.items.map((i) => i.user.username);
 
   it('lists active artists who stay listed, interesting ones first, and pages', async () => {
-    const all = await ok('/discover/artists?limit=48');
+    const all = await everyArtist();
     expect(all.items.length).toBe(all.total);
     expect(names(all)).not.toContain(null);
     // Mika has tags, gifts and an exchange, so she is near the top; Ada (admin, no tags) is near the end
@@ -381,12 +394,12 @@ describe('discover artists', () => {
   it('searches, leaves out yourself and unlisted artists', async () => {
     expect(names(await ok('/discover/artists?q=@MIK'))).toEqual(['mika']);
     await loginAs('kit');
-    const asKit = await ok('/discover/artists?limit=48');
+    const asKit = await everyArtist();
     expect(names(asKit)).not.toContain('kit');
     expect(asKit.items[0]).toHaveProperty('following');
     await ok('/profile', { method: 'PATCH', body: { profilePrivacy: { listInDiscover: false } } });
     await logout();
-    expect(names(await ok('/discover/artists?limit=48'))).not.toContain('kit');
+    expect(names(await everyArtist())).not.toContain('kit');
     expect((await ok('/users/kit')).profile.username).toBe('kit');
   });
 });
@@ -406,7 +419,7 @@ describe('discover filters and sorts', () => {
     await loginAs('mika');
     await ok('/users/noor/follow', { method: 'POST' });
     expect(names(await ok('/discover/artists?following=true'))).toEqual(['noor']);
-    const newest = await ok('/discover/artists?sort=newest&limit=48');
+    const newest = await everyArtist('&sort=newest');
     const times = newest.items.map((i) => i.user.username);
     expect(times.length).toBe(newest.total);
     expect((await ok('/discover/artists?sort=exchanges')).items[0].exchangesCompleted).toBeGreaterThan(0);

@@ -82,9 +82,9 @@ describe('demo data', () => {
     expect(all.events.every((e) => e.viewer === null && e.inviteCode === undefined)).toBe(true);
 
     const open = await ok('/events?status=open');
-    expect(open.events.map((e) => e.status)).toEqual(['open', 'open']);
-    // Sorted by sign-up deadline: Moth (6 days) before Winter (10 days)
-    expect(open.events[0].name).toBe('Moth & Lantern Exchange');
+    expect(open.events.map((e) => e.status)).toEqual(['open', 'open', 'open']);
+    // Sorted by sign-up deadline: Moth (6 days), the OC Secret Santa (8), Winter (10)
+    expect(open.events.map((e) => e.name)).toEqual(['Moth & Lantern Exchange', 'OC Secret Santa 2026', 'Winter Secret Santa 2026']);
 
     // Most recently finished first: Spring Bloom, the Museum Club's sample wings, then the showcase communities
     expect((await ok('/events?status=completed&limit=50')).events.map((e) => e.name)).toEqual([
@@ -105,11 +105,13 @@ describe('demo data', () => {
     expect((await ok('/events?season=summer')).events.map((e) => e.name)).toEqual(['Summer Splash Swap']);
     // Organiser names count in the search
     expect((await ok('/events?q=kit')).events.map((e) => e.name).sort()).toEqual(['Moth & Lantern Exchange', 'Sea Shanty Swap']);
-    expect((await ok('/events?minParticipants=6')).events.map((e) => e.name)).toEqual(['Summer Splash Swap']);
-    expect((await ok('/events?sort=popular')).events[0].participantCount).toBe(6);
+    expect((await ok('/events?minParticipants=6')).events.map((e) => e.name).sort()).toEqual(['OC Secret Santa 2026', 'Summer Splash Swap']);
+    // The OC Secret Santa has everyone from the sign-up sheet
+    const popular = (await ok('/events?sort=popular')).events[0];
+    expect(popular).toMatchObject({ name: 'OC Secret Santa 2026', participantCount: 192 });
 
     const page = await ok('/events?limit=2&page=2');
-    expect(page).toMatchObject({ total: 17, page: 2, pages: 9 });
+    expect(page).toMatchObject({ total: 18, page: 2, pages: 9 });
     expect(page.events).toHaveLength(2);
 
     expect((await fails('/events?status=nope')).code).toBe('VALIDATION');
@@ -396,7 +398,7 @@ describe('uploads, overviews and the deadline job', () => {
 
     const dashboard = await ok('/dashboard');
     expect(dashboard.assignments).toEqual([expect.objectContaining({ recipientName: 'Sol', submitted: true, late: false })]);
-    expect(dashboard.counts).toMatchObject({ organizing: 5, participating: 2 });
+    expect(dashboard.counts).toMatchObject({ organizing: 6, participating: 2 });
     const autumnStats = dashboard.organizing.find((row) => row.event.id === autumn.id).stats;
     expect(autumnStats).toMatchObject({ accepted: 5, matched: 5, submitted: 4, missing: 1, overdue: 0 });
   });
@@ -471,10 +473,12 @@ describe('accounts', () => {
 describe('build-out additions', () => {
   it("sorts the listing by each event's next deadline, with completed events last", async () => {
     const { events } = await ok('/events?sort=deadline&limit=50');
-    // Autumn's gifts are due in 5 days, Moth's sign-ups close in 6, Winter's in 10, Summer's gifts in 25
+    // Autumn's gifts are due in 5 days, Moth's sign-ups close in 6, the OC Secret Santa's in 8,
+    // Winter's in 10, Summer's gifts in 25
     expect(events.map((e) => e.name)).toEqual([
       'Autumn Leaves Art Trade',
       'Moth & Lantern Exchange',
+      'OC Secret Santa 2026',
       'Winter Secret Santa 2026',
       'Summer Splash Swap',
       // Finished exchanges last, most recently finished first
