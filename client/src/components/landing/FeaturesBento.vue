@@ -1,4 +1,5 @@
 <script setup>
+import { sitePath } from '@/utils/sitePath';
 // "Everything an exchange needs" as a bento grid. Each tile pairs a feature with a small
 // illustration of the real screen instead of an icon. data-floating-stop marks where the floating
 // "Happening now" card should disappear.
@@ -87,7 +88,7 @@ const MARK = { 9: 's', 20: 'g', 27: 'r' };
       <!-- Character library -->
       <article class="tile t-chars">
         <div class="art chars" aria-hidden="true">
-          <div class="char-card"><img src="/demo-art/spring-kit-mika.jpg" alt="" /><div><b>Biscuit</b><small>Dragon · pastel</small></div></div>
+          <div class="char-card"><img :src="sitePath('/demo-art/spring-kit-mika.jpg')" alt="" /><div><b>Biscuit</b><small>Dragon · pastel</small></div></div>
           <svg viewBox="0 0 60 90" class="links"><path d="M0 45 C30 45 30 12 60 12 M0 45 H60 M0 45 C30 45 30 78 60 78" /></svg>
           <div class="events">
             <span>Winter Secret Santa</span>
@@ -106,9 +107,9 @@ const MARK = { 9: 's', 20: 'g', 27: 'r' };
         <div class="art upload" aria-hidden="true">
           <div class="drop"><Upload :size="18" /> Drop your finished piece</div>
           <div class="thumbs">
-            <img src="/demo-art/spring-mika-sol.jpg" alt="" />
-            <img src="/demo-art/spring-noor-kit.jpg" alt="" />
-            <img src="/demo-art/gallery-pip-remy.jpg" alt="" />
+            <img :src="sitePath('/demo-art/spring-mika-sol.jpg')" alt="" />
+            <img :src="sitePath('/demo-art/spring-noor-kit.jpg')" alt="" />
+            <img :src="sitePath('/demo-art/gallery-pip-remy.jpg')" alt="" />
           </div>
         </div>
         <div class="copy">

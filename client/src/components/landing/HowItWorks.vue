@@ -1,4 +1,5 @@
 <script setup>
+import { sitePath } from '@/utils/sitePath';
 // "How it works" as one scroll-driven stepper with two tracks (organisers / artists). Each step
 // pairs a short explanation with a small illustration of the real screen (demo names and demo art,
 // hidden from screen readers); the progress bar fills and the current step comes into focus as you
@@ -151,7 +152,7 @@ watch(track, async () => {
 
             <!-- Artists -->
             <div v-else-if="step.mock === 'character'" class="m-card">
-              <div class="m-char"><img src="/demo-art/spring-kit-mika.jpg" alt="" /><div><b>Biscuit</b><p>Dragon · pastel, fantasy</p><p class="m-small">A sleepy cream dragon who hoards teacups.</p></div></div>
+              <div class="m-char"><img :src="sitePath('/demo-art/spring-kit-mika.jpg')" alt="" /><div><b>Biscuit</b><p>Dragon · pastel, fantasy</p><p class="m-small">A sleepy cream dragon who hoards teacups.</p></div></div>
               <div class="m-row"><div class="m-chip on">Reference sheet</div><div class="m-chip on">Toyhou.se</div></div>
             </div>
             <div v-else-if="step.mock === 'signup'" class="m-card">
@@ -164,17 +165,17 @@ watch(track, async () => {
             </div>
             <div v-else-if="step.mock === 'yourmatch'" class="m-card">
               <p class="m-head"><Gift :size="14" /> You're making a gift for</p>
-              <div class="m-char"><img src="/demo-art/spring-mika-sol.jpg" alt="" /><div><b>Sol · Ember</b><p>Fox · fluffy, fantasy</p><p class="m-small">Likes: dynamic poses, sunsets</p></div></div>
+              <div class="m-char"><img :src="sitePath('/demo-art/spring-mika-sol.jpg')" alt="" /><div><b>Sol · Ember</b><p>Fox · fluffy, fantasy</p><p class="m-small">Likes: dynamic poses, sunsets</p></div></div>
               <div class="m-row"><div class="m-chip on"><Check :size="12" /> You can draw this</div></div>
             </div>
             <div v-else-if="step.mock === 'submit'" class="m-card">
               <p class="m-head"><Upload :size="14" /> Submit your gift · due in 5 days</p>
-              <div class="m-drop"><img src="/demo-art/spring-noor-kit.jpg" alt="" /><span>lantern-tea-stall.png</span></div>
+              <div class="m-drop"><img :src="sitePath('/demo-art/spring-noor-kit.jpg')" alt="" /><span>lantern-tea-stall.png</span></div>
               <div class="m-input">A note for Kit…</div>
               <div class="m-btn">Submit gift</div>
             </div>
             <div v-else-if="step.mock === 'reveal'" class="m-card reveal">
-              <img src="/demo-art/spring-sol-remy.jpg" alt="" />
+              <img :src="sitePath('/demo-art/spring-sol-remy.jpg')" alt="" />
               <p class="m-head"><Sparkles :size="14" /> Your gift is from Sol!</p>
               <p class="m-small">“Marzipan nap time” · Spring Bloom Exchange</p>
             </div>
