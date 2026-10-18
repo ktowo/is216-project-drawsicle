@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue';
-import { Download, Share2, Link2, Lock } from 'lucide-vue-next';
+import { Download, Share2, Link2, Lock, Copy } from 'lucide-vue-next';
 import BaseModal from '@/components/ui/BaseModal.vue';
 import { assetUrl } from '@/api';
 import { copyText } from '@/utils/events';
@@ -108,6 +108,49 @@ async function shareImage() {
   }
 }
 
+// Puts the picture itself on the clipboard, to paste straight into Discord or Telegram.
+// The PNG goes in as a promise so Safari still counts it as part of the click.
+const canCopyImage = computed(
+  () => typeof window !== 'undefined' && !!window.ClipboardItem && !!navigator.clipboard?.write && window.isSecureContext
+);
+
+async function copyImage() {
+  if (busy.value) return;
+  busy.value = true;
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': png() })]);
+    toast.success('Image copied. Paste it into a chat with Ctrl+V (Cmd+V on a Mac).');
+  } catch {
+    toast.error("Couldn't copy the image. You can download it instead.");
+  } finally {
+    busy.value = false;
+  }
+}
+
+// ---------- How to post it ----------
+// Short steps per app, using whichever buttons this device actually has
+const APPS = ['Discord', 'Instagram', 'Telegram'];
+const app = ref('Discord');
+const steps = computed(() => {
+  const story = size.value === 'story';
+  const pick = story ? null : 'Pick Story above: it fits Instagram exactly.';
+  if (app.value === 'Instagram') {
+    if (canShareFiles.value) {
+      return [pick, 'Tap Share image.', 'Choose Instagram, then Stories (or Feed).', 'Add the link with a Link sticker so people can tap through.'].filter(Boolean);
+    }
+    return [pick, 'Download PNG and send it to your phone.', 'In Instagram, tap + and choose Story, then pick the card.', 'Add the link with a Link sticker so people can tap through.'].filter(Boolean);
+  }
+  const where = app.value === 'Discord' ? 'the channel or DM' : 'the chat';
+  const tip = story ? 'Tip: Wide reads better in a chat.' : null;
+  if (canShareFiles.value) {
+    return [tip, 'Tap Share image.', `Choose ${app.value}, then ${where}.`, 'Send. The link is in the QR code and under it, or tap Copy link to paste it too.'].filter(Boolean);
+  }
+  if (canCopyImage.value) {
+    return [tip, 'Click Copy image.', `Open ${where} in ${app.value} and paste (Ctrl+V, or Cmd+V on a Mac).`, 'Click Copy link and paste it in the same message, so people can click through.'].filter(Boolean);
+  }
+  return [tip, 'Click Download PNG.', `Drag the file into ${where} in ${app.value}.`, 'Click Copy link and paste it in the same message.'].filter(Boolean);
+});
+
 async function copyLink() {
   if (await copyText(props.url)) toast.success(props.privateEvent ? 'Invite link copied.' : 'Link copied.');
   else toast.error("Couldn't copy the link. You can copy it from the address bar instead.");
@@ -135,6 +178,28 @@ async function copyLink() {
         <canvas ref="canvas" role="img" :aria-label="summary" />
       </div>
 
+      <section class="howto" aria-labelledby="howto-heading">
+        <h3 id="howto-heading">How to post it</h3>
+        <div class="apps" role="tablist" aria-label="App">
+          <button
+            v-for="a in APPS"
+            :id="`howto-tab-${a}`"
+            :key="a"
+            type="button"
+            role="tab"
+            :aria-selected="app === a ? 'true' : 'false'"
+            aria-controls="howto-steps"
+            :class="{ on: app === a }"
+            @click="app = a"
+          >
+            {{ a }}
+          </button>
+        </div>
+        <ol id="howto-steps" role="tabpanel" :aria-labelledby="`howto-tab-${app}`">
+          <li v-for="(step, i) in steps" :key="i">{{ step }}</li>
+        </ol>
+      </section>
+
       <p v-if="privateEvent" class="private-note">
         <Lock :size="14" aria-hidden="true" /> This card holds the invite link: anyone who sees it can open the event.
       </p>
@@ -142,6 +207,9 @@ async function copyLink() {
 
     <template #footer>
       <button type="button" class="btn btn-ghost" @click="copyLink"><Link2 :size="16" aria-hidden="true" /> Copy link</button>
+      <button v-if="canCopyImage && !canShareFiles" type="button" class="btn btn-outline" :disabled="busy" @click="copyImage">
+        <Copy :size="16" aria-hidden="true" /> Copy image
+      </button>
       <button v-if="canShareFiles" type="button" class="btn btn-outline" :disabled="busy" @click="shareImage">
         <Share2 :size="16" aria-hidden="true" /> Share image
       </button>
@@ -197,6 +265,42 @@ async function copyLink() {
 .preview.story canvas {
   max-height: min(62vh, 560px);
   width: auto;
+}
+.howto {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.howto h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.apps {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.apps button {
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.apps button.on {
+  background: var(--pink-soft);
+  color: var(--pink-dark);
+  border-color: transparent;
+}
+.howto ol {
+  margin: 10px 0 0;
+  padding-left: 20px;
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 .private-note {
   display: flex;

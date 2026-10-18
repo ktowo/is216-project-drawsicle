@@ -23,6 +23,8 @@ Run in demo mode (`pnpm dev:mock`) and real-API mode, in light and dark themes, 
 - [ ] Download PNG saves `<event-name>-story.png` / `-wide.png` at 1080×1920 / 1200×630
 - [ ] Share image appears on phones/Safari only and opens the share sheet with the picture; cancelling shows no error
 - [ ] Copy link copies the same link as Share
+- [ ] Copy image (desktop Chrome/Edge/Safari): pastes the card into Discord and Telegram; hidden where the browser can't; a blocked clipboard shows the "download it instead" message
+- [ ] How to post it: Discord / Instagram / Telegram steps match the buttons shown on this device (phone: Share image; desktop: Copy image or Download)
 - [ ] Keyboard: Tab stays inside the dialog, Esc closes it, focus returns to the button
 - [ ] Screen reader reads the card's summary (name, stage line, counts, link)
 - [ ] Phone width: the dialog fits and the preview scales down
