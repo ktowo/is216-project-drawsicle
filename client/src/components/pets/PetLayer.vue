@@ -4,6 +4,7 @@ import { useRoute, RouterLink } from 'vue-router';
 import { Cookie, Hand, Heart } from 'lucide-vue-next';
 import PetSprite from './PetSprite.vue';
 import { lineFor } from './petLines';
+import { play, PET_VOICES } from '@/effects/sfx';
 import { resolvePet, PET_KINDS, MAX_SHOWN_PETS } from '@shared/pets.mjs';
 import { auth } from '@/stores/auth';
 import { preferences } from '@/stores/preferences';
@@ -485,6 +486,7 @@ function launch(p, t) {
   p.perch = null;
   p.mode = 'air';
   views[p.id].state = 'jump';
+  play('jump', { volume: 0.3 });
 }
 
 function fly(p, t) {
@@ -500,6 +502,7 @@ function fly(p, t) {
 }
 
 function land(p, t) {
+  play('land', { volume: p.dropped || p.thrown ? 0.8 : 0.35 });
   p.mode = 'land';
   p.until = t + 0.18;
   p.landAt = t;
@@ -568,6 +571,7 @@ function fall(p, t, dt) {
     p.y = geo.floor;
     if (p.vy > 650 && !p.bounced) {
       p.vy = -p.vy * 0.28;
+      play('boing', { volume: 0.6 });
       p.vx *= 0.7;
       p.bounced = true;
       return;
@@ -616,6 +620,7 @@ function say(p, t, mood) {
   v.bubble = lineFor(p.kind, mood, p.name);
   v.side = p.x < 70 ? 'left' : p.x > geo.w - 70 ? 'right' : 'mid';
   p.bubbleUntil = t + 1.7;
+  play(PET_VOICES[p.kind] || 'pop', { volume: ['chat', 'hungry', 'perched'].includes(mood) ? 0.3 : 0.75 });
 }
 
 function chatter(p, t) {
@@ -695,6 +700,7 @@ function pickUp(p, t) {
   p.rot = 0;
   p.rotTarget = 0;
   v.state = 'held';
+  play('jump', { volume: 0.8 });
   if (Math.random() < 0.5) say(p, t, 'picked');
 }
 
@@ -702,6 +708,7 @@ function release(p, vx, vy, t) {
   if (!p) return;
   p.dropped = true;
   p.thrown = Math.hypot(vx, vy) > 500;
+  if (p.thrown) play('whoosh');
   if (reduceMotion.value) {
     // No falling animation: straight onto whatever is underneath
     const below = perchSpots(true)
@@ -737,6 +744,7 @@ function onClick(id, e) {
   v.menuSide = p.x < 120 ? 'left' : p.x > geo.w - 120 ? 'right' : 'mid';
   v.menuBelow = p.y - size.value - 190 < geo.navBottom;
   v.menu = true;
+  play('pop');
   idle(p, 'stand', t, 600);
   v.facing = p.x < geo.w / 2 ? 'right' : 'left';
   // Opened from the keyboard: move focus into the menu
@@ -770,6 +778,7 @@ function feed(id) {
     return queue(id, [{ pose: 'sit', duration: 1.4 }]);
   }
   views[id].full = full;
+  play('nom');
   queue(id, [
     { pose: 'eat', duration: 2.2 },
     { pose: 'happy', duration: 1.3, say: 'fed' },
@@ -777,12 +786,14 @@ function feed(id) {
 }
 
 function pat(id) {
+  play(bodies.get(id)?.kind === 'cat' ? 'purr' : 'heart', { volume: 0.7 });
   queue(id, [{ pose: 'happy', duration: 1.8, say: 'petted' }]);
 }
 
 function hide(id) {
   const pet = shown.value.find((s) => s.id === id);
   closeMenu(id);
+  play('swoosh');
   hidePet(id);
   toast.info(`${pet?.name || 'Your pet'} is having a nap until your next visit. The paw button brings everyone back.`);
 }
@@ -880,6 +891,7 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="pet-body"
+          data-sfx="none"
           :aria-label="`${pet.name} the ${KIND_LABEL[pet.kind]}, your screen pet`"
           :aria-expanded="views[pet.id].menu ? 'true' : 'false'"
           @pointerdown="onDown($event, pet.id)"
@@ -927,12 +939,12 @@ onBeforeUnmount(() => {
               />
             </p>
             <div class="menu-actions">
-              <button type="button" class="btn btn-primary btn-xs" @click="feed(pet.id)"><Cookie :size="15" aria-hidden="true" /> Feed</button>
-              <button type="button" class="btn btn-outline btn-xs" @click="pat(pet.id)"><Hand :size="15" aria-hidden="true" /> Pet</button>
+              <button type="button" class="btn btn-primary btn-xs" data-sfx="none" @click="feed(pet.id)"><Cookie :size="15" aria-hidden="true" /> Feed</button>
+              <button type="button" class="btn btn-outline btn-xs" data-sfx="none" @click="pat(pet.id)"><Hand :size="15" aria-hidden="true" /> Pet</button>
             </div>
             <div class="menu-foot">
               <RouterLink :to="{ name: 'character', params: { id: pet.id } }" @click="closeMenu(pet.id)">About {{ pet.name }}</RouterLink>
-              <button type="button" class="link-button" @click="hide(pet.id)">Hide for now</button>
+              <button type="button" class="link-button" data-sfx="none" @click="hide(pet.id)">Hide for now</button>
             </div>
           </div>
         </Transition>

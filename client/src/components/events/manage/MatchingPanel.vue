@@ -1,4 +1,5 @@
 <script setup>
+import { play } from '@/effects/sfx';
 import { ref, reactive, computed, watch, useId } from 'vue';
 import {
   Shuffle,
@@ -182,7 +183,10 @@ async function generate() {
     regenerateOpen.value = false;
     const left = data.result?.unmatched?.length || 0;
     if (left) toast.info(`Made ${pluralize(matches.value.length, 'match', 'matches')}, but ${pluralize(left, 'person', 'people')} couldn't be placed.`);
-    else toast.success(`Made ${pluralize(matches.value.length, 'match', 'matches')}.`);
+    else {
+      play('fanfare');
+      toast.success(`Made ${pluralize(matches.value.length, 'match', 'matches')}.`, { quiet: true });
+    }
   } catch (e) {
     generateError.value = e.message;
     if (regenerateOpen.value) regenerateOpen.value = false;
@@ -254,7 +258,8 @@ async function doPublish() {
     matches.value = data.matches || matches.value;
     published.value = true;
     swap.on = false;
-    toast.success('Matches published! Every artist now knows who they are making a gift for.');
+    play('cheer');
+    toast.success('Matches published! Every artist now knows who they are making a gift for.', { quiet: true });
     if (data.event) emit('updated', data.event);
   } catch (e) {
     publish.error = e.message;

@@ -1,4 +1,5 @@
 import { reactive } from 'vue';
+import { play } from '@/effects/sfx';
 import {
   Bell,
   Inbox,
@@ -139,7 +140,9 @@ export async function loadMoreNotifications(limit = PAGE_SIZE) {
 export async function refreshUnreadCount({ throwErrors = false } = {}) {
   try {
     const { unreadCount } = await api('/notifications/unread-count');
+    if (unreadCount > notifications.unreadCount && notifications.countKnown) play('ding');
     notifications.unreadCount = unreadCount;
+    notifications.countKnown = true;
   } catch (e) {
     if (throwErrors) throw e;
   }

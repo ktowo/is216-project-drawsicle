@@ -1,4 +1,5 @@
 <script setup>
+import { play } from '@/effects/sfx';
 import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
 import {
@@ -280,7 +281,8 @@ async function togglePet(character) {
     const { character: updated } = await api(`/characters/${character.id}`, { method: 'PATCH', body: { pet: { shown: out } } });
     replaceInList(updated);
     await refreshPets();
-    toast.success(out ? `${updated.name} is out on screen. Say hi!` : `${updated.name} has gone for a nap.`);
+    play(out ? 'boing' : 'swoosh');
+    toast.success(out ? `${updated.name} is out on screen. Say hi!` : `${updated.name} has gone for a nap.`, { quiet: true });
   } catch (e) {
     toast.error(e.code === 'TOO_MANY_PETS' ? `You already have ${MAX_SHOWN_PETS} pets out. Put one away first.` : e.message);
   } finally {

@@ -1,12 +1,18 @@
 <script setup>
 import { computed } from 'vue';
-import { Sparkles, Moon, Sun, PawPrint } from 'lucide-vue-next';
-import { preferences, toggleTheme, toggleSparkles, togglePets } from '@/stores/preferences';
+import { Sparkles, Moon, Sun, PawPrint, Volume2, VolumeX } from 'lucide-vue-next';
+import { preferences, toggleTheme, toggleSparkles, togglePets, toggleSound } from '@/stores/preferences';
+import { play } from '@/effects/sfx';
 import { auth } from '@/stores/auth';
 
 // The sparkle cursor only exists on mouse/trackpad devices, so its switch does too
 const hasFinePointer = typeof window !== 'undefined' && window.matchMedia?.('(pointer: fine)').matches;
 const dark = computed(() => preferences.resolvedTheme === 'dark');
+
+function flipSound() {
+  toggleSound();
+  if (preferences.sound) play('chime');
+}
 </script>
 
 <template>
@@ -35,6 +41,19 @@ const dark = computed(() => preferences.resolvedTheme === 'dark');
     >
       <PawPrint :size="19" aria-hidden="true" />
       <span class="sr-only">Screen pets</span>
+    </button>
+    <button
+      type="button"
+      class="toggle"
+      :class="{ off: !preferences.sound }"
+      :aria-pressed="preferences.sound"
+      :title="preferences.sound ? 'Turn sound effects off' : 'Turn sound effects on'"
+      data-sfx="none"
+      @click="flipSound"
+    >
+      <Volume2 v-if="preferences.sound" :size="19" aria-hidden="true" />
+      <VolumeX v-else :size="19" aria-hidden="true" />
+      <span class="sr-only">Sound effects</span>
     </button>
     <button
       type="button"

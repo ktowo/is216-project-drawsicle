@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import PetSprite from './PetSprite.vue';
 import { lineFor } from './petLines';
+import { play as sfx, PET_VOICES } from '@/effects/sfx';
 
 // A little patch of floor for one pet to potter about on: it walks back and forth, sits,
 // naps and hops. Parents can call feed(), pat() and say(text) through a template ref.
@@ -86,6 +87,7 @@ function tick() {
 
 function say(text) {
   bubble.value = text;
+  sfx(PET_VOICES[props.kind] || 'pop', { volume: 0.7 });
   clearTimeout(bubbleTimer);
   bubbleTimer = setTimeout(() => (bubble.value = ''), 1700);
 }
@@ -100,6 +102,7 @@ function feed({ full = false } = {}) {
     say(lineFor(props.kind, 'full', props.name));
     play([{ pose: 'sit', ms: 1400 }]);
   } else {
+    sfx('nom');
     play([
       { pose: 'eat', ms: 2200 },
       { pose: 'happy', ms: 1300, say: 'fed' },
@@ -108,6 +111,7 @@ function feed({ full = false } = {}) {
 }
 
 function pat() {
+  sfx(props.kind === 'cat' ? 'purr' : 'heart', { volume: 0.7 });
   play([{ pose: 'happy', ms: 1800, say: 'petted' }]);
 }
 
