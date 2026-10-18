@@ -65,6 +65,12 @@ erDiagram
         string name
         string description
         string species
+        string pronouns
+        string personality
+        array colours "up to 6 #rrggbb"
+        string folder "library grouping"
+        boolean favourite
+        object pet "shown kind palette (max 4 shown per owner)"
         array tags "lowercase, used by matching"
         array referenceLinks "label + url, external only"
         string notesForArtists

@@ -1,5 +1,8 @@
 // Small helpers shared by the mock handlers: errors, input reading, dates.
 import { LIMITS, normalizeTags, CONTENT_WARNING_VALUES } from '@shared/constants.mjs';
+import { PET_KIND_VALUES, PET_PALETTE_VALUES } from '@shared/pets.mjs';
+
+const HEX_RE = /^#[0-9a-f]{6}$/;
 
 // Same default codes as server/utils/helpers.js
 const DEFAULT_CODES = {
@@ -75,6 +78,9 @@ export function readCharacterInput(body) {
     description: ['Description', LIMITS.characterDescription],
     species: ['Species', LIMITS.species],
     notesForArtists: ['Notes for artists', LIMITS.notesForArtists],
+    pronouns: ['Pronouns', LIMITS.pronouns],
+    personality: ['Personality', LIMITS.personality],
+    folder: ['Folder', LIMITS.folder],
   };
   for (const [key, [label, max]] of Object.entries(fields)) {
     if (body[key] !== undefined) input[key] = readText(body[key], label, max);
@@ -89,6 +95,32 @@ export function readCharacterInput(body) {
       throw invalid('Pick content warnings from the list.');
     }
     input.contentWarnings = [...new Set(list)];
+  }
+  if (body.colours !== undefined) {
+    if (body.colours !== null && !Array.isArray(body.colours)) throw invalid('Colours must be a list.');
+    const colours = [];
+    for (const raw of body.colours || []) {
+      const hex = String(raw ?? '').trim().toLowerCase();
+      if (!HEX_RE.test(hex)) throw invalid('Colours must look like #ff99cc.');
+      if (!colours.includes(hex)) colours.push(hex);
+    }
+    if (colours.length > LIMITS.colours) throw invalid(`Up to ${LIMITS.colours} colours.`);
+    input.colours = colours;
+  }
+  if (body.favourite !== undefined) input.favourite = body.favourite === true;
+  if (body.pet !== undefined) {
+    if (!isPlainObject(body.pet)) throw invalid('Pet settings are missing.');
+    const pet = {};
+    if (body.pet.shown !== undefined) pet.shown = body.pet.shown === true;
+    if (body.pet.kind !== undefined) {
+      if (body.pet.kind !== '' && !PET_KIND_VALUES.includes(body.pet.kind)) throw invalid('Pick a kind of pet from the list.');
+      pet.kind = body.pet.kind;
+    }
+    if (body.pet.palette !== undefined) {
+      if (body.pet.palette !== '' && !PET_PALETTE_VALUES.includes(body.pet.palette)) throw invalid('Pick pet colours from the list.');
+      pet.palette = body.pet.palette;
+    }
+    input.pet = pet;
   }
   return input;
 }

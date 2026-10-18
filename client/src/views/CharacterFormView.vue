@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter, RouterLink, onBeforeRouteLeave } from 'vue-router';
-import { Save, Loader2, Trash2, Archive, Ghost, CalendarHeart } from 'lucide-vue-next';
+import { Save, Loader2, Trash2, Archive, Ghost, CalendarHeart, Star } from 'lucide-vue-next';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import LoadingBlock from '@/components/ui/LoadingBlock.vue';
 import ErrorBlock from '@/components/ui/ErrorBlock.vue';
@@ -9,6 +9,7 @@ import EmptyState from '@/components/ui/EmptyState.vue';
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue';
 import CharacterFields from '@/components/characters/CharacterFields.vue';
 import CharacterCard from '@/components/characters/CharacterCard.vue';
+import PetSettings from '@/components/characters/PetSettings.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import {
   emptyCharacter,
@@ -18,6 +19,7 @@ import {
 } from '@/components/characters/character-form.js';
 import { api } from '@/api';
 import { toast } from '@/stores/toast';
+import { refreshPets } from '@/stores/pets';
 import { pluralize } from '@/utils/format';
 
 const ID_PREFIX = 'character';
@@ -33,6 +35,7 @@ const form = ref(emptyCharacter());
 const savedSnapshot = ref(JSON.stringify(characterPayload(form.value)));
 const errors = ref({});
 const formError = ref('');
+const petError = ref('');
 const saving = ref(false);
 const loading = ref(false);
 const loadError = ref('');
@@ -46,6 +49,11 @@ const preview = computed(() => ({
   id: 'preview',
   name: form.value.name.trim() || 'Your character',
   species: form.value.species.trim(),
+  pronouns: form.value.pronouns.trim(),
+  colours: (form.value.colours || []).filter((c) => /^#[0-9a-f]{6}$/i.test(c)),
+  favourite: form.value.favourite,
+  folder: form.value.folder.trim(),
+  pet: form.value.pet,
   tags: form.value.tags || [],
   description: form.value.description.trim(),
   referenceLinks: (form.value.referenceLinks || []).filter((l) => String(l.url || '').trim()),
@@ -67,6 +75,21 @@ async function loadOwnTags() {
   }
 }
 loadOwnTags();
+
+// Folder names to suggest, and how many other characters are out as pets (there's a limit)
+const folders = ref([]);
+const petsOut = ref([]);
+async function loadLibraryInfo() {
+  try {
+    const [{ folders: list = [] }, { pets: out = [] }] = await Promise.all([api('/characters/folders'), api('/characters/pets')]);
+    folders.value = list.map((f) => f.name);
+    petsOut.value = out.map((p) => p.id);
+  } catch {
+    // Only suggestions and a friendly limit message depend on this; the server still checks
+  }
+}
+loadLibraryInfo();
+const othersShown = computed(() => petsOut.value.filter((id) => id !== characterId.value).length);
 
 const usedIn = computed(() => character.value?.usedIn || []);
 
@@ -109,7 +132,7 @@ const title = computed(() => {
 });
 
 // First field with a problem, in the order they appear on the page
-const FIELD_ORDER = ['name', 'species', 'tags', 'description', 'referenceLinks', 'notesForArtists'];
+const FIELD_ORDER = ['name', 'species', 'pronouns', 'folder', 'tags', 'description', 'personality', 'colours', 'referenceLinks', 'notesForArtists'];
 function focusFirstError() {
   const keys = Object.keys(errors.value);
   const linkKey = keys.find((k) => k.startsWith('referenceLinks.'));
@@ -118,11 +141,13 @@ function focusFirstError() {
   let id = `${ID_PREFIX}-${first}`;
   if (first === 'notesForArtists') id = `${ID_PREFIX}-notes`;
   if (first === 'referenceLinks' && linkKey) id = `${ID_PREFIX}-link-url-${linkKey.split('.')[1]}`;
+  if (first === 'colours') id = `${ID_PREFIX}-colour-0`;
   nextTick(() => document.getElementById(id)?.focus());
 }
 
 async function save() {
   formError.value = '';
+  petError.value = '';
   errors.value = validateCharacter(form.value);
   if (Object.keys(errors.value).length) {
     focusFirstError();
@@ -137,10 +162,14 @@ async function save() {
       : await api('/characters', { method: 'POST', body });
     leaving = true;
     toast.success(isEdit.value ? `${data.character.name} saved.` : `${data.character.name} added to your library.`);
-    router.push('/characters');
+    refreshPets();
+    router.push({ name: 'character', params: { id: data.character.id } });
   } catch (e) {
     if (e.status === 404) {
       notFound.value = true;
+    } else if (e.code === 'TOO_MANY_PETS') {
+      petError.value = e.message;
+      document.getElementById('pet')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     } else {
       formError.value = e.message;
     }
@@ -257,8 +286,8 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
           ? 'Changes show up wherever this character is offered, including events you have already joined.'
           : 'Save a character once and offer it in any event.'
       "
-      back="/characters"
-      back-label="Character library"
+      :back="isEdit ? `/characters/${characterId}` : '/characters'"
+      :back-label="isEdit && character ? character.name : 'Character library'"
     />
 
     <LoadingBlock v-if="loading" label="Loading character…" />
@@ -286,7 +315,25 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
           <span>Offered in {{ pluralize(character.eventCount, 'event') }}.</span>
         </p>
 
-        <CharacterFields v-model="form" :errors="errors" :id-prefix="ID_PREFIX" :tag-suggestions="ownTags" />
+        <label class="fav-toggle" :class="{ on: form.favourite }">
+          <input v-model="form.favourite" type="checkbox" class="sr-only" />
+          <Star :size="17" aria-hidden="true" :fill="form.favourite ? 'currentColor' : 'none'" />
+          {{ form.favourite ? 'Favourite' : 'Mark as favourite' }}
+          <span class="hint">· shows first in your library</span>
+        </label>
+
+        <CharacterFields
+          v-model="form"
+          :errors="errors"
+          :id-prefix="ID_PREFIX"
+          :tag-suggestions="ownTags"
+          :folder-suggestions="folders"
+          extended
+        />
+
+        <div id="pet" class="pet-block">
+          <PetSettings v-model="form.pet" :character="form" :others-shown="othersShown" :error="petError" />
+        </div>
 
         <p v-if="formError" class="alert alert-error form-alert" role="alert">{{ formError }}</p>
 
@@ -428,6 +475,46 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
 }
 .form-alert {
   margin: 22px 0 0;
+}
+.fav-toggle {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 22px;
+  padding: 6px 14px 6px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.fav-toggle:hover {
+  background: var(--hover);
+}
+.fav-toggle.on {
+  border-color: var(--warning);
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+.fav-toggle:focus-within {
+  outline: 2px solid var(--pink);
+  outline-offset: 2px;
+}
+.fav-toggle .hint {
+  font-weight: 500;
+}
+.pet-block {
+  margin-top: 30px;
+  padding-top: 26px;
+  border-top: 1px dashed var(--border-strong);
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 .actions {
   display: flex;

@@ -11,9 +11,15 @@ IS216 Web Application Development II project (SMU).
 
 - **Accounts that last between events**: a profile, default answers for sign-up forms, notification
   settings, and deactivation with a 30-day grace period.
-- **A private character library**: name, species, tags, description, reference links (Toyhou.se, Google
-  Docs...) and notes for artists. Reuse characters in every event; ones that were offered in an event can
-  be archived but not deleted.
+- **A private character library**: name, species, pronouns, tags, description, personality, a colour
+  palette, reference links (Toyhou.se, Google Docs...) and notes for artists, sorted into folders with
+  favourites pinned to the top. Each character has its own page. Reuse characters in every event; ones that
+  were offered in an event can be archived but not deleted.
+- **Screen pets**: any character can come out as a little cartoon pet (cat, dog, fox, bunny, mouse,
+  bear, penguin, bird, dragon, slime, frog or hedgehog, in the character's own colours or one of twelve
+  palettes). Up to four at once wander along the bottom of the screen beside the page, now and then hop
+  up onto a card, say something short, and can be picked up, thrown, fed and petted. The paw button in
+  the navbar puts them away; `/pets` shows every kind.
 - **Events for organisers**: name, theme, rules, sign-up and submission deadlines, participant limits,
   allowed gift types (art, adoptables, writing), the community platform, public or invite-only, with
   optional application review. Lifecycle: *Draft → Open → Matching → Active → Completed*.
@@ -118,6 +124,8 @@ simply killed can lose them. If the database doesn't answer, the script falls ba
 
 Every demo account uses the password **drawsicle123**. Dates are relative to when the demo data was
 created, so deadlines always look current.
+Every account also has a character library (97 characters across the demo, with folders, colour
+palettes and personalities), and most have a screen pet or two out. Mika has three.
 
 | Email | Name | Organises | Takes part in |
 | --- | --- | --- | --- |
@@ -247,7 +255,11 @@ pnpm dev:mock     # or: ./Start-all.sh --mock / Start-all.bat --mock
 pnpm build:mock   # static build in client/dist
 ```
 
-A banner at the top shows the demo login and a *Reset demo data* button. Uploaded images are shrunk and kept
+**Live demo:** https://ktowo.github.io/is216-project-drawsicle/ runs mock mode on GitHub Pages. It is rebuilt by
+`.github/workflows/pages.yml` whenever the `github-demo` branch is pushed (`git push origin dev:github-demo`), and
+the build only goes out if the client tests pass.
+
+The login page has a **Test accounts** dropdown listing every demo account (site staff, organisers, artists): pick one to fill in the form, or *Sign in as* to log straight in. On the GitHub Pages build it also has a *Reset test data* link. It is a testing aid and will be removed before finals: build with `VITE_TEST_LOGINS=false` to hide it, or delete `client/src/utils/testLogins.js`, `client/src/components/TestLogins.vue` and their lines in `LoginView.vue`. Uploaded images are shrunk and kept
 in the browser too, so the browser's storage limit (about 5 MB) applies. Google/Discord sign-in, real emails
 and password-reset links need the real server.
 
@@ -256,7 +268,11 @@ and password-reset links need the real server.
 ```sh
 cd server && pnpm test   # API tests against a throwaway MongoDB (downloads MongoDB on the first run)
 cd client && pnpm test   # Vitest, including a full exchange driven through the mock API
+cd client && pnpm test:e2e   # Playwright: an exchange and the museum in a real browser
 ```
+
+GitHub runs all three, plus both client builds, on every push to `dev` or `main` and on every pull request
+(`.github/workflows/checks.yml`).
 
 ## Project structure
 
@@ -300,3 +316,4 @@ reminder schedule. `GET /api/health` tells you whether the API and database are 
 - `main`: the stable version. Only tested, working code is merged here.
 - `dev`: where everyone's work comes together. Branch off `dev` for new work and open pull requests into it;
   `dev` is merged into `main` when it's stable.
+- `github-demo`: what the GitHub Pages demo is built from. Push `dev` to it when you want the demo updated.
