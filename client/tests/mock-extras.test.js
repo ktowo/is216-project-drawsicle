@@ -55,6 +55,8 @@ describe('gifts', () => {
     const { user: mika } = await loginAs('mika');
     const spring = await eventByName('Spring Bloom Exchange');
     expect((await fails(`/events/${spring.id}/thanks`, { method: 'PUT', body: {} })).code).toBe('VALIDATION');
+    // The demo gift already has a thank-you note; take it back so this one counts as the first
+    await ok(`/events/${spring.id}/thanks`, { method: 'DELETE' });
     const { submission } = await ok(`/events/${spring.id}/thanks`, {
       method: 'PUT',
       body: { reaction: 'sparkles', message: 'Thank you!' },
@@ -471,6 +473,37 @@ describe('museum avatars', () => {
     // Style analysis needs the real server
     expect((await ok('/profile/style')).demo).toBe(true);
     expect((await fails('/profile/style/analyse', { method: 'POST' })).code).toBe('NOT_IN_DEMO');
+  });
+});
+
+describe('landing showcase', () => {
+  it('counts real exchanges, lists communities and the feed, and only consented gifts with notes', async () => {
+    const body = await ok('/showcase');
+    expect(body.stats.exchanges).toBeGreaterThanOrEqual(10);
+    expect(body.stats.communities).toBeGreaterThanOrEqual(8);
+    expect(body.stats.giftsRevealed).toBeGreaterThanOrEqual(8);
+    expect(body.communities.map((c) => c.name)).toContain('Moonlit Moth Society');
+    expect(body.communities.every((c) => c.initials && c.colour && c.exchanges > 0)).toBe(true);
+    expect(body.communities.map((c) => c.name)).not.toContain(''); // the private Studio Club has no name shown
+    expect(body.feed[0].kind).toBe('open');
+    expect(body.feed.every((r) => r.event.name !== 'Studio Club Swap' && r.event.name !== 'Valentine Doodle Swap')).toBe(true);
+
+    const titles = body.gifts.map((g) => g.submission.title);
+    expect(titles.length).toBeLessThanOrEqual(12); // newest 12 consented gifts
+    expect(body.gifts.filter((g) => g.thanks).length).toBeGreaterThanOrEqual(3);
+    expect(titles).not.toContain('Biscuit and the teacup hoard'); // Ash hasn't agreed
+    const ember = body.gifts.find((g) => g.submission.title === 'Ember in the cherry blossoms');
+    expect(ember.characterName).toBe('Ember');
+    expect(ember.thanks.message).toMatch(/teared up/);
+    expect(ember.giver.cardColor).toBe('rose');
+    expect(JSON.stringify(body)).not.toMatch(/Happy spring, Sol/);
+  });
+});
+
+describe('event search by community', () => {
+  it('finds exchanges by their community name', async () => {
+    const { events } = await ok('/events?status=all&q=moonlit');
+    expect(events.map((e) => e.name)).toEqual(['Midsummer Moth Swap']);
   });
 });
 
