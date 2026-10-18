@@ -7,6 +7,12 @@
 //   // pose: { rx, ry (degrees), lift (0..1), lightX, lightY (0..1), strength (0..1), settled }
 
 const MAX_DEG = 12;
+// Keyboard: arrows held move the light this share of the card per second; while held, the card
+// follows almost directly so it feels attached to the keys
+const KEY_SPEED = 5;
+const KEY_FOLLOW = 0.7;
+const KEY_TAP = 0.08;
+const DIRS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 const SETTLED = 0.0008;
 
 // Reduced motion: the card stays flat, lit from the top left
@@ -16,6 +22,8 @@ export function createTilt({ follow = 0.38, reduced = false } = {}) {
   const target = { x: 0.5, y: 0.5, lift: 0 };
   const now = { x: 0.5, y: 0.5, lift: 0 };
   let last = null; // time of the previous frame; null while resting
+  const held = new Set();
+  const clamp = (v) => Math.min(1, Math.max(0, v));
 
   function pose(settled) {
     const dx = now.x - 0.5;
@@ -39,7 +47,25 @@ export function createTilt({ follow = 0.38, reduced = false } = {}) {
       target.y = Math.min(1, Math.max(0, y));
       target.lift = 1;
     },
+    // Keyboard: an arrow pressed (ignored if already held) and released
+    press(key, at) {
+      const dir = DIRS[key];
+      if (!dir || held.has(key)) return;
+      held.add(key);
+      if (last === null && at != null) last = at;
+      target.x = clamp(target.x + dir[0] * KEY_TAP);
+      target.y = clamp(target.y + dir[1] * KEY_TAP);
+      target.lift = 1;
+    },
+    release(key) {
+      if (key) held.delete(key);
+      else held.clear();
+    },
+    get steering() {
+      return held.size > 0;
+    },
     leave() {
+      held.clear();
       target.x = 0.5;
       target.y = 0.5;
       target.lift = 0;
@@ -50,11 +76,15 @@ export function createTilt({ follow = 0.38, reduced = false } = {}) {
       const dt = last === null ? 0 : Math.min(64, Math.max(0, time - last));
       last = time;
       // Share of the remaining distance covered, scaled by real frame time (same feel at any Hz)
-      const k = 1 - Math.pow(1 - follow, dt / (1000 / 60));
+      for (const key of held) {
+        target.x = clamp(target.x + DIRS[key][0] * KEY_SPEED * (dt / 1000));
+        target.y = clamp(target.y + DIRS[key][1] * KEY_SPEED * (dt / 1000));
+      }
+      const k = 1 - Math.pow(1 - (held.size ? KEY_FOLLOW : follow), dt / (1000 / 60));
       now.x += (target.x - now.x) * k;
       now.y += (target.y - now.y) * k;
       now.lift += (target.lift - now.lift) * k;
-      const settled = Math.abs(target.x - now.x) + Math.abs(target.y - now.y) + Math.abs(target.lift - now.lift) < SETTLED;
+      const settled = !held.size && Math.abs(target.x - now.x) + Math.abs(target.y - now.y) + Math.abs(target.lift - now.lift) < SETTLED;
       if (settled) last = null;
       return pose(settled);
     },

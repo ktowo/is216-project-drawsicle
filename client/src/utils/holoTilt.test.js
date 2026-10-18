@@ -61,4 +61,25 @@ describe('holo tilt', () => {
     expect(pose.strength).toBeGreaterThan(0);
     expect([pose.lightX, pose.lightY]).toEqual([0.35, 0.3]);
   });
+
+  it('starts tilting on the first frame a key is held and reaches full tilt within 0.2s', () => {
+    const tilt = createTilt();
+    tilt.press('ArrowRight', 0);
+    const first = tilt.tick(16.7);
+    expect(first.ry).toBeGreaterThan(1);
+    const pose = run(tilt, 200, 60, 16.7);
+    expect(pose.ry).toBeGreaterThan(11);
+    tilt.release('ArrowRight');
+    const held = run(tilt, 300, 60, 216.7);
+    expect(held.ry).toBeGreaterThan(11); // stays where it was let go
+  });
+
+  it('tilts diagonally with two arrows held', () => {
+    const tilt = createTilt();
+    tilt.press('ArrowUp', 0);
+    tilt.press('ArrowLeft', 0);
+    const pose = run(tilt, 400);
+    expect(pose.ry).toBeLessThan(-11);
+    expect(pose.rx).toBeGreaterThan(11);
+  });
 });
