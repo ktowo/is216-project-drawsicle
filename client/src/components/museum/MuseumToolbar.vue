@@ -137,6 +137,7 @@ defineExpose({ focus: () => inputRef.value?.focus() });
         :key="e.key"
         type="button"
         class="quick-emote"
+        data-sfx="none"
         :class="{ on: e.key === 'dance' && dancing }"
         :aria-pressed="e.key === 'dance' ? (dancing ? 'true' : 'false') : undefined"
         :title="e.key === 'dance' && dancing ? 'Stop dancing' : `${e.label} (${i + 1})`"
@@ -161,7 +162,7 @@ defineExpose({ focus: () => inputRef.value?.focus() });
           <Smile :size="18" aria-hidden="true" />
         </button>
         <div v-if="emotesOpen" :id="`${uid}-emotes`" class="emotes card" role="menu">
-          <button v-for="e in EMOTES" :key="e.key" type="button" role="menuitem" class="emote" @click="emote(e.key)">
+          <button v-for="e in EMOTES" :key="e.key" type="button" role="menuitem" class="emote" data-sfx="none" @click="emote(e.key)">
             <span aria-hidden="true">{{ e.icon }}</span> {{ e.label }}
           </button>
         </div>
