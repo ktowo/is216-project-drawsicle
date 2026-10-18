@@ -1,4 +1,5 @@
 <script setup>
+import { play } from '@/effects/sfx';
 import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { ArrowLeft, ArrowRight, Sparkles, Save, Loader2, RotateCcw, UsersRound, Check } from 'lucide-vue-next';
@@ -46,6 +47,8 @@ const STEPS = [
 ];
 const current = computed(() => STEPS[step.value] || null);
 const onResult = computed(() => step.value >= QUIZ_STEPS);
+// Ta-da when the artist card appears
+watch(onResult, (now) => now && play('fanfare'));
 
 const fullThemes = computed(() =>
   answers.themes.length >= THEMES_MAX ? THEMES.map((t) => t.value).filter((v) => !answers.themes.includes(v)) : []
