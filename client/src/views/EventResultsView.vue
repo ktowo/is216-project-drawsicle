@@ -1,4 +1,5 @@
 <script setup>
+import { play } from '@/effects/sfx';
 import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
 import {
@@ -142,6 +143,7 @@ watch(
   }
 );
 function markOpened(...keys) {
+  play('unwrap');
   opened.value = new Set([...opened.value, ...keys]);
   if (event.value) saveUnwrapped(event.value.id, opened.value);
 }
@@ -166,6 +168,7 @@ function unwrapMine() {
 }
 function unwrapAll() {
   markOpened('all', 'mine');
+  setTimeout(() => play('fanfare'), 450);
 }
 
 // Filter the gallery by kind of gift, when there's more than one kind to choose from

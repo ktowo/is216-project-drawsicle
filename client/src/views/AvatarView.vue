@@ -1,4 +1,5 @@
 <script setup>
+import { play, EMOTE_SOUNDS } from '@/effects/sfx';
 import { ref, computed, watch, onMounted, onBeforeUnmount, useId } from 'vue';
 import { RouterLink, onBeforeRouteLeave } from 'vue-router';
 import { RotateCcw, RotateCw, Shuffle, Undo2, Save, Loader2, Landmark } from 'lucide-vue-next';
@@ -31,6 +32,7 @@ function turn(step) {
 const emote = ref('');
 let emoteTimer = null;
 function tryEmote(key) {
+  play(EMOTE_SOUNDS[key] || 'pop');
   emote.value = key;
   clearTimeout(emoteTimer);
   emoteTimer = setTimeout(() => (emote.value = ''), 2800);
@@ -92,7 +94,7 @@ onBeforeRouteLeave(() => {
           </button>
         </div>
         <div class="emote-row" role="group" aria-label="Try an emote">
-          <button v-for="e in EMOTES" :key="e.key" type="button" class="emote" :title="e.label" @click="tryEmote(e.key)">
+          <button v-for="e in EMOTES" :key="e.key" type="button" class="emote" :title="e.label" data-sfx="none" @click="tryEmote(e.key)">
             <span aria-hidden="true">{{ e.icon }}</span><span class="sr-only">{{ e.label }}</span>
           </button>
         </div>

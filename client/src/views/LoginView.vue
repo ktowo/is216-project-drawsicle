@@ -1,4 +1,5 @@
 <script setup>
+import { play } from '@/effects/sfx';
 import { ref, computed, onMounted, nextTick } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
 import { LogIn, Mail, Lock, Loader2, X } from 'lucide-vue-next';
@@ -99,9 +100,11 @@ async function submit() {
     setRememberPreference(remember.value);
     if (remember.value) rememberLogin(user);
     else forgetLogin(user.email);
-    if (reactivated) toast.success('Welcome back, your account is active again.');
+    if (reactivated) toast.success('Welcome back, your account is active again.', { quiet: true });
+    play('chime');
     router.replace(redirectTo.value);
   } catch (e) {
+    play('bonk');
     error.value = e.message;
   } finally {
     loading.value = false;

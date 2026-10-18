@@ -1,4 +1,5 @@
 <script setup>
+import { play } from '@/effects/sfx';
 import { ref, computed, watch } from 'vue';
 import { useRoute, RouterLink } from 'vue-router';
 import {
@@ -97,7 +98,8 @@ async function togglePet() {
   try {
     const updated = await patch({ pet: { shown: out } });
     await refreshPets();
-    toast.success(out ? `${updated.name} is out on screen. Say hi!` : `${updated.name} has gone for a nap.`);
+    play(out ? 'boing' : 'swoosh');
+    toast.success(out ? `${updated.name} is out on screen. Say hi!` : `${updated.name} has gone for a nap.`, { quiet: true });
     stage.value?.say(out ? 'wheee!' : 'zzz');
   } catch (e) {
     toast.error(e.code === 'TOO_MANY_PETS' ? `You already have ${MAX_SHOWN_PETS} pets out. Put one away first.` : e.message);
@@ -258,8 +260,8 @@ async function copyColour(hex) {
             />
           </p>
           <div class="pet-actions">
-            <button type="button" class="btn btn-primary btn-sm" @click="feed"><Cookie :size="16" aria-hidden="true" /> Feed</button>
-            <button type="button" class="btn btn-outline btn-sm" @click="pat"><Hand :size="16" aria-hidden="true" /> Pet</button>
+            <button type="button" class="btn btn-primary btn-sm" data-sfx="none" @click="feed"><Cookie :size="16" aria-hidden="true" /> Feed</button>
+            <button type="button" class="btn btn-outline btn-sm" data-sfx="none" @click="pat"><Hand :size="16" aria-hidden="true" /> Pet</button>
           </div>
 
           <button
