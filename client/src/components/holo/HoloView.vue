@@ -54,6 +54,7 @@ let box = null;
 const keyPoint = { x: 0.5, y: 0.5 };
 
 function draw(time) {
+  steerByKeys(time);
   const p = tilt.tick(time);
   const dx = p.lightX - 0.5;
   const dy = p.lightY - 0.5;
@@ -73,7 +74,7 @@ function draw(time) {
     stars.value.style.transform = `translate3d(${(-dx * 100).toFixed(2)}%, ${(-dy * 100).toFixed(2)}%, 0)`;
     lamp.value.style.opacity = (0.6 + p.strength * 0.4).toFixed(3);
   }
-  frame = p.settled ? 0 : requestAnimationFrame(draw);
+  frame = p.settled && !held.size ? 0 : requestAnimationFrame(draw);
 }
 function wake() {
   if (!frame) frame = requestAnimationFrame(draw);
@@ -123,15 +124,42 @@ function onPointerLeave() {
   wake();
 }
 
-// Keyboard: Shift + arrows tilt by stepping a virtual pointer (starts where the pointer left it)
-function keyTilt(key, at) {
-  const step = 0.1;
-  if (key === 'ArrowLeft') keyPoint.x = Math.max(0, keyPoint.x - step);
-  if (key === 'ArrowRight') keyPoint.x = Math.min(1, keyPoint.x + step);
-  if (key === 'ArrowUp') keyPoint.y = Math.max(0, keyPoint.y - step);
-  if (key === 'ArrowDown') keyPoint.y = Math.min(1, keyPoint.y + step);
+// Keyboard: hold Shift + arrows to tilt. The card moves from the first frame the key is down,
+// glides while it's held (corner to corner in about 0.4s, two arrows for a diagonal) and stays
+// where it is on release. Key auto-repeat is ignored; the animation loop does the moving.
+const KEY_SPEED = 2.5; // share of the card per second
+const TAP = 0.06; // a single tap still visibly nudges it
+const held = new Set();
+let keyClock = null;
+function steerByKeys(time) {
+  if (!held.size) {
+    keyClock = null;
+    return;
+  }
+  const dt = keyClock === null ? 0 : Math.min(64, time - keyClock) / 1000;
+  keyClock = time;
+  const step = KEY_SPEED * dt;
+  if (held.has('ArrowLeft')) keyPoint.x -= step;
+  if (held.has('ArrowRight')) keyPoint.x += step;
+  if (held.has('ArrowUp')) keyPoint.y -= step;
+  if (held.has('ArrowDown')) keyPoint.y += step;
+  keyPoint.x = Math.min(1, Math.max(0, keyPoint.x));
+  keyPoint.y = Math.min(1, Math.max(0, keyPoint.y));
+  tilt.pointAt(keyPoint.x, keyPoint.y, time);
+}
+function pressTiltKey(key, at) {
+  if (held.has(key)) return;
+  held.add(key);
+  if (key === 'ArrowLeft') keyPoint.x = Math.max(0, keyPoint.x - TAP);
+  if (key === 'ArrowRight') keyPoint.x = Math.min(1, keyPoint.x + TAP);
+  if (key === 'ArrowUp') keyPoint.y = Math.max(0, keyPoint.y - TAP);
+  if (key === 'ArrowDown') keyPoint.y = Math.min(1, keyPoint.y + TAP);
   tilt.pointAt(keyPoint.x, keyPoint.y, at);
   wake();
+}
+function onKeyup(e) {
+  if (e.key === 'Shift') held.clear();
+  else held.delete(e.key);
 }
 
 // ---------- Flip, close, focus ----------
@@ -163,7 +191,7 @@ function onKeydown(e) {
   }
   if (e.key.startsWith('Arrow') && e.shiftKey) {
     e.preventDefault();
-    if (!reduced) keyTilt(e.key, e.timeStamp);
+    if (!reduced) pressTiltKey(e.key, e.timeStamp);
     return;
   }
   if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
@@ -234,6 +262,8 @@ onBeforeUnmount(() => {
       :aria-label="`Holographic view of ${sub?.title || 'this gift'}`"
       tabindex="-1"
       @keydown="onKeydown"
+      @keyup="onKeyup"
+      @focusout="held.clear()"
       @click.self="emit('close')"
     >
       <button type="button" class="holo-close" aria-label="Close the holographic view" @click="emit('close')">
