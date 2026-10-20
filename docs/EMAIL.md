@@ -2,6 +2,8 @@
 
 Drawsicle sends notification emails (deadline reminders, matches, event updates) and, with the app's own sign-in, password reset emails. Every email uses one branded layout (`server/services/email-layout.js`): HTML that works in email apps, readable in light and dark mode, plus a plain-text version.
 
+Each email type (deadline reminders, matches, event updates) can be **Instant**, **Daily digest** or **Off** on the notifications page (`shared/email-types.mjs`). The daily digest (`server/services/digest.js`) runs with the reminder job, at most once a day: one email per person with everything waiting, grouped by event. Days with nothing new send nothing.
+
 Without SMTP settings, emails are printed in the server log instead (handy locally). While tests run they go to an in-memory outbox.
 
 ## Real delivery with Resend

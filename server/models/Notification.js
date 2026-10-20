@@ -10,6 +10,8 @@ const notificationSchema = new mongoose.Schema(
     readAt: { type: Date, default: null },
     // Waiting for the daily digest email (its email type is set to digest)
     digestPending: { type: Boolean, default: false },
+    // Which email type it was ('reminders' | 'matches' | 'eventUpdates'), while waiting for the digest
+    emailType: { type: String, default: undefined },
   },
   { timestamps: true }
 );
