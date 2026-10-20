@@ -4,9 +4,10 @@ import TextField from './TextField.vue';
 import { Loader2 } from 'lucide-vue-next';
 import { ref } from 'vue';
 import axios from 'axios';
-import LoadingBlock from './ui/LoadingBlock.vue';
 
 const modelValue = defineModel({ type: String, default: '' });
+
+const COOLDOWN_TIME = 200; // ms
 
 const props = defineProps({
   label: { type: String, required: true },
@@ -31,13 +32,17 @@ async function getRandomWord(type) {
 }
 
 async function assignRandomUsername() {
+  if (isLoading.value) return;
   isLoading.value = true
-  const adj = await getRandomWord('adjective');
+  const adj = await getRandomWord(Math.random() > 0.9? 'noun': 'adjective');
   const noun = await getRandomWord('noun');
-  const number = Math.random().toString().substring(2, 6);
   
-  modelValue.value = adj + noun + number;
-  isLoading.value = false
+  if (noun == undefined) {
+    modelValue.value = "THAT'S ENOUGH!!"
+  } else {
+    modelValue.value = adj + " " + noun;
+  }
+  setTimeout(() => isLoading.value = false, COOLDOWN_TIME);
 }
     
 </script>
