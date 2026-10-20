@@ -1,6 +1,7 @@
 // The mock's version of the server models and services/events.js: JSON shapes,
 // event roles, visibility rules and notifications. Shapes follow docs/ARCHITECTURE.md.
 import { newId } from './db.js';
+import { emailModesOf } from '@shared/email-types.mjs';
 import { artistTagsOf } from '@shared/taste.mjs';
 import { permissionsFor } from '@shared/permissions.mjs';
 import { cleanLook } from '@shared/looks.mjs';
@@ -32,11 +33,16 @@ export function userPublic(user) {
       avoid: user.defaultForm?.avoid || '',
       cannotDraw: [...(user.defaultForm?.cannotDraw || [])],
     },
-    notificationPrefs: {
-      emailReminders: user.notificationPrefs?.emailReminders !== false,
-      emailMatches: user.notificationPrefs?.emailMatches !== false,
-      emailEventUpdates: Boolean(user.notificationPrefs?.emailEventUpdates),
-    },
+    notificationPrefs: (() => {
+      const modes = emailModesOf(user.notificationPrefs);
+      return {
+        emailReminders: modes.reminders !== 'off',
+        emailMatches: modes.matches !== 'off',
+        emailEventUpdates: modes.eventUpdates !== 'off',
+      };
+    })(),
+    // Instant / daily digest / off for each email type (as the server)
+    emailModes: emailModesOf(user.notificationPrefs),
     artistTags: artistTagsOf(user.artistTags),
     profilePrivacy: {
       showExchanges: user.profilePrivacy?.showExchanges !== false,

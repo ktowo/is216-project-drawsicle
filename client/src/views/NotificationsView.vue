@@ -32,6 +32,7 @@ import {
 import { auth, setUser } from '@/stores/auth';
 import { toast } from '@/stores/toast';
 import { api } from '@/api';
+import { EMAIL_TYPES, emailModesOf } from '@shared/email-types.mjs';
 import { timeAgo, formatDateTime, toDate, pluralize } from '@/utils/format';
 
 const PAGE = 30;
@@ -247,30 +248,48 @@ const PREFS = [
   },
 ];
 
-const prefs = reactive({
-  emailReminders: auth.user?.notificationPrefs?.emailReminders !== false,
-  emailMatches: auth.user?.notificationPrefs?.emailMatches !== false,
-  emailEventUpdates: Boolean(auth.user?.notificationPrefs?.emailEventUpdates),
-});
+// Instant, daily digest or off for each email type (shared/email-types.mjs)
+const MODE_CHOICES = [
+  { value: 'instant', label: 'Instant' },
+  { value: 'digest', label: 'Daily' },
+  { value: 'off', label: 'Off' },
+];
+const typeOf = (legacyKey) => EMAIL_TYPES.find((t) => t.legacy === legacyKey);
+const modes = reactive({ ...(auth.user?.emailModes || emailModesOf(auth.user?.notificationPrefs)) });
 const savingPref = ref('');
 
-// Each switch saves straight away; it flips back if the server says no
-async function togglePref(key) {
-  if (savingPref.value) return;
-  const next = !prefs[key];
-  prefs[key] = next;
-  savingPref.value = key;
+// Each choice saves straight away; it goes back if the server says no
+async function setMode(legacyKey, mode) {
+  const type = typeOf(legacyKey);
+  if (savingPref.value || !type || modes[type.key] === mode) return;
+  const before = modes[type.key];
+  modes[type.key] = mode;
+  savingPref.value = legacyKey;
   try {
-    const { user } = await api('/profile', { method: 'PATCH', body: { notificationPrefs: { [key]: next } } });
+    const { user } = await api('/profile', { method: 'PATCH', body: { notificationPrefs: { emailModes: { [type.key]: mode } } } });
     setUser(user);
-    Object.assign(prefs, user.notificationPrefs || {});
-    toast.success(next ? 'We will email you about this.' : 'Okay, no more emails about this.');
+    Object.assign(modes, user.emailModes || {});
+    toast.success(
+      mode === 'instant' ? 'We will email you as it happens.' : mode === 'digest' ? 'These will come in one email a day.' : 'Okay, no more emails about this.'
+    );
   } catch (e) {
-    prefs[key] = !next;
+    modes[type.key] = before;
     toast.error(e.message);
   } finally {
     savingPref.value = '';
   }
+}
+
+// Arrow keys move between the three choices, as in any radio group
+function onModeKey(e, legacyKey) {
+  if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+  e.preventDefault();
+  const type = typeOf(legacyKey);
+  const i = MODE_CHOICES.findIndex((c) => c.value === modes[type.key]);
+  const step = e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 1;
+  const next = MODE_CHOICES[(i + step + MODE_CHOICES.length) % MODE_CHOICES.length];
+  setMode(legacyKey, next.value);
+  e.currentTarget.parentElement.querySelectorAll('button')[MODE_CHOICES.indexOf(next)]?.focus();
 }
 </script>
 
@@ -439,7 +458,10 @@ async function togglePref(key) {
 
     <section class="card panel" aria-labelledby="email-heading">
       <h2 id="email-heading" class="section-title">Email me about</h2>
-      <p class="section-sub">In-app notifications are always on. Choose which ones also come by email.</p>
+      <p class="section-sub">
+        In-app notifications are always on. Choose how each kind also comes by email: as it happens, in one
+        email a day, or not at all.
+      </p>
 
       <ul class="prefs">
         <li v-for="p in PREFS" :key="p.key" class="pref">
@@ -447,20 +469,29 @@ async function togglePref(key) {
             <span :id="`pref-${p.key}`" class="pref-label">{{ p.label }}</span>
             <span :id="`pref-${p.key}-desc`" class="pref-desc">{{ p.description }}</span>
           </div>
-          <button
-            type="button"
-            role="switch"
-            class="switch"
-            :class="{ on: prefs[p.key] }"
-            :aria-checked="prefs[p.key] ? 'true' : 'false'"
+          <div
+            class="modes"
+            role="radiogroup"
             :aria-labelledby="`pref-${p.key}`"
             :aria-describedby="`pref-${p.key}-desc`"
             :aria-busy="savingPref === p.key ? 'true' : undefined"
-            :disabled="Boolean(savingPref)"
-            @click="togglePref(p.key)"
           >
-            <span class="knob" aria-hidden="true" />
-          </button>
+            <button
+              v-for="c in MODE_CHOICES"
+              :key="c.value"
+              type="button"
+              role="radio"
+              class="mode"
+              :class="{ on: modes[typeOf(p.key).key] === c.value }"
+              :aria-checked="modes[typeOf(p.key).key] === c.value ? 'true' : 'false'"
+              :tabindex="modes[typeOf(p.key).key] === c.value ? 0 : -1"
+              :disabled="Boolean(savingPref)"
+              @click="setMode(p.key, c.value)"
+              @keydown="onModeKey($event, p.key)"
+            >
+              {{ c.label }}
+            </button>
+          </div>
         </li>
       </ul>
     </section>
@@ -749,6 +780,31 @@ async function togglePref(key) {
 .pref-desc {
   color: var(--muted);
   font-size: 0.92rem;
+}
+.modes {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.mode {
+  border: 0;
+  background: none;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+.mode.on {
+  background: var(--pink);
+  color: #fff;
+}
+.mode:disabled {
+  cursor: progress;
 }
 .switch {
   position: relative;
