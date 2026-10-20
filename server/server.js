@@ -1,78 +1,124 @@
+// Entry point. It runs two ways:
+//   node server.js  (pnpm dev, Start-all) connects to the database, loads the demo data into the
+//                   built-in local one, starts the reminder timer and listens on PORT.
+//   Vercel          imports this file and gets the app (module.exports). There is no start-up step
+//                   there, so the first request connects to the database, and requests start the
+//                   deadline reminders when they're due.
+
 // Import
-const express = require("express");
-const path = require("path");
-const mongoose = require("mongoose");
-const dotenv = require("dotenv");
-const session = require("express-session");
-const cors = require("cors");
+const path = require('node:path');
+const crypto = require('node:crypto');
+const dotenv = require('dotenv');
 
-// Initialize Server
-const server = express();
-require("node:dns/promises").setServers(["1.1.1.1", "8.8.8.8"]);
+// Load Env variable (before anything reads process.env)
+dotenv.config({ path: path.join(__dirname, '.env'), quiet: true });
+require('node:dns/promises').setServers(['1.1.1.1', '8.8.8.8']);
 
-// Load Env variable
-dotenv.config({ path: "./.env" });
+const { waitUntil } = require('@vercel/functions');
+const { createApp } = require('./create-app.js');
+const { connectDB, disconnectDB } = require('./db.js');
+const { startReminders, stopReminders, runRemindersIfDue } = require('./services/reminders.js');
+const { seedIfEmpty } = require('./scripts/seed.js');
+const { runMigrations } = require('./services/migrations.js');
+const { httpError } = require('./utils/helpers.js');
 
-// Middleware
-server.use(express.static(path.join(__dirname, "public")));
-server.use(express.urlencoded({ extended: true }));
-server.use(cors()); // Adds headers: Access-Control-Allow-Origin: *
+const serverless = Boolean(process.env.VERCEL);
+const production =
+  process.env.NODE_ENV === 'production' || ['production', 'preview'].includes(process.env.VERCEL_ENV);
 
-// Session
-const secret = process.env.SECRET;
-server.use(
-  session({
-    secret: secret, // sign the session ID cookie. should be a long, random, and secure string, preferably stored in an environment variable
-    resave: false, // Prevents the session from being saved back to the session store if nothing has changed.
-    saveUninitialized: false, // Prevents a new, empty session from being saved to the store.
-    cookie: {
-      secure: false, // even if I reload, session will stay
-    },
-  }),
-);
+// JWT_SECRET signs the login cookies. SECRET (the scaffold's name for it) works too.
+function ensureSecret() {
+  if (process.env.JWT_SECRET) return;
+  const fallback = (process.env.SECRET || '').trim();
+  if (fallback && !fallback.startsWith('[')) {
+    process.env.JWT_SECRET = fallback;
+    return;
+  }
+  if (production) throw httpError(503, 'The server is missing its JWT_SECRET setting.', 'MISCONFIGURED');
+  // Fine for a quick local run; everyone gets logged out when the server restarts.
+  process.env.JWT_SECRET = crypto.randomBytes(32).toString('hex');
+  console.warn('JWT_SECRET is not set in server/.env, using a temporary one.');
+}
 
-// Routes
-const baseRouter = require("./routes/base-router.js");
-server.use("/api/", baseRouter);
+// Connects once per server instance, runs the start-up data fixes and, for the built-in
+// local database, loads the demo data. A failure is retried on the next request.
+let starting = null;
+function prepare() {
+  starting ??= (async () => {
+    ensureSecret();
+    const db = await connectDB();
+    await runMigrations();
+    if (db.mode === 'local') {
+      console.log(`Local MongoDB running (data in ${db.dbPath})`);
+      if (process.env.SEED_DEMO !== 'false') await seedIfEmpty();
+    } else {
+      console.log('MongoDB connected successfully');
+    }
+    return db;
+  })().catch((err) => {
+    starting = null;
+    throw err;
+  });
+  return starting;
+}
 
-// Database connection
-let isConnected = false;
+const REMINDER_CHECK_MS = 60 * 1000;
+let lastReminderCheck = 0;
 
-async function connectDB() {
-  if (isConnected) return;
-
+// Every request waits for this before it reaches a route
+async function ready() {
   try {
-    await mongoose.connect(process.env.DB_MONGODB_URI);
-    isConnected = db.connections[0].readyState;
-    console.log("MongoDB connected successfully");
-  } catch (error) {
-    console.error("MongoDB connection failed:", error);
-    process.exit(1);
+    await prepare();
+  } catch (err) {
+    if (err.status) throw err;
+    const unavailable = httpError(503, 'The database is not reachable right now. Please try again in a moment.', 'DB_UNAVAILABLE');
+    unavailable.cause = err;
+    throw unavailable;
+  }
+
+  // No timer survives between requests on Vercel, so traffic starts the deadline job instead.
+  // runRemindersIfDue only does a pass every REMINDER_INTERVAL_MINUTES across all instances;
+  // waitUntil lets it finish after the response has gone.
+  if (serverless && Date.now() - lastReminderCheck > REMINDER_CHECK_MS) {
+    lastReminderCheck = Date.now();
+    waitUntil(runRemindersIfDue());
   }
 }
 
-// Initialize Server
-function startServer() {
-  const hostname = process.env.HOST || "localhost";
-  const port = process.env.PORT || 8000;
+const app = createApp({ ready });
 
-  server.listen(port, hostname, () => {
+async function main() {
+  // Database connection
+  try {
+    await prepare();
+  } catch (error) {
+    console.error(error.status ? error.message : `MongoDB connection failed: ${error.message}`);
+    process.exit(1);
+  }
+
+  startReminders();
+
+  // Initialize Server
+  const hostname = process.env.HOST || 'localhost';
+  const port = Number(process.env.PORT) || 8000;
+  const httpServer = app.listen(port, hostname, () => {
     console.log(`Server running at http://${hostname}:${port}/`);
   });
+
+  let closing = false;
+  async function shutdown() {
+    if (closing) return;
+    closing = true;
+    stopReminders();
+    httpServer.close();
+    await disconnectDB().catch(() => {});
+    process.exit(0);
+  }
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 }
 
-// Middleware to ensure DB connection on every request
-server.use(async (req, res, next) => {
-  await connectDB();
-  next();
-});
-
-// run server if node environment is not production
-if (process.env.NODE_ENV !== 'production') {
-  console.log("Running in a not production environment");
-  
-  startServer();
-}
+if (require.main === module) main();
 
 // Export the app for Vercel's serverless environment
-module.exports = server; 
+module.exports = app;

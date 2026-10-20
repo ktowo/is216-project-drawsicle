@@ -1,0 +1,3 @@
+allowBuilds:
+  # Its postinstall only pre-downloads MongoDB; we download on first use instead.
+  mongodb-memory-server: false

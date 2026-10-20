@@ -490,7 +490,6 @@ main:focus {
   .topbar,
   .site-footer,
   .toast-host,
-  .demo-banner,
   .skip-link {
     display: none !important;
   }

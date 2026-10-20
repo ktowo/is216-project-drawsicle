@@ -1,0 +1,5 @@
+{
+  "watch": [".", "../shared"],
+  "ext": "js,mjs,json",
+  "ignore": ["tests/*", "uploads/*", ".data/*", "node_modules/*"]
+}
