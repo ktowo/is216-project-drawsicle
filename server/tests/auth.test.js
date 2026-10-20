@@ -280,6 +280,7 @@ test('profile PATCH validates username, socials, defaultForm and notification se
     canCreate: ['art', 'writing'],
     wantsTypes: ['adoptable'],
     likes: 'Cosy scenes',
+    adoptWishlist: '',
     avoid: 'Horror',
     cannotDraw: ['mecha', 'feral'],
   });

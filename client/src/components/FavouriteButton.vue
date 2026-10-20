@@ -1,4 +1,5 @@
 <script setup>
+import { play } from '@/effects/sfx';
 import { computed, onMounted, ref } from 'vue';
 import { Heart } from 'lucide-vue-next';
 import { auth } from '@/stores/auth';
@@ -22,7 +23,8 @@ async function toggle() {
   busy.value = true;
   try {
     const now = await toggleFavourite(props.submissionId);
-    if (now) toast.success('Saved to your saved art.');
+    play(now ? 'star' : 'unpop');
+    if (now) toast.success('Saved to your saved art.', { quiet: true });
   } catch (e) {
     toast.error(e.message);
   } finally {

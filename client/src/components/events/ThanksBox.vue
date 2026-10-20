@@ -111,6 +111,7 @@ async function remove() {
           type="button"
           role="radio"
           class="reaction"
+          data-sfx="heart"
           :class="{ on: reaction === r.value }"
           :aria-checked="reaction === r.value ? 'true' : 'false'"
           :title="r.label"

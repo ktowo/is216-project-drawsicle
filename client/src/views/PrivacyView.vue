@@ -60,9 +60,9 @@ import InfoLayout from '@/components/info/InfoLayout.vue';
           <RouterLink to="/profile">your profile</RouterLink>.
         </li>
         <li>
-          Gifts you made in finished public exchanges, but only if you <em>and</em> the person you made it for both turn on
-          "Allow public display of gifts". It is off unless you turn it on, and the private message with a gift is never
-          shown.
+          Gifts you made in finished public exchanges, on your profile and the home page, but only if you <em>and</em> the
+          person you made it for both turn on "Allow public display of gifts". Thank-you notes for those gifts can be
+          shown with them. It is off unless you turn it on, and the private message with a gift is never shown.
         </li>
         <li>Public events you organise, including your display name as organiser.</li>
       </ul>

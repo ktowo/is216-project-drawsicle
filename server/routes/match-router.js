@@ -294,6 +294,7 @@ async function myMatchJson(event, match, { asBackup = false } = {}) {
       communityUsername: recipientApplication?.communityUsername || '',
       wantsTypes: [...(recipientApplication?.wantsTypes || [])],
       likes: recipientApplication?.likes || '',
+      adoptWishlist: recipientApplication?.adoptWishlist || '',
       avoid: recipientApplication?.avoid || '',
       // Archived characters stay visible: they were offered for this event
       characters: (recipientApplication?.offeredCharacters || []).filter(Boolean).map((c) => c.toPublic()),

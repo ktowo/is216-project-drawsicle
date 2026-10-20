@@ -28,6 +28,7 @@ export function userPublic(user) {
       canCreate: [...(user.defaultForm?.canCreate || [])],
       wantsTypes: [...(user.defaultForm?.wantsTypes || [])],
       likes: user.defaultForm?.likes || '',
+      adoptWishlist: user.defaultForm?.adoptWishlist || '',
       avoid: user.defaultForm?.avoid || '',
       cannotDraw: [...(user.defaultForm?.cannotDraw || [])],
     },
@@ -81,9 +82,15 @@ export function characterPublic(character, extra = {}) {
     description: character.description || '',
     species: character.species || '',
     tags: [...(character.tags || [])],
-    referenceLinks: (character.referenceLinks || []).map((l) => ({ label: l.label || '', url: l.url })),
+    referenceLinks: (character.referenceLinks || []).map((l) => ({ label: l.label || '', url: l.url, note: l.note || '' })),
     notesForArtists: character.notesForArtists || '',
     contentWarnings: [...(character.contentWarnings || [])],
+    pronouns: character.pronouns || '',
+    personality: character.personality || '',
+    colours: [...(character.colours || [])],
+    folder: character.folder || '',
+    favourite: Boolean(character.favourite),
+    pet: { shown: Boolean(character.pet?.shown), kind: character.pet?.kind || '', palette: character.pet?.palette || '' },
     archived: Boolean(character.archivedAt),
     archivedAt: character.archivedAt || null,
     createdAt: character.createdAt,
@@ -164,6 +171,7 @@ export function viewerContext(state, event, user) {
 // Drafts: organisers only. Private: members, applicants, or the right invite code.
 export function canViewEvent(event, ctx, inviteCode) {
   if (ctx.isOrganizer) return true;
+  if (event.disabledAt) return false; // hidden by a site admin
   if (event.status === 'draft') return false;
   if (event.publicity === 'private') {
     return ctx.roles.length > 0 || Boolean(ctx.application) || (Boolean(inviteCode) && inviteCode === event.inviteCode);
@@ -210,6 +218,9 @@ export function serializeEvent(state, event, user, ctx = viewerContext(state, ev
     museumTheme: event.museumTheme || 'auto',
     publishedAt: event.publishedAt || null,
     completedAt: event.completedAt || null,
+    cancelledAt: event.cancelledAt || null,
+    cancelReason: event.cancelReason || '',
+    disabled: Boolean(event.disabledAt),
     createdAt: event.createdAt,
     updatedAt: event.updatedAt,
     participantCount: participantCount(state, event.id),
@@ -218,6 +229,8 @@ export function serializeEvent(state, event, user, ctx = viewerContext(state, ev
     ...(ctx.isOrganizer
       ? {
           inviteCode: event.inviteCode,
+          disabledAt: event.disabledAt || null,
+          disabledReason: event.disabledReason || '',
           discordWebhookUrl: event.discordWebhookUrl || '',
           matchingRules: {
             avoidPairs: (event.matchingRules?.avoidPairs || []).map((p) => ({ a: p.a, b: p.b })),
@@ -263,6 +276,7 @@ export function applicationJson(state, application) {
     offeredCharacterIds: [...application.offeredCharacters],
     offeredCharacters: characters,
     likes: application.likes || '',
+    adoptWishlist: application.adoptWishlist || '',
     avoid: application.avoid || '',
     cannotDraw: [...(application.cannotDraw || [])],
     notes: application.notes || '',
