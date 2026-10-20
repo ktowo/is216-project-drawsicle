@@ -4,7 +4,6 @@ import { auth } from '@/stores/auth';
 import { can } from '@shared/permissions.mjs';
 import { useRoute, useRouter } from 'vue-router';
 import { ShieldCheck } from 'lucide-vue-next';
-import { isMockMode } from '@/api';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import TabNav from '@/components/ui/TabNav.vue';
 import AdminOverview from '@/components/admin/AdminOverview.vue';
@@ -61,16 +60,11 @@ const tab = computed({
       </span>
     </PageHeader>
 
-    <p v-if="isMockMode" class="alert alert-error mt-6">
-      The admin tools need the real server, so they aren't available in demo mode. Run the app with Start-all to try them.
-    </p>
-    <template v-else>
-      <TabNav v-model="tab" :tabs="TABS" class="mt-6" />
-      <div class="mt-6">
-        <KeepAlive>
-          <component :is="PANELS[tab]" v-if="tab" :key="tab" />
-        </KeepAlive>
-      </div>
-    </template>
+    <TabNav v-model="tab" :tabs="TABS" class="mt-6" />
+    <div class="mt-6">
+      <KeepAlive>
+        <component :is="PANELS[tab]" v-if="tab" :key="tab" />
+      </KeepAlive>
+    </div>
   </main>
 </template>

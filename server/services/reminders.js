@@ -314,7 +314,7 @@ async function purgeDeactivated(now, summary) {
             displayName: 'Deleted user',
             bio: '',
             socials,
-            defaultForm: { communityUsername: '', canCreate: [], wantsTypes: [], likes: '', avoid: '', cannotDraw: [] },
+            defaultForm: { communityUsername: '', canCreate: [], wantsTypes: [], likes: '', adoptWishlist: '', avoid: '', cannotDraw: [] },
             watchedEvents: [],
           },
           $unset: {

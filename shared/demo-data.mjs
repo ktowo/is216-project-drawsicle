@@ -1,3 +1,5 @@
+import { CHARACTER_DETAILS, moreCharacters } from './demo-characters.mjs';
+import { SIGNUP_RESPONSES } from './demo-signups.mjs';
 // Demo accounts, characters and events. Used by server/scripts/seed.js (local database)
 // and by the in-browser mock API (client/src/mock), so both show the same little world.
 // Records point at each other by `key`; each side swaps keys for real ids when it loads them.
@@ -61,6 +63,7 @@ export function buildDemoData(now = new Date()) {
     },
     {
       key: 'juniper',
+      profilePrivacy: { showExchanges: true, showGifts: true },
       // Public artist tags (shared/taste.mjs), as if they'd taken the Find your style quiz
       artistTags: { makes: ['art', 'writing'], themes: ['spooky', 'nature', 'mythology'], activity: 'casual', cardColor: 'lavender' },
       displayName: 'Juniper',
@@ -93,6 +96,7 @@ export function buildDemoData(now = new Date()) {
     },
     {
       key: 'remy',
+      profilePrivacy: { showExchanges: true, showGifts: true },
       // Public artist tags (shared/taste.mjs), as if they'd taken the Find your style quiz
       artistTags: { makes: ['art', 'adoptable'], themes: ['food', 'cute', 'creatures'], activity: 'seasonal', cardColor: 'butter' },
       displayName: 'Remy',
@@ -109,6 +113,7 @@ export function buildDemoData(now = new Date()) {
     },
     {
       key: 'noor',
+      profilePrivacy: { showExchanges: true, showGifts: true },
       // Public artist tags (shared/taste.mjs), as if they'd taken the Find your style quiz
       artistTags: { makes: ['writing'], themes: ['mythology', 'adventure', 'nature'], activity: 'casual', cardColor: 'sage' },
       // Helps the admins: reviews reports and museum chat
@@ -145,6 +150,7 @@ export function buildDemoData(now = new Date()) {
     },
     {
       key: 'pip',
+      profilePrivacy: { showExchanges: true, showGifts: true },
       displayName: 'Pip',
       bio: 'New to exchanges! Doodles, tiny animals and chiptune music.',
       socials: { twitter: 'pipsqueak', bluesky: 'pipsqueak', discord: 'pipsqueak' },
@@ -224,6 +230,42 @@ export function buildDemoData(now = new Date()) {
       defaultForm: { communityUsername: 'ada_admin', canCreate: ['art'], wantsTypes: ['art'], likes: '', avoid: '', cannotDraw: [] },
     },
   ].map((u) => ({ ...u, email: `${u.key}@demo.test`, username: u.key, role: u.role || 'user' }));
+
+  // ---------- The OC Secret Santa crowd ----------
+  // 192 people signed up to a real community Secret Santa with these answers (shared/demo-signups.mjs:
+  // names made up, links swapped for the demo's own reference pictures). Each gets an account, a
+  // character library from what they offered, and a sign-up for the OC Secret Santa below.
+  const KIND_WORDS = { humanoid: 'humans and humanoids', anthro: 'anthros', feral: 'ferals' };
+  const listWords = (list) => (list.length > 1 ? `${list.slice(0, -1).join(', ')} and ${list.at(-1)}` : list[0] || '');
+  const crowd = SIGNUP_RESPONSES.map((s) => {
+    const drawsAll = s.draws.length === 3;
+    const bio = [
+      drawsAll ? 'Happy to draw anything: humans, anthros and ferals.' : `Draws ${listWords(s.draws.map((k) => KIND_WORDS[k]))}.`,
+      s.wants.includes('adoptable') && s.wants.includes('art') ? 'Hoping for art or an adopt this season.' : s.wants.includes('adoptable') ? 'Here for the adopts.' : 'Here for the art.',
+      s.backup === 'yes' ? 'Always up for being a backup artist.' : 'OCs live on my Toyhouse.',
+    ].join(' ');
+    return {
+      key: s.username,
+      community: true,
+      displayName: s.displayName,
+      bio,
+      socials: { toyhouse: s.toyhouse, discord: s.username.replace(/_/g, '.') },
+      profilePrivacy: { showExchanges: true, showGifts: false },
+      defaultForm: {
+        communityUsername: s.toyhouse,
+        canCreate: ['art', 'adoptable'],
+        wantsTypes: [...s.wants],
+        likes: s.wantNote,
+        adoptWishlist: s.adopt,
+        avoid: '',
+        cannotDraw: [...s.cannotDraw],
+      },
+      email: `${s.username}@demo.test`,
+      username: s.username,
+      role: 'user',
+    };
+  });
+  users.push(...crowd);
 
   const character = (owner, key, name, species, tags, description, notesForArtists, links, archived = false) => ({
     key,
@@ -341,6 +383,34 @@ export function buildDemoData(now = new Date()) {
       [ref('vera', 'dot')]),
   ];
 
+  // Pronouns, colours, folders and screen pets, plus everyone's bigger library (demo-characters.mjs)
+  for (const c of characters) Object.assign(c, { pet: { shown: false, kind: '', palette: '' } }, CHARACTER_DETAILS[c.key] || {});
+  characters.push(...moreCharacters());
+
+  // What the OC Secret Santa crowd offered: one character per link they gave, the comment they
+  // wrote beside it kept with the link
+  const crowdCharacters = new Map(); // username -> character keys
+  SIGNUP_RESPONSES.forEach((s) => {
+    const keys = s.characters.map((c, k) => {
+      const key = `${s.username}-${k + 1}`;
+      characters.push({
+        key,
+        owner: s.username,
+        name: c.name,
+        species: c.species,
+        tags: [c.kind],
+        description: c.description,
+        referenceLinks: c.links.map((l) => ({ label: l.label, url: l.url, note: l.note })),
+        notesForArtists: '',
+        archived: false,
+        folder: 'Secret Santa',
+        pet: { shown: false, kind: '', palette: '' },
+      });
+      return key;
+    });
+    crowdCharacters.set(s.username, keys);
+  });
+
   const ALL_TYPES = ['art', 'adoptable', 'writing'];
   const event = (fields) => ({
     description: '',
@@ -384,6 +454,29 @@ export function buildDemoData(now = new Date()) {
       maxParticipants: 40,
       inviteCode: 'wintr-26-snow',
       banner: { seed: 'winter-secret-santa', title: 'Winter Secret Santa 2026' },
+    }),
+    event({
+      key: 'ocsanta',
+      status: 'open',
+      createdBy: 'mika',
+      name: 'OC Secret Santa 2026',
+      description:
+        "A big community Secret Santa for original characters. Sign up with your OCs or an adopt wishlist, and you'll be matched with someone whose characters you're happy to draw. Backup artists step in if anyone drops out.",
+      theme: 'Gifts for our OCs',
+      season: 'christmas',
+      rules:
+        "Art or an adoptable, whichever your match asked for.\nOnly draw the characters and folders your match pointed you to.\nNo NSFW. If you can't finish, tell an organiser early so a backup artist can help.",
+      tags: ['secret santa', 'ocs', 'adopts'],
+      platform: 'toyhouse',
+      platformName: 'Toyhouse OC community',
+      platformLink: 'https://toyhou.se/~browse/recent',
+      signupDeadline: deadline(8),
+      submissionDeadline: deadline(42),
+      minParticipants: 3,
+      maxParticipants: 250,
+      allowedTypes: ['art', 'adoptable'],
+      inviteCode: 'oc-santa-26',
+      banner: { seed: 'oc-secret-santa', title: 'OC Secret Santa 2026' },
     }),
     event({
       key: 'valentine',
@@ -512,6 +605,34 @@ export function buildDemoData(now = new Date()) {
       publishedAt: ago(55),
       completedAt: ago(10),
     }),
+    // Smaller finished exchanges in other communities, so the landing page has real history to show
+    ...[
+      ['moonlit', 'juniper', 'Midsummer Moth Swap', 'Moths and lanterns at midsummer', 'discord', 'Moonlit Moth Society', ['moths', 'summer'], 40],
+      ['pastel', 'remy', 'Pastel Picnic Swap', 'Picnic snacks in pastel colours', 'tumblr', 'Pastel Paws', ['picnic', 'cute'], 55],
+      ['inkwell', 'noor', 'Short Story Swap', 'A short story for someone else\'s character', 'discord', 'Inkwell Writers Guild', ['writing'], 70],
+      ['dragon', 'mika', 'Hoard Day Exchange', 'What does your character hoard?', 'toyhouse', 'Cozy Dragon Den', ['dragons', 'fantasy'], 85],
+      ['sketch', 'sol', 'Sunday Doodle Swap', 'Quick doodles, any style', 'discord', 'Sketchbook Sundays', ['doodles'], 100],
+      ['starboard', 'kit', 'Sea Shanty Swap', 'Ships, sailors and sea creatures', 'deviantart', 'Starboard Artists', ['ocean', 'adventure'], 120],
+    ].map(([key, createdBy, name, theme, platform, platformName, tags, daysAgo]) =>
+      event({
+        key,
+        status: 'completed',
+        createdBy,
+        name,
+        description: `${theme}. All gifts have been revealed.`,
+        theme,
+        tags,
+        platform,
+        platformName,
+        platformLink: `https://example.com/communities/${key}`,
+        signupDeadline: deadline(-(daysAgo + 45)),
+        submissionDeadline: deadline(-(daysAgo + 5)),
+        maxParticipants: 12,
+        inviteCode: `${key}-swap`,
+        publishedAt: ago(daysAgo + 40),
+        completedAt: ago(daysAgo),
+      })
+    ),
   ];
 
   // Sign-up forms. Types stay inside each event's allowedTypes and characters
@@ -575,11 +696,51 @@ export function buildDemoData(now = new Date()) {
     application('autumn', 'pip', ['art'], ['art'], ['pipsqueak']),
 
     application('spring', 'mika', ['art', 'writing'], ['art'], ['biscuit']),
-    application('spring', 'sol', ['art'], ['art'], ['sunny']),
+    application('spring', 'sol', ['art'], ['art'], ['ember']),
     application('spring', 'remy', ['art'], ['art'], ['marzipan']),
     application('spring', 'noor', ['writing'], ['art', 'writing'], ['saffron', 'idris']),
     application('spring', 'kit', ['art'], ['art', 'writing'], ['lantern']),
+
+    application('moonlit', 'juniper', ['art', 'writing'], ['art'], ['lumen']),
+    application('moonlit', 'sol', ['art'], ['art'], ['sunny']),
+    application('moonlit', 'kit', ['art'], ['art'], ['lantern']),
+    application('pastel', 'pip', ['art'], ['art'], ['pipsqueak']),
+    application('pastel', 'remy', ['art'], ['art'], ['gloop']),
+    application('pastel', 'mika', ['art'], ['art'], ['biscuit']),
+    application('inkwell', 'noor', ['writing'], ['writing'], ['idris']),
+    application('inkwell', 'juniper', ['writing'], ['writing'], ['wren']),
+    application('inkwell', 'mika', ['writing'], ['writing'], ['pocket']),
+    application('dragon', 'mika', ['art'], ['art'], ['biscuit']),
+    application('dragon', 'ash', ['art'], ['art'], ['cinder']),
+    application('dragon', 'kit', ['art'], ['art'], ['lantern']),
+    application('sketch', 'sol', ['art'], ['art'], ['ember']),
+    application('sketch', 'pip', ['art'], ['art'], ['pipsqueak']),
+    application('sketch', 'remy', ['art'], ['art'], ['marzipan']),
+    application('sketch', 'ash', ['art'], ['art'], ['unit7']),
+    application('starboard', 'kit', ['art'], ['art'], ['lantern']),
+    application('starboard', 'noor', ['writing'], ['art'], ['saffron']),
+    application('starboard', 'sol', ['art'], ['art', 'writing'], ['sunny']),
   ];
+
+  // Everyone from the OC Secret Santa sheet, signed up with their own answers
+  SIGNUP_RESPONSES.forEach((s) => {
+    const notes = [s.drawNote && `About what I can draw: ${s.drawNote}`, s.extra].filter(Boolean).join('\n\n');
+    applications.push({
+      event: 'ocsanta',
+      user: s.username,
+      status: 'accepted',
+      communityUsername: s.toyhouse,
+      canCreate: ['art', 'adoptable'],
+      wantsTypes: [...s.wants],
+      offeredCharacters: crowdCharacters.get(s.username),
+      likes: s.wantNote,
+      adoptWishlist: s.wants.includes('adoptable') ? s.adopt : '',
+      avoid: '',
+      cannotDraw: [...s.cannotDraw],
+      notes: notes.slice(0, 1000),
+      canBackup: s.backup !== 'no',
+    });
+  });
 
   const match = (eventKey, giver, recipient, score, reasons, status = 'assigned') => ({
     event: eventKey,
@@ -608,8 +769,21 @@ export function buildDemoData(now = new Date()) {
     match('spring', 'remy', 'noor', 53, [ART, 'Can draw 1 of 2 offered characters'], 'submitted'),
     match('spring', 'noor', 'kit', 65, ['Can make writing, which they asked for', ONE], 'submitted'),
     match('spring', 'kit', 'mika', 65, [ART, ONE], 'submitted'),
+
+    match('moonlit', 'sol', 'juniper', 70, [ART, ONE], 'submitted'),
+    match('moonlit', 'juniper', 'kit', 66, [ART, ONE]),
+    match('moonlit', 'kit', 'sol', 64, [ART, ONE]),
+    match('pastel', 'pip', 'remy', 68, [ART, ONE], 'submitted'),
+    match('pastel', 'remy', 'mika', 62, [ART, ONE]),
+    match('pastel', 'mika', 'pip', 63, [ART, ONE]),
+    match('dragon', 'ash', 'mika', 60, [ART, ONE], 'submitted'),
+    match('dragon', 'mika', 'kit', 61, [ART, ONE]),
+    match('dragon', 'kit', 'ash', 59, [ART, ONE]),
   ];
 
+  // thanks: { message, reaction, days } is the recipient's thank-you note, sent `days` ago.
+  // art: [{ seed, title }] draws placeholder artwork (shared/demo-art.mjs); add src to use a real
+  // picture from client/public/demo-art instead (see the CREDITS.md there).
   const submission = (eventKey, giver, recipient, fields) => ({
     event: eventKey,
     giver,
@@ -649,44 +823,73 @@ export function buildDemoData(now = new Date()) {
     }),
 
     submission('spring', 'mika', 'sol', {
+      thanks: { message: 'I actually teared up. Ember has never looked so happy. Thank you!!', reaction: 'sparkles', days: 9 },
       title: 'Ember in the cherry blossoms',
       message: 'Happy spring, Sol! Thank you for being such a lovely part of the club.',
-      art: [{ seed: 'spring-mika-sol', title: 'Ember in the cherry blossoms' }],
+      art: [{ seed: 'spring-mika-sol', src: '/demo-art/spring-mika-sol.jpg', title: 'Ember in the cherry blossoms' }],
       submittedAt: ago(18, 4),
       verified: true,
     }),
     submission('spring', 'sol', 'remy', {
+      thanks: { message: 'The loaf shape is PERFECT. This is going on my wall.', reaction: 'heart', days: 9 },
       title: 'Marzipan nap time',
       message: 'A loaf among the tulips.',
-      art: [{ seed: 'spring-sol-remy', title: 'Marzipan nap time' }],
+      art: [{ seed: 'spring-sol-remy', src: '/demo-art/spring-sol-remy.jpg', title: 'Marzipan nap time' }],
       submittedAt: ago(17, 6),
       verified: true,
     }),
     submission('spring', 'remy', 'noor', {
+      thanks: { message: 'You even remembered the little bell. I love it so much.', reaction: 'teary', days: 9 },
       title: 'Saffron at the oasis',
       message: 'Sorry it was a little late, I hope it was worth the wait!',
       art: [
-        { seed: 'spring-remy-noor-1', title: 'Saffron at the oasis' },
-        { seed: 'spring-remy-noor-2', title: 'Colour study' },
+        { seed: 'spring-remy-noor-1', src: '/demo-art/spring-remy-noor-1.jpg', title: 'Saffron at the oasis' },
+        { seed: 'spring-remy-noor-2', src: '/demo-art/spring-remy-noor-2.jpg', title: 'Colour study' },
       ],
       submittedAt: ago(14, 8),
       late: true,
       verified: true,
     }),
     submission('spring', 'noor', 'kit', {
+      thanks: { message: 'A whole story AND a picture? Lantern would serve you tea forever.', reaction: 'heart', days: 9 },
       title: 'The Lantern Tea Stall',
       message: 'A short story about Lantern opening the stall on the first warm night of spring.',
       type: 'writing',
-      art: [{ seed: 'spring-noor-kit', title: 'The Lantern Tea Stall' }],
+      art: [{ seed: 'spring-noor-kit', src: '/demo-art/spring-noor-kit.jpg', title: 'The Lantern Tea Stall' }],
       links: [{ label: 'Read the story', url: 'https://example.com/stories/lantern-tea-stall' }],
       submittedAt: ago(16, 2),
       verified: true,
     }),
     submission('spring', 'kit', 'mika', {
+      thanks: { message: 'The teacups!!! Biscuit is living her best life. Thank you Kit!', reaction: 'sparkles', days: 9 },
       title: 'Biscuit in bloom',
       message: 'Biscuit surrounded by spring teacups. Thank you for the lovely prompts!',
-      art: [{ seed: 'spring-kit-mika', title: 'Biscuit in bloom' }],
+      art: [{ seed: 'spring-kit-mika', src: '/demo-art/spring-kit-mika.jpg', title: 'Biscuit in bloom' }],
       submittedAt: ago(19, 1),
+      verified: true,
+    }),
+    submission('moonlit', 'sol', 'juniper', {
+      title: 'Lumen lights the lanterns',
+      message: 'Happy midsummer! I loved drawing Lumen on the rooftops.',
+      art: [{ seed: 'moonlit-sol-juniper', src: '/demo-art/gallery-sol-juniper.jpg', title: 'Lumen lights the lanterns' }],
+      submittedAt: ago(48),
+      verified: true,
+      thanks: { message: 'You got the collar and the wing spots exactly right. Lumen looks so proud.', reaction: 'heart', days: 39 },
+    }),
+    submission('pastel', 'pip', 'remy', {
+      title: "Gloop's snack attack",
+      message: 'Gloop deserves all the snacks.',
+      art: [{ seed: 'pastel-pip-remy', src: '/demo-art/gallery-pip-remy.jpg', title: "Gloop's snack attack" }],
+      submittedAt: ago(62),
+      verified: true,
+      thanks: { message: 'GLOOP WITH THE DONUTS. I am screaming. Thank you Pip!', reaction: 'laugh', days: 54 },
+    }),
+    // Ash hasn't allowed public display, so this gift never appears on the landing page or profiles
+    submission('dragon', 'ash', 'mika', {
+      title: 'Biscuit and the teacup hoard',
+      message: 'Hope you like it!',
+      art: [{ seed: 'dragon-ash-mika', title: 'Biscuit and the teacup hoard' }],
+      submittedAt: ago(92),
       verified: true,
     }),
   ];

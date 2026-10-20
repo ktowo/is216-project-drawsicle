@@ -35,6 +35,8 @@ const applicationSchema = new mongoose.Schema(
       ],
     },
     likes: { type: String, trim: true, default: '', maxlength: LIMITS.formText }, // what they'd love to get
+    // For adoptables: the kind of design they'd like (colours, species, themes, links to examples)
+    adoptWishlist: { type: String, trim: true, default: '', maxlength: LIMITS.adoptWishlist },
     avoid: { type: String, trim: true, default: '', maxlength: LIMITS.formText }, // what to avoid in their gift
     // Tags/species this person can't draw, used by matching (e.g. "mecha", "humans")
     cannotDraw: { type: [String], default: [] },
@@ -78,6 +80,7 @@ applicationSchema.methods.toPublic = function ({ user = null, characters = null 
     offeredCharacterIds: (this.offeredCharacters || []).map(idOf),
     offeredCharacters: characters,
     likes: this.likes || '',
+    adoptWishlist: this.adoptWishlist || '',
     avoid: this.avoid || '',
     cannotDraw: [...(this.cannotDraw || [])],
     notes: this.notes || '',

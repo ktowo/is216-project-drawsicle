@@ -1,5 +1,5 @@
 // /reports: flag something for the site admins (server/routes/report-router.js).
-// The admin queue needs the real server, so reports made in the demo are only kept here.
+// They go into the same queue the demo's admin tools work through (handlers/admin.js).
 import { LIMITS, REPORT_REASON_VALUES, REPORT_TARGETS } from '@shared/constants.mjs';
 import { newId } from '../db.js';
 import { notifyMany } from '../model.js';

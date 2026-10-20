@@ -110,6 +110,9 @@ router.patch('/', requireAuth, asyncHandler(async (req, res) => {
     if (defaultForm.wantsTypes !== undefined) form.wantsTypes = typeList(defaultForm.wantsTypes, 'What you would like');
     if (defaultForm.likes !== undefined) form.likes = textField(defaultForm.likes, 'Likes', LIMITS.formText);
     if (defaultForm.avoid !== undefined) form.avoid = textField(defaultForm.avoid, 'Things to avoid', LIMITS.formText);
+    if (defaultForm.adoptWishlist !== undefined) {
+      form.adoptWishlist = textField(defaultForm.adoptWishlist, 'Adopt wishlist', LIMITS.adoptWishlist);
+    }
     if (defaultForm.cannotDraw !== undefined) {
       if (typeof defaultForm.cannotDraw !== 'string' && !Array.isArray(defaultForm.cannotDraw)) {
         throw invalid("Things you can't draw must be a list of tags.");

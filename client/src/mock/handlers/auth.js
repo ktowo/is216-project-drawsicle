@@ -65,7 +65,7 @@ export function register(router) {
       bio: '',
       socials: emptySocials(),
       artistTags: { makes: [], themes: [], activity: '', cardColor: '' },
-      defaultForm: { communityUsername: '', canCreate: [], wantsTypes: [], likes: '', avoid: '', cannotDraw: [] },
+      defaultForm: { communityUsername: '', canCreate: [], wantsTypes: [], likes: '', adoptWishlist: '', avoid: '', cannotDraw: [] },
       notificationPrefs: { emailReminders: true, emailMatches: true, emailEventUpdates: false },
       createdAt: now,
       updatedAt: now,
@@ -85,6 +85,9 @@ export function register(router) {
     const user = ctx.state.users.find((u) => u.email === email);
     // Anonymised accounts have no password left, so they can't match
     if (!user || !user.password || user.password !== password) throw wrong();
+    if (user.status === 'banned') {
+      throw httpError(403, `This account has been suspended by the site admins.${user.banReason ? ` Reason: ${user.banReason}` : ''}`, 'ACCOUNT_BANNED');
+    }
 
     const reactivated = reactivate(user);
     if (reactivated) user.updatedAt = ctx.now.toISOString();

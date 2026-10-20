@@ -130,6 +130,7 @@ function readSignupForm(body, event) {
     offeredCharacterIds: readCharacterIds(src.offeredCharacterIds),
     newCharacters,
     likes: readText(src.likes, 'Likes', LIMITS.formText),
+    adoptWishlist: readText(src.adoptWishlist, 'Adopt wishlist', LIMITS.adoptWishlist),
     avoid: readText(src.avoid, 'Things to avoid', LIMITS.formText),
     cannotDraw: normalizeTags(readList(src.cannotDraw, "Things you can't draw")),
     notes: readText(src.notes, 'Notes for the organisers', LIMITS.formText),
@@ -198,6 +199,7 @@ router.put('/application', ...applicant, asyncHandler(async (req, res) => {
     wantsTypes: form.wantsTypes,
     offeredCharacters: offered.map((c) => c._id),
     likes: form.likes,
+    adoptWishlist: form.wantsTypes.includes('adoptable') ? form.adoptWishlist : '',
     avoid: form.avoid,
     cannotDraw: form.cannotDraw,
     notes: form.notes,
@@ -229,6 +231,7 @@ router.put('/application', ...applicant, asyncHandler(async (req, res) => {
       canCreate: form.canCreate,
       wantsTypes: form.wantsTypes,
       likes: form.likes,
+      adoptWishlist: form.adoptWishlist,
       avoid: form.avoid,
       cannotDraw: form.cannotDraw,
     };

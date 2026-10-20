@@ -378,6 +378,7 @@ test('accounts deactivated past the grace period are anonymised in place', async
     canCreate: [],
     wantsTypes: [],
     likes: '',
+    adoptWishlist: '',
     avoid: '',
     cannotDraw: [],
   });
