@@ -1,5 +1,7 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, onMounted } from 'vue';
+import { usingSupabase, startProviderSignIn } from '@/auth/supabaseSignIn';
+import { toast } from '@/stores/toast';
 
 // Full page navigation: the server redirects to Discord and back (same as GoogleButton).
 const props = defineProps({
@@ -12,10 +14,26 @@ const href = computed(() => {
   const safe = props.redirect.startsWith('/') && !props.redirect.startsWith('//');
   return safe ? `${base}?redirect=${encodeURIComponent(props.redirect)}` : base;
 });
+
+// With Supabase sign-in (AUTH_PROVIDER=supabase) the button starts Supabase's redirect instead
+const viaSupabase = ref(false);
+onMounted(async () => {
+  viaSupabase.value = await usingSupabase();
+});
+async function onClick(e) {
+  if (!viaSupabase.value) return;
+  e.preventDefault();
+  const safe = props.redirect.startsWith('/') && !props.redirect.startsWith('//');
+  try {
+    await startProviderSignIn('discord', safe ? props.redirect : '');
+  } catch (err) {
+    toast.error(err.message);
+  }
+}
 </script>
 
 <template>
-  <a class="btn btn-outline btn-block provider-btn" :href="href">
+  <a class="btn btn-outline btn-block provider-btn" :href="href" @click="onClick">
     <svg width="22" height="22" viewBox="0 0 127.14 96.36" aria-hidden="true">
       <path
         fill="#5865F2"
