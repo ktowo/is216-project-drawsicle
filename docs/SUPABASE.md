@@ -27,6 +27,35 @@ For the deployed site, add the same values in Vercel under **Project → Setting
 | `pnpm supabase:tables` | Creates or updates the tables directly. Needs `SUPABASE_DB_URL`. It only adds what is missing, so it's safe to re-run after a model changes. |
 | `pnpm supabase:sync` | Copies every record and every stored picture across. Uses the app's database, or the local one while the API is running. |
 | `node scripts/supabase-sync.js --move-pictures` | The same, and also points the app's own records at the pictures in Supabase Storage. |
+| `pnpm supabase:import-users` | Creates a Supabase Auth user for every account not linked yet: same email (marked confirmed), same password (the bcrypt hash moves as is) and display name, then saves the account's `supabaseId`. Safe to re-run; prints counts, never hashes. Run it before switching to `AUTH_PROVIDER=supabase`. Google / Discord link themselves the first time an imported person uses them with the same email. |
+
+## Sign-in (in progress)
+
+Sign-in is moving to Supabase Auth (`docs/specs/supabase-auth-email.md`). Supabase proves who someone is, and the app still gives them its own session (`docs/adr/0001-supabase-proves-identity-app-keeps-sessions.md`).
+
+| Setting | What it does |
+| --- | --- |
+| `AUTH_PROVIDER=local` | The app's own sign-in (email + password, Google, Discord). The default; used by the tests and for running without a Supabase project. |
+| `AUTH_PROVIDER=supabase` | Sign-in through Supabase Auth. Needs `SUPABASE_URL` and `SUPABASE_ANON_KEY` (the public key). The browser trades its Supabase token for the app's session at `POST /api/auth/supabase`. |
+
+How it signs in, with `AUTH_PROVIDER=supabase`:
+
+1. The log-in and sign-up pages sign in with supabase-js in the browser (email + password, or Google / Discord with the PKCE redirect). The browser gets the project URL and public key from `GET /api/auth/providers`; nothing secret leaves the server.
+2. Google and Discord come back to `/auth/callback`, which swaps the one-time code for a Supabase session.
+3. Either way, the browser sends the Supabase access token to `POST /api/auth/supabase` and gets the app's normal session. Logging out ends both.
+
+Supabase dashboard setup (team project): **Authentication → Providers**, switch on Google and Discord with the OAuth app keys; **Authentication → URL Configuration**, add `<site>/auth/callback` and `http://localhost:5173/auth/callback` to the redirect URLs. `SUPABASE_OAUTH_PROVIDERS` (default `google,discord`) says which buttons the app shows. For **Account → Ways to sign in** (connect or disconnect Google / Discord), switch on **Allow manual linking** under **Authentication → Sign In / Providers**.
+
+**Email links** (Supabase dashboard → **Authentication → Emails → Templates**). Change the links in two templates so they carry a one-time `token_hash`. Supabase's default link only works in the browser that asked for it; these work anywhere, for example requested on a laptop and opened on a phone:
+
+| Template | Link |
+| --- | --- |
+| Confirm signup | `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=signup` |
+| Reset password | `{{ .SiteURL }}/reset-password?token_hash={{ .TokenHash }}&type=recovery` |
+
+Set **Site URL** (Authentication → URL Configuration) to the deployed site. The reset page checks the link with Supabase, shows the same "expired" and "already used" screens as before, and after the new password is saved it logs the account out of its other devices. Sign-up and log-in show **Check your email · Send it again** until the address is confirmed.
+
+Each account can hold `supabaseId`, the Supabase Auth user it signs in as. It's cleared when an account is deleted.
 
 ## Security
 

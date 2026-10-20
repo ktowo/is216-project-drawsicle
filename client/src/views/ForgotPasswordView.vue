@@ -4,8 +4,8 @@ import { RouterLink, useRoute } from 'vue-router';
 import { Mail, MailCheck, ArrowLeft, Loader2, RotateCw } from 'lucide-vue-next';
 import AuthLayout from '@/components/AuthLayout.vue';
 import TextField from '@/components/TextField.vue';
-import { api } from '@/api';
 import { toast } from '@/stores/toast';
+import { requestPasswordReset } from '@/stores/auth';
 
 const route = useRoute();
 // ?email= fills it in (from the sign-up page when the email already has an account)
@@ -33,7 +33,7 @@ onBeforeUnmount(() => clearInterval(timer));
 const resendLabel = computed(() => (wait.value > 0 ? `Send it again in ${wait.value}s` : 'Send it again'));
 
 async function send() {
-  await api('/auth/forgot-password', { method: 'POST', body: { email: email.value.trim() } });
+  await requestPasswordReset(email.value.trim());
   startWait();
 }
 

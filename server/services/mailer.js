@@ -24,9 +24,10 @@ function getTransporter() {
 
 // With no SMTP settings, emails are printed to the server terminal instead,
 // so you can still click reset links while developing.
-async function sendMail({ to, subject, text, html }) {
+// headers: extra email headers, e.g. List-Unsubscribe
+async function sendMail({ to, subject, text, html, headers }) {
   if (process.env.NODE_ENV === 'test') {
-    outbox.push({ to, subject, text, html });
+    outbox.push({ to, subject, text, html, headers });
     return;
   }
   const t = getTransporter();
@@ -40,6 +41,7 @@ async function sendMail({ to, subject, text, html }) {
     subject,
     text,
     html,
+    ...(headers ? { headers } : {}),
   });
 }
 

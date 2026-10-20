@@ -3,6 +3,7 @@ import { computed, useId } from 'vue';
 import { Repeat } from 'lucide-vue-next';
 import { personName } from './helpers';
 import { pluralize } from '@/utils/format';
+import UserAvatar from '@/components/UserAvatar.vue';
 
 // The matches drawn as gift loops: each ring is a group of artists who make gifts for each other
 // in a circle, with arrows from artist to recipient. Hovering an arrow highlights that pair in the
@@ -15,9 +16,9 @@ const props = defineProps({
 const emit = defineEmits(['highlight']);
 const uid = useId();
 
-const NODE_R = 17;
+const NODE_R = 17; // node radius
 const SPACING = 72; // room for each person around a ring
-const MIN_R = 62;
+const MIN_R = 62; // minimum loop radius
 const PAD_X = 92; // beside each ring, for names
 const PAD_Y = 36; // above and below it
 const WRAP = 700; // rings wrap onto a new row past this width
@@ -47,13 +48,6 @@ const loops = computed(() => {
   return out.sort((a, b) => b.matches.length - a.matches.length);
 });
 
-const initials = (user) =>
-  personName(user)
-    .split(/\s+/)
-    .map((w) => w[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
 const shortName = (user) => {
   const name = personName(user);
   return name.length > 12 ? `${name.slice(0, 11)}…` : name;
@@ -220,8 +214,12 @@ const summary = computed(() => {
             @mouseleave="emit('highlight', null)"
           >
             <title>{{ personName(p.user) }}</title>
-            <circle :cx="p.x" :cy="p.y" :r="NODE_R" class="node" />
-            <text :x="p.x" :y="p.y + 4" class="initials">{{ initials(p.user) }}</text>
+            <!-- <text :x="p.x" :y="p.y + 4" class="initials">{{ initials(p.user) }}</text> -->
+            <foreignObject class="node rounded-full" :x="p.x - NODE_R" :y="p.y - NODE_R", :width="2 * NODE_R" :height="2 * NODE_R">
+              <body xmlns="http://www.w3.org/1999/xhtml">
+                <UserAvatar :user="p.user" :size="2 * NODE_R - 2" class="avatar" />
+              </body>
+            </foreignObject>
             <text
               v-if="ring.showNames"
               :x="labelPos(ring, p).x"
@@ -251,6 +249,9 @@ const summary = computed(() => {
 </template>
 
 <style scoped>
+figure {
+  --anim-dur: 0.15s;
+}
 .loop-card {
   margin: 0;
   padding: 16px 18px;
@@ -291,7 +292,8 @@ const summary = computed(() => {
   stroke-width: 2;
   opacity: 0.75;
   cursor: pointer;
-  transition: stroke 0.15s, stroke-width 0.15s, opacity 0.15s;
+  transition-property: stroke, stroke-width, opacity;
+  transition-duration: var(--anim-dur);
 }
 .head {
   fill: var(--muted);
@@ -308,30 +310,23 @@ const summary = computed(() => {
   opacity: 0.25;
 }
 .node {
-  fill: var(--pink-soft);
-  stroke: var(--pink);
-  stroke-width: 2;
-  transition: fill 0.15s;
+  border: 2px solid var(--pink-dark);
 }
 .person {
   cursor: default;
 }
-.person.on .node {
-  fill: var(--pink);
-  stroke: var(--pink-dark);
+.person.on {
+  filter: drop-shadow(0 0 0.2rem var(--pink));
 }
 .focused .person:not(.on) {
   opacity: 0.45;
 }
-.initials {
-  font-size: 11px;
-  font-weight: 800;
-  text-anchor: middle;
-  fill: var(--pink-dark);
-  pointer-events: none;
+.avatar {
+  /* border: 2px solid var(--pink-dark); */
+  transition: transform var(--anim-dur);
 }
-.person.on .initials {
-  fill: #fff;
+.person.on .avatar {
+  transform: scale(110%);
 }
 .name {
   font-size: 12px;
@@ -368,8 +363,7 @@ const summary = computed(() => {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .arrow,
-  .node {
+  .arrow {
     transition: none;
   }
 }

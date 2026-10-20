@@ -379,6 +379,7 @@ create table if not exists public.users (
 alter table public.users add column if not exists "email" text;
 alter table public.users add column if not exists "google_id" text;
 alter table public.users add column if not exists "discord_id" text;
+alter table public.users add column if not exists "supabase_id" text;
 alter table public.users add column if not exists "username" text;
 alter table public.users add column if not exists "role" text;
 alter table public.users add column if not exists "session_version" double precision;
