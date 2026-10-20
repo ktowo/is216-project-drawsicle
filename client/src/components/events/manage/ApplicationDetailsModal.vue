@@ -1,4 +1,5 @@
 <script setup>
+import LinkifiedText from '@/components/ui/LinkifiedText.vue';
 import { computed } from 'vue';
 import { Check, X, UserMinus, Loader2 } from 'lucide-vue-next';
 import BaseModal from '@/components/ui/BaseModal.vue';
@@ -63,6 +64,10 @@ const title = computed(() => (app.value ? personName(app.value.user) : 'Sign-up'
         <div class="wide">
           <dt>Likes</dt>
           <dd class="prose-text">{{ app.likes || 'Nothing listed' }}</dd>
+        </div>
+        <div v-if="app.wantsTypes?.includes('adoptable')" class="wide">
+          <dt>Adopt wishlist</dt>
+          <dd><LinkifiedText v-if="app.adoptWishlist" tag="span" class="prose-text" :text="app.adoptWishlist" /><span v-else>Nothing listed</span></dd>
         </div>
         <div class="wide">
           <dt>Please avoid</dt>

@@ -178,6 +178,12 @@ async function seed({ reset = false, now = new Date(), artDir = DEMO_UPLOAD_DIR 
       description: c.description || '',
       referenceLinks: c.referenceLinks || [],
       notesForArtists: c.notesForArtists || '',
+      pronouns: c.pronouns || '',
+      personality: c.personality || '',
+      colours: c.colours || [],
+      folder: c.folder || '',
+      favourite: Boolean(c.favourite),
+      pet: { shown: Boolean(c.pet?.shown), kind: c.pet?.kind || '', palette: c.pet?.palette || '' },
       archivedAt: c.archived ? now : null,
     };
   });
@@ -259,9 +265,11 @@ async function seed({ reset = false, now = new Date(), artDir = DEMO_UPLOAD_DIR 
       wantsTypes: a.wantsTypes,
       offeredCharacters: (a.offeredCharacters || []).map((key) => lookup(characterIds, key, 'character')),
       likes: a.likes || '',
+      adoptWishlist: a.adoptWishlist || '',
       avoid: a.avoid || '',
       cannotDraw: a.cannotDraw || [],
       notes: a.notes || '',
+      canBackup: Boolean(a.canBackup),
       reviewedBy: reviewed ? lookup(userIds, event.createdBy, 'user') : null,
       reviewedAt: reviewed ? new Date(Math.min(createdAt.getTime() + 6 * HOUR, now.getTime())) : null,
       createdAt,
@@ -301,7 +309,8 @@ async function seed({ reset = false, now = new Date(), artDir = DEMO_UPLOAD_DIR 
     const match = lookup(matchesByGiver, pair(s.event, s.giver), 'match');
     match.status = 'submitted';
     const images = [];
-    for (const piece of s.art || []) images.push(await writeArt(piece, { width: 800, height: 600 }));
+    // Real demo pictures (client/public/demo-art) are served with the client; the rest are drawn
+    for (const piece of s.art || []) images.push(piece.src || (await writeArt(piece, { width: 800, height: 600 })));
     const submittedAt = new Date(s.submittedAt);
     const event = lookup(eventsByKey, s.event, 'event');
     submissions.push({
@@ -319,6 +328,7 @@ async function seed({ reset = false, now = new Date(), artDir = DEMO_UPLOAD_DIR 
       verified: Boolean(s.verified),
       verifiedAt: s.verified ? new Date(Math.min(submittedAt.getTime() + DAY, now.getTime())) : null,
       verifiedBy: s.verified ? lookup(userIds, event.createdBy, 'user') : null,
+      ...(s.thanks ? { thanks: { message: s.thanks.message, reaction: s.thanks.reaction || '', at: new Date(now.getTime() - (s.thanks.days || 0) * DAY) } } : {}),
       createdAt: submittedAt,
     });
   }

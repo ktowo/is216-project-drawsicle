@@ -1,0 +1,14 @@
+{
+  "name": "Drawsicle",
+  "short_name": "Drawsicle",
+  "description": "Art exchanges made easy",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#faf7f0",
+  "theme_color": "#faf7f0",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "drawsicle.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

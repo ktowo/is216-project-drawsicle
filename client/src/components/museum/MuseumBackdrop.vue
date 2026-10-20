@@ -3,7 +3,6 @@ import { computed, useId } from 'vue';
 import { assetUrl } from '@/api';
 import { iso, tilePoints, wallTransform, wallQuad, WALL_H } from '@/museum/iso';
 import { FRAME, RUG } from '@/museum/layout';
-import DoodlePattern from './DoodlePattern.vue';
 
 // Everything in a museum room that stays put: the doodles behind it, walls, floor, the
 // pictures and the doors, in the room design's colours (shared/museum-themes.mjs). Darker designs
@@ -159,8 +158,6 @@ function activate(kind, item, event) {
         <stop offset="0" :stop-color="theme.wallRight[0]" />
         <stop offset="1" :stop-color="theme.wallRight[1]" />
       </linearGradient>
-      <!-- Faint doodles behind the room -->
-      <DoodlePattern :id="ids.pattern" colour="#ffffff" />
       <!-- Light: black lets it through the shade, so each pool is a soft-edged hole -->
       <radialGradient :id="ids.hole">
         <stop offset="0" stop-color="#000" stop-opacity="1" />
@@ -181,8 +178,6 @@ function activate(kind, item, event) {
     </defs>
 
     <!-- Behind the room -->
-    <rect :x="view.minX" :y="view.minY" :width="view.maxX - view.minX" :height="view.maxY - view.minY" :fill="theme.void" />
-    <rect :x="view.minX" :y="view.minY" :width="view.maxX - view.minX" :height="view.maxY - view.minY" :fill="url(ids.pattern)" opacity="0.06" />
 
     <!-- Walls -->
     <polygon :points="walls.left" :fill="url(ids.wallLeft)" />
