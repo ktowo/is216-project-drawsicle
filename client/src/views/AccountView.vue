@@ -207,7 +207,7 @@ async function downloadData() {
   try {
     const data = await api('/profile/export');
     if (saveJson(`drawsicle-data-${dateStamp()}.json`, data)) {
-      toast.success('Your data is downloading.');
+      toast.success('Your data file is downloading. Check your downloads folder.');
     } else {
       exportError.value = "Your browser didn't let us save the file. Try again, or try another browser.";
     }
@@ -403,8 +403,12 @@ async function deactivate() {
     <section class="card panel" aria-labelledby="data-heading">
       <h2 id="data-heading" class="section-title">Your data</h2>
       <p class="section-sub data-sub">
-        One file with everything Drawsicle keeps about you: your profile, characters, sign-up forms, the gifts
-        you've made and your notifications. It's a JSON file, readable in any text editor.
+        Get a copy of everything Drawsicle keeps about you in one file: your profile and settings, characters,
+        sign-up forms, the gifts you've made, your notifications and the events you asked us to remind you about.
+      </p>
+      <p class="section-sub data-sub">
+        It's a JSON file you can open in any text editor. Gifts other artists made for you aren't included; they
+        stay on each event's page. Downloading doesn't change or delete anything.
       </p>
       <button type="button" class="btn btn-outline" :disabled="exporting" @click="downloadData">
         <Loader2 v-if="exporting" :size="18" class="spin" aria-hidden="true" />

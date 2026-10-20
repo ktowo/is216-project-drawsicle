@@ -12,15 +12,17 @@ const DEFAULT_CODES = {
   404: 'NOT_FOUND',
 };
 
+// extra: more fields for the error body, like the server's { reason: 'expired' }
 export class MockHttpError extends Error {
-  constructor(status, message, code) {
+  constructor(status, message, code, extra = null) {
     super(message);
     this.status = status;
     this.code = code || DEFAULT_CODES[status];
+    this.extra = extra;
   }
 }
 
-export const httpError = (status, message, code) => new MockHttpError(status, message, code);
+export const httpError = (status, message, code, extra) => new MockHttpError(status, message, code, extra);
 export const invalid = (message) => httpError(400, message, 'VALIDATION');
 
 export const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);

@@ -276,20 +276,52 @@ router.post('/forgot-password', authLimiter, asyncHandler(async (req, res) => {
   res.json({ message: 'If an account exists for that email, a reset link is on its way.' });
 }));
 
+// Why a reset link can't be used, so the page can say so before anyone types a new password:
+//   expired  the hour is up
+//   used     already used, or replaced by a newer reset email (the old link stops working)
+const RESET_LINK_PROBLEMS = {
+  expired: 'This reset link has expired. Links work for 1 hour, so request a new one.',
+  used: 'This reset link was already used, or a newer reset email replaced it. Request a new one if you still need it.',
+};
+
+function resetLinkError(res, reason) {
+  return res.status(400).json({ error: RESET_LINK_PROBLEMS[reason], code: 'INVALID_TOKEN', reason });
+}
+
+// The account a reset link belongs to, or the reason it can't be used
+async function userForResetToken(token) {
+  if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) return { reason: 'used' };
+  const user = await User.findOne({ resetTokenHash: hashToken(token) }).select('+resetTokenExpires');
+  if (!user) return { reason: 'used' };
+  if (!user.resetTokenExpires || user.resetTokenExpires <= new Date()) return { reason: 'expired' };
+  return { user };
+}
+
+// "mika.draws@gmail.com" -> "mi•••@gmail.com", so people know which account they're resetting
+// without the page giving the full address to whoever has the link
+function maskEmail(email) {
+  const [name, domain] = String(email).split('@');
+  if (!domain) return '';
+  return `${name.slice(0, Math.min(2, Math.max(1, name.length - 1)))}•••@${domain}`;
+}
+
+// Checked when the reset page opens. Doesn't use the link up.
+router.get('/reset-password/check', authLimiter, asyncHandler(async (req, res) => {
+  const { user, reason } = await userForResetToken(req.query.token);
+  if (!user) return resetLinkError(res, reason);
+  if (user.status === 'banned') return res.status(403).json(bannedBody(user));
+  res.json({ ok: true, email: maskEmail(user.email), expiresAt: user.resetTokenExpires });
+}));
+
 router.post('/reset-password', authLimiter, asyncHandler(async (req, res) => {
   const { token, password } = req.body;
-  const invalid = () =>
-    res.status(400).json({ error: 'This reset link has expired or was already used.', code: 'INVALID_TOKEN' });
 
-  if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) return invalid();
+  if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) return resetLinkError(res, 'used');
   const pwError = passwordProblem(password);
   if (pwError) return res.status(400).json({ error: pwError, code: 'VALIDATION' });
 
-  const user = await User.findOne({
-    resetTokenHash: hashToken(token),
-    resetTokenExpires: { $gt: new Date() },
-  });
-  if (!user) return invalid();
+  const { user, reason } = await userForResetToken(token);
+  if (!user) return resetLinkError(res, reason);
   if (user.status === 'banned') return res.status(403).json(bannedBody(user));
 
   user.passwordHash = await bcrypt.hash(password, 12);

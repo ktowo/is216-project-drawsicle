@@ -110,14 +110,26 @@ export function register(router) {
     return { message: 'If an account exists for that email, a reset link is on its way.' };
   });
 
-  // Mock mode never sends reset links, so no token can be valid
+  // Mock mode never sends reset links, so no token can be valid. Same answers as the server
+  // gives for a link that was used or replaced by a newer email.
+  const usedLink = () =>
+    httpError(
+      400,
+      'This reset link was already used, or a newer reset email replaced it. Request a new one if you still need it.',
+      'INVALID_TOKEN',
+      { reason: 'used' }
+    );
+
+  router.get('/auth/reset-password/check', () => {
+    throw usedLink();
+  });
+
   router.post('/auth/reset-password', (ctx) => {
     const { token, password } = ctx.body;
-    const expired = () => httpError(400, 'This reset link has expired or was already used.', 'INVALID_TOKEN');
-    if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) throw expired();
+    if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) throw usedLink();
     const pwError = passwordProblem(password);
     if (pwError) throw invalid(pwError);
-    throw expired();
+    throw usedLink();
   });
 
   router.post('/auth/change-password', (ctx) => {
