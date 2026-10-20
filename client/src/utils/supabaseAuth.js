@@ -28,3 +28,15 @@ export function callbackUrl(origin, base, redirect) {
   const url = `${origin}${base.endsWith('/') ? base : `${base}/`}auth/callback`;
   return redirect && safeRedirect(redirect) === redirect ? `${url}?redirect=${encodeURIComponent(redirect)}` : url;
 }
+
+// A reset or confirmation link Supabase refused, as the reset page's reasons: 'expired' or 'used'
+export function linkProblem(error) {
+  if (error?.code === 'otp_expired' || /expired/i.test(error?.message || '')) return 'expired';
+  return 'used';
+}
+
+// The kinds of email link the app accepts (token_hash links in the Supabase email templates)
+const LINK_TYPES = ['recovery', 'signup', 'email'];
+export function emailLinkType(type) {
+  return LINK_TYPES.includes(type) ? type : null;
+}

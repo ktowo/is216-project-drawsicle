@@ -2,10 +2,10 @@
 import { ref, onMounted } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
 import LoadingBlock from '@/components/ui/LoadingBlock.vue';
-import { finishRedirect, exchangeForSession } from '@/auth/supabaseSignIn';
+import { finishRedirect, exchangeForSession, verifyEmailLink } from '@/auth/supabaseSignIn';
 import { setUser } from '@/stores/auth';
 import { rememberPreference } from '@/utils/recentLogins';
-import { safeRedirect } from '@/utils/supabaseAuth';
+import { safeRedirect, emailLinkType } from '@/utils/supabaseAuth';
 
 // Where Supabase sends people back after Google, Discord or an email link (AUTH_PROVIDER=supabase).
 // Swaps the one-time code for a Supabase session, then that for the app's own session.
@@ -19,18 +19,25 @@ onMounted(async () => {
     error.value = q.error === 'access_denied' ? 'Sign-in was cancelled.' : "We couldn't sign you in. Please try again.";
     return;
   }
-  if (typeof q.code !== 'string' || !q.code) {
+  // A "confirm your email" link: one-time token_hash, works in any browser
+  const linkType = typeof q.token_hash === 'string' && q.token_hash ? emailLinkType(q.type) : null;
+  if (!linkType && (typeof q.code !== 'string' || !q.code)) {
     error.value = 'This sign-in link is incomplete or was already used. Please sign in again.';
     return;
   }
   try {
-    const token = await finishRedirect(q.code);
+    const token = linkType ? (await verifyEmailLink(q.token_hash, linkType)).accessToken : await finishRedirect(q.code);
     const { user, reactivated } = await exchangeForSession(token, { remember: rememberPreference() });
     setUser(user);
     const to = safeRedirect(typeof q.redirect === 'string' ? q.redirect : '');
     router.replace(reactivated ? { path: to, query: { reactivated: '1' } } : to);
   } catch (err) {
-    error.value = err?.message || "We couldn't sign you in. Please try again.";
+    error.value =
+      err?.code === 'expired'
+        ? 'This confirmation link has expired. Log in with your email and password to get a new one.'
+        : err?.code === 'used'
+          ? 'This link was already used. If your email is confirmed, just log in.'
+          : err?.message || "We couldn't sign you in. Please try again.";
   }
 });
 </script>

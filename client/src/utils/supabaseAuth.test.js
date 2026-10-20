@@ -30,3 +30,22 @@ describe('where to go after signing in', () => {
     expect(callbackUrl('https://x.app', '/app/', '')).toBe('https://x.app/app/auth/callback');
   });
 });
+
+describe('reset and confirmation links', () => {
+  it('maps Supabase link errors to the reset page reasons', async () => {
+    const { linkProblem } = await import('./supabaseAuth');
+    expect(linkProblem({ code: 'otp_expired' })).toBe('expired');
+    expect(linkProblem({ message: 'Email link is invalid or has expired' })).toBe('expired');
+    expect(linkProblem({ code: 'otp_disabled' })).toBe('used');
+    expect(linkProblem(null)).toBe('used');
+  });
+
+  it('only accepts link types Supabase sends', async () => {
+    const { emailLinkType } = await import('./supabaseAuth');
+    expect(emailLinkType('recovery')).toBe('recovery');
+    expect(emailLinkType('signup')).toBe('signup');
+    expect(emailLinkType('email')).toBe('email');
+    expect(emailLinkType('magiclink')).toBe(null);
+    expect(emailLinkType(undefined)).toBe(null);
+  });
+});

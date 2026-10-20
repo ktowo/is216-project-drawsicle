@@ -3,7 +3,7 @@
 // the Supabase access token (POST /api/auth/supabase, docs/adr/0001). With the app's own sign-in
 // (and in demo mode) none of this runs, and supabase-js is never even downloaded.
 import { api, ApiError } from '@/api';
-import { signInMessage, callbackUrl } from '@/utils/supabaseAuth';
+import { signInMessage, callbackUrl, linkProblem } from '@/utils/supabaseAuth';
 
 let configPromise = null;
 let clientPromise = null;
@@ -46,8 +46,9 @@ function fail(error) {
 }
 
 // The app's session for this Supabase sign-in -> { user, reactivated }
-export async function exchangeForSession(accessToken, { remember } = {}) {
-  return api('/auth/supabase', { method: 'POST', body: { accessToken, remember } });
+// passwordReset: just changed the password, so the server logs out the account's other devices
+export async function exchangeForSession(accessToken, { remember, passwordReset } = {}) {
+  return api('/auth/supabase', { method: 'POST', body: { accessToken, remember, passwordReset } });
 }
 
 export async function signInWithPassword(email, password) {
@@ -84,6 +85,44 @@ export async function finishRedirect(code) {
   const { data, error } = await (await supabase()).auth.exchangeCodeForSession(code);
   if (error) fail(error);
   return data.session.access_token;
+}
+
+// ---------- Email links: confirming an address, resetting a password ----------
+// The Supabase email templates link with a one-time token_hash (not the PKCE code), so a link works
+// in any browser, e.g. requested on a laptop and opened on a phone (docs/SUPABASE.md).
+
+export async function sendPasswordReset(email) {
+  const base = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
+  const { error } = await (await supabase()).auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}${base}reset-password`,
+  });
+  // Rate limits are worth saying; anything else stays quiet so nobody learns who has an account
+  if (error && /rate/i.test(error.code || error.message || '')) fail(error);
+}
+
+// -> { accessToken, email } for a confirmation or reset link, or throws with code 'expired' | 'used'
+export async function verifyEmailLink(tokenHash, type) {
+  const { data, error } = await (await supabase()).auth.verifyOtp({ token_hash: tokenHash, type });
+  if (error || !data.session) throw new ApiError(signInMessage(error), 400, linkProblem(error));
+  return { accessToken: data.session.access_token, email: data.user?.email || '' };
+}
+
+// After a reset link: the new password, then the token for the app session
+export async function setNewPassword(password) {
+  const client = await signedInClient();
+  const { error } = await client.auth.updateUser({ password });
+  if (error) fail(error);
+  const { data } = await client.auth.getSession();
+  return data.session.access_token;
+}
+
+export async function resendConfirmation(email) {
+  const { error } = await (await supabase()).auth.resend({
+    type: 'signup',
+    email,
+    options: { emailRedirectTo: callbackUrl(window.location.origin, import.meta.env.BASE_URL, '') },
+  });
+  if (error) fail(error);
 }
 
 // ---------- Linked sign-ins (account page) ----------

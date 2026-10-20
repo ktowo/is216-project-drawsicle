@@ -46,6 +46,15 @@ How it signs in, with `AUTH_PROVIDER=supabase`:
 
 Supabase dashboard setup (team project): **Authentication → Providers**, switch on Google and Discord with the OAuth app keys; **Authentication → URL Configuration**, add `<site>/auth/callback` and `http://localhost:5173/auth/callback` to the redirect URLs. `SUPABASE_OAUTH_PROVIDERS` (default `google,discord`) says which buttons the app shows. For **Account → Ways to sign in** (connect or disconnect Google / Discord), switch on **Allow manual linking** under **Authentication → Sign In / Providers**.
 
+**Email links** (Supabase dashboard → **Authentication → Emails → Templates**). Change the links in two templates so they carry a one-time `token_hash`. Supabase's default link only works in the browser that asked for it; these work anywhere, for example requested on a laptop and opened on a phone:
+
+| Template | Link |
+| --- | --- |
+| Confirm signup | `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=signup` |
+| Reset password | `{{ .SiteURL }}/reset-password?token_hash={{ .TokenHash }}&type=recovery` |
+
+Set **Site URL** (Authentication → URL Configuration) to the deployed site. The reset page checks the link with Supabase, shows the same "expired" and "already used" screens as before, and after the new password is saved it logs the account out of its other devices. Sign-up and log-in show **Check your email · Send it again** until the address is confirmed.
+
 Each account can hold `supabaseId`, the Supabase Auth user it signs in as. It's cleared when an account is deleted.
 
 ## Security

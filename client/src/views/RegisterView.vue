@@ -9,6 +9,7 @@ import DiscordButton from '@/components/DiscordButton.vue';
 import OrDivider from '@/components/ui/OrDivider.vue';
 import PasswordStrength from '@/components/PasswordStrength.vue';
 import { register } from '@/stores/auth';
+import ConfirmEmailNotice from '@/components/ConfirmEmailNotice.vue';
 import { toast } from '@/stores/toast';
 import { api } from '@/api';
 import { safeRedirect } from '@/router';
@@ -32,6 +33,8 @@ const fieldErrors = reactive({ displayName: '', email: '', password: '', confirm
 const tried = ref(false);
 // The email that already has an account, so the links can offer to log in with it
 const takenEmail = ref('');
+// Supabase sign-in: the address to confirm before the first log-in
+const confirmEmail = ref('');
 const providers = ref({ google: false, discord: false });
 
 const redirectTo = computed(() => safeRedirect(route.query.redirect));
@@ -92,6 +95,8 @@ async function submit() {
     if (e.code === 'EMAIL_TAKEN') {
       takenEmail.value = email.value.trim().toLowerCase();
       checkFields();
+    } else if (e.code === 'CHECK_EMAIL') {
+      confirmEmail.value = email.value.trim();
     } else {
       error.value = e.message;
     }
@@ -162,6 +167,7 @@ async function submit() {
         required
       />
 
+      <ConfirmEmailNotice v-if="confirmEmail" :email="confirmEmail" />
       <p v-if="error" class="alert alert-error" role="alert">{{ error }}</p>
 
       <p class="terms">
