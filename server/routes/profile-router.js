@@ -1,4 +1,5 @@
 const { Router } = require('express');
+const { EMAIL_TYPES, EMAIL_MODES } = require('../../shared/email-types.mjs');
 const mongoose = require('mongoose');
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
@@ -122,10 +123,27 @@ router.patch('/', requireAuth, asyncHandler(async (req, res) => {
 
   if (notificationPrefs !== undefined) {
     if (!isPlainObject(notificationPrefs)) throw invalid('notificationPrefs must be an object.');
-    for (const key of ['emailReminders', 'emailMatches', 'emailEventUpdates']) {
-      if (notificationPrefs[key] === undefined) continue;
-      if (typeof notificationPrefs[key] !== 'boolean') throw invalid(`${key} must be true or false.`);
-      user.notificationPrefs[key] = notificationPrefs[key];
+    const modes = user.notificationPrefs.emailModes;
+    // The older on/off switches: off is off, on brings back that type's usual mode
+    for (const type of EMAIL_TYPES) {
+      const on = notificationPrefs[type.legacy];
+      if (on === undefined) continue;
+      if (typeof on !== 'boolean') throw invalid(`${type.legacy} must be true or false.`);
+      user.notificationPrefs[type.legacy] = on;
+      // Off means off; on brings back the usual mode if it had been turned off
+      if (!on) modes[type.key] = 'off';
+      else if (modes[type.key] === 'off') modes[type.key] = undefined;
+    }
+    // Instant / daily digest / off per email type
+    if (notificationPrefs.emailModes !== undefined) {
+      if (!isPlainObject(notificationPrefs.emailModes)) throw invalid('emailModes must be an object.');
+      for (const type of EMAIL_TYPES) {
+        const mode = notificationPrefs.emailModes[type.key];
+        if (mode === undefined) continue;
+        if (!EMAIL_MODES.includes(mode)) throw invalid(`${type.label} must be instant, digest or off.`);
+        modes[type.key] = mode;
+        user.notificationPrefs[type.legacy] = mode !== 'off';
+      }
     }
   }
 
