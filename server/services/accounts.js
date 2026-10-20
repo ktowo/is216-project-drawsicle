@@ -80,6 +80,7 @@ async function anonymiseUser(userId, filter = {}) {
         avatarUrl: 1,
         googleId: 1,
         discordId: 1,
+        supabaseId: 1,
         passwordHash: 1,
         resetTokenHash: 1,
         resetTokenExpires: 1,

@@ -8,12 +8,17 @@ const notificationSchema = new mongoose.Schema(
     message: { type: String, default: '', maxlength: 500 },
     link: { type: String, default: '' }, // client route, e.g. '/events/123'
     readAt: { type: Date, default: null },
+    // Waiting for the daily digest email (its email type is set to digest)
+    digestPending: { type: Boolean, default: false },
+    // Which email type it was ('reminders' | 'matches' | 'eventUpdates'), while waiting for the digest
+    emailType: { type: String, default: undefined },
   },
   { timestamps: true }
 );
 
 notificationSchema.index({ user: 1, createdAt: -1 });
 notificationSchema.index({ user: 1, readAt: 1 });
+notificationSchema.index({ digestPending: 1, user: 1 }, { partialFilterExpression: { digestPending: true } });
 
 notificationSchema.methods.toPublic = function () {
   return {

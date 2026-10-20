@@ -4,23 +4,6 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const { setupAuth } = require('./setup-auth.js');
-const characterRouter = require('./routes/character-router.js');
-const eventRouter = require('./routes/event-router.js');
-const applicationRouter = require('./routes/application-router.js');
-const matchRouter = require('./routes/match-router.js');
-const submissionRouter = require('./routes/submission-router.js');
-const outreachRouter = require('./routes/outreach-router.js');
-const dashboardRouter = require('./routes/dashboard-router.js');
-const userRouter = require('./routes/user-router.js');
-const discoverRouter = require('./routes/discover-router.js');
-const showcaseRouter = require('./routes/showcase-router.js');
-const adminRouter = require('./routes/admin-router.js');
-const reportRouter = require('./routes/report-router.js');
-const museumRouter = require('./routes/museum-router.js');
-const favouriteRouter = require('./routes/favourite-router.js');
-const friendsRouter = require('./routes/friends-router.js');
-const fileRouter = require('./routes/file-router.js');
-const cronRouter = require('./routes/cron-router.js');
 const baseRouter = require('./routes/base-router.js');
 const { apiErrorHandler } = require('./utils/helpers.js');
 
@@ -58,31 +41,7 @@ function createApp({ ready } = {}) {
   // Accounts, profiles, notifications, event roles (+ JSON body parsing, cookies, /uploads)
   setupAuth(server);
 
-  server.get('/api/health', (req, res) => {
-    res.json({
-      ok: true,
-      db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-      time: new Date().toISOString(),
-    });
-  });
-
-  server.use('/api/characters', characterRouter);
-  server.use('/api/events', eventRouter);
-  // Everything under one event. These routers use mergeParams to read :eventId.
-  server.use('/api/events/:eventId', applicationRouter, matchRouter, submissionRouter, outreachRouter);
-  server.use('/api/dashboard', dashboardRouter);
-  server.use('/api/users', userRouter);
-  server.use('/api/discover', discoverRouter);
-  server.use('/api/showcase', showcaseRouter);
-  server.use('/api/admin', adminRouter);
-  server.use('/api/reports', reportRouter);
-  server.use('/api/museum', museumRouter);
-  server.use('/api/favourites', favouriteRouter);
-  server.use('/api/friends', friendsRouter);
-  server.use('/api/files', fileRouter);
-  server.use('/api/cron', cronRouter);
-
-  server.use('/api', (req, res) => res.status(404).json({ error: 'Not found.', code: 'NOT_FOUND' }));
+  server.use("/api/", baseRouter);
 
   // Optional: serve the built Vue app from the same origin (SERVE_CLIENT=true after `pnpm build` in client/)
   const clientDist = path.join(__dirname, '..', 'client', 'dist');
@@ -100,7 +59,9 @@ function createApp({ ready } = {}) {
   }
 
   server.use(express.static(path.join(__dirname, 'public')));
-  server.use('/', baseRouter);
+  server.use("", (req, res) =>
+    res.status(404).json({ error: "Not found.", code: "NOT_FOUND" }),
+);
 
   return server;
 }

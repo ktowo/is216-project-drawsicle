@@ -1,6 +1,9 @@
 const Notification = require('../models/Notification.js');
 const User = require('../models/User.js');
 const { sendMail } = require('./mailer.js');
+const { renderEmail } = require('./email-layout.js');
+const { emailModesOf } = require('../../shared/email-types.mjs');
+const { unsubscribeFor } = require('./unsubscribe.js');
 const { clientUrl } = require('../utils/helpers.js');
 
 // For teammates. Send someone a notification from anywhere on the server:
@@ -18,14 +21,9 @@ const { clientUrl } = require('../utils/helpers.js');
 //   false (default)  in-app only
 //   true             always email as well (password resets and the like)
 //   'reminders' | 'matches' | 'eventUpdates'
-//                    email only if the user switched that on in their notification settings
+//                    as the person chose for that email type (shared/email-types.mjs):
+//                    instant (now), digest (in tomorrow's daily email) or off
 // Deactivated accounts never get emails.
-
-const PREF_KEYS = {
-  reminders: 'emailReminders',
-  matches: 'emailMatches',
-  eventUpdates: 'emailEventUpdates',
-};
 
 // Same limits as the Notification model, so a long event name can't make the insert fail
 const TITLE_MAX = 120;
@@ -36,29 +34,29 @@ function clip(text, max) {
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 }
 
-function wantsEmail(user, email) {
-  if (!email || !user || user.status === 'deactivated') return false;
-  if (email === true) return true;
-  const key = PREF_KEYS[email];
-  if (!key) return false;
-  // toPublic() applies the defaults for accounts made before a preference existed
-  return Boolean(user.toPublic().notificationPrefs[key]);
+// 'instant' | 'digest' | 'off' for this person and email type
+function emailMode(user, email) {
+  if (!email || !user || user.status === 'deactivated' || user.status === 'banned') return 'off';
+  if (email === true) return 'instant';
+  // toPublic() fills in the defaults for anything never chosen
+  return emailModesOf(user.notificationPrefs)[email] || 'off';
 }
 
-function sendNotificationEmail(user, { title, message, link }) {
+// emailType: the type it was sent as ('matches', ...), or true for emails that must always arrive
+// (those have no unsubscribe link)
+function sendNotificationEmail(user, { title, message, link }, emailType) {
+  const unsub = typeof emailType === 'string' ? unsubscribeFor(user._id, emailType) : null;
   const url = link ? `${clientUrl()}${link}` : clientUrl();
   const settingsUrl = `${clientUrl()}/notifications`;
-  sendMail({
-    to: user.email,
-    subject: title,
-    text: `${title}\n\n${message ? `${message}\n\n` : ''}${url}\n\nYou can choose which emails you get in your notification settings: ${settingsUrl}`,
-    html:
-      `<p><strong>${escapeHtml(title)}</strong></p>` +
-      (message ? `<p>${escapeHtml(message)}</p>` : '') +
-      `<p><a href="${escapeHtml(url)}">Open Drawsicle</a></p>` +
-      `<p style="color:#8a7a70;font-size:12px">You can choose which emails you get in your ` +
-      `<a href="${escapeHtml(settingsUrl)}">notification settings</a>.</p>`,
-  }).catch((err) => console.error('Notification email failed:', err.message));
+  const { html, text } = renderEmail({
+    preheader: message,
+    heading: title,
+    paragraphs: [message],
+    button: { label: 'Open Drawsicle', url },
+    footer: { text: 'You can choose which emails you get in your notification settings.', linkLabel: 'Notification settings', url: settingsUrl },
+    unsubscribe: unsub,
+  });
+  sendMail({ to: user.email, subject: title, text, html, headers: unsub?.headers }).catch((err) => console.error('Notification email failed:', err.message));
 }
 
 function toRow(userId, { type, title, message = '', link = '' }) {
@@ -67,13 +65,11 @@ function toRow(userId, { type, title, message = '', link = '' }) {
 
 async function notify(userId, { type, title, message = '', link = '', email = false }) {
   const row = toRow(userId, { type, title, message, link });
-  const notification = await Notification.create(row);
-
-  if (email) {
-    const user = await User.findById(userId);
-    if (wantsEmail(user, email)) sendNotificationEmail(user, row);
-  }
-
+  const user = email ? await User.findById(userId) : null;
+  const mode = emailMode(user, email);
+  const digest = mode === 'digest' ? { digestPending: true, emailType: email } : {};
+  const notification = await Notification.create({ ...row, ...digest });
+  if (mode === 'instant') sendNotificationEmail(user, row, email);
   return notification;
 }
 
@@ -82,14 +78,16 @@ async function notifyMany(userIds, { type, title, message = '', link = '', email
   const ids = [...new Set((userIds || []).filter(Boolean).map(String))];
   if (!ids.length) return [];
 
-  const rows = ids.map((id) => toRow(id, { type, title, message, link }));
+  const users = email ? await User.find({ _id: { $in: ids } }) : [];
+  const modes = new Map(users.map((u) => [u._id.toString(), emailMode(u, email)]));
+  const rows = ids.map((id) => ({
+    ...toRow(id, { type, title, message, link }),
+    ...(modes.get(id) === 'digest' ? { digestPending: true, emailType: email } : {}),
+  }));
   const created = await Notification.insertMany(rows);
 
-  if (email) {
-    const users = await User.find({ _id: { $in: ids } });
-    for (const user of users) {
-      if (wantsEmail(user, email)) sendNotificationEmail(user, rows[0]);
-    }
+  for (const user of users) {
+    if (modes.get(user._id.toString()) === 'instant') sendNotificationEmail(user, rows[0], email);
   }
 
   return created;
