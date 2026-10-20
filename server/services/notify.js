@@ -1,6 +1,7 @@
 const Notification = require('../models/Notification.js');
 const User = require('../models/User.js');
 const { sendMail } = require('./mailer.js');
+const { renderEmail } = require('./email-layout.js');
 const { clientUrl } = require('../utils/helpers.js');
 
 // For teammates. Send someone a notification from anywhere on the server:
@@ -48,17 +49,14 @@ function wantsEmail(user, email) {
 function sendNotificationEmail(user, { title, message, link }) {
   const url = link ? `${clientUrl()}${link}` : clientUrl();
   const settingsUrl = `${clientUrl()}/notifications`;
-  sendMail({
-    to: user.email,
-    subject: title,
-    text: `${title}\n\n${message ? `${message}\n\n` : ''}${url}\n\nYou can choose which emails you get in your notification settings: ${settingsUrl}`,
-    html:
-      `<p><strong>${escapeHtml(title)}</strong></p>` +
-      (message ? `<p>${escapeHtml(message)}</p>` : '') +
-      `<p><a href="${escapeHtml(url)}">Open Drawsicle</a></p>` +
-      `<p style="color:#8a7a70;font-size:12px">You can choose which emails you get in your ` +
-      `<a href="${escapeHtml(settingsUrl)}">notification settings</a>.</p>`,
-  }).catch((err) => console.error('Notification email failed:', err.message));
+  const { html, text } = renderEmail({
+    preheader: message,
+    heading: title,
+    paragraphs: [message],
+    button: { label: 'Open Drawsicle', url },
+    footer: { text: 'You can choose which emails you get in your notification settings.', linkLabel: 'Notification settings', url: settingsUrl },
+  });
+  sendMail({ to: user.email, subject: title, text, html }).catch((err) => console.error('Notification email failed:', err.message));
 }
 
 function toRow(userId, { type, title, message = '', link = '' }) {
