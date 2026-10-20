@@ -42,7 +42,8 @@ function providerError(code) {
   return '';
 }
 
-const email = ref('');
+// ?email= fills it in, e.g. from "Log in" on the sign-up page when the email already has an account
+const email = ref(typeof route.query.email === 'string' ? route.query.email.slice(0, 254) : '');
 const password = ref('');
 const remember = ref(rememberPreference());
 // Accounts that ticked "Remember me" here before: one click fills in the email

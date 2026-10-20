@@ -219,6 +219,11 @@ export function register(router) {
         .filter((n) => n.user === user.id)
         .sort(byDate('createdAt'))
         .map(notificationPublic),
+      // Events they tapped "Remind me" on
+      eventReminders: (user.watchedEvents || [])
+        .map((id) => state.events.find((e) => e.id === id))
+        .filter(Boolean)
+        .map((e) => ({ id: e.id, name: e.name, signupDeadline: e.signupDeadline })),
     };
   });
 

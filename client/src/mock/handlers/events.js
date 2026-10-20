@@ -52,7 +52,7 @@ const DATE_FIELDS = {
 
 // Event.remindersSent keys tied to each deadline (see jobs.js)
 const DEADLINE_REMINDERS = {
-  signupDeadline: ['signup-48h'],
+  signupDeadline: ['signup-48h', 'watchers-48h'],
   submissionDeadline: ['submission-72h', 'submission-24h', 'submission-overdue'],
 };
 
@@ -284,6 +284,7 @@ function deleteEventData(state, eventId) {
   state.submissions = state.submissions.filter((s) => s.event !== eventId);
   state.members = state.members.filter((m) => m.event !== eventId);
   state.events = state.events.filter((e) => e.id !== eventId);
+  for (const u of state.users) if (u.watchedEvents) u.watchedEvents = u.watchedEvents.filter((id) => id !== eventId);
 }
 
 export function register(router) {
@@ -450,6 +451,24 @@ export function register(router) {
     const user = ctx.currentUser();
     const { event, viewer } = visibleEvent(ctx, user);
     return { event: serializeEvent(ctx.state, event, user, viewer) };
+  });
+
+  // "Remind me before sign-ups close" (server/routes/event-router.js)
+  router.post('/events/:eventId/watch', (ctx) => {
+    const user = ctx.requireAuth();
+    const { event } = visibleEvent(ctx, user);
+    if (event.status !== 'open') {
+      throw httpError(409, 'Reminders are only for events that are open for sign-ups.', 'NOT_OPEN');
+    }
+    user.watchedEvents ||= [];
+    if (!user.watchedEvents.includes(event.id)) user.watchedEvents.push(event.id);
+    return { watching: true };
+  });
+
+  router.delete('/events/:eventId/watch', (ctx) => {
+    const user = ctx.requireAuth();
+    user.watchedEvents = (user.watchedEvents || []).filter((id) => id !== ctx.params.eventId);
+    return { watching: false };
   });
 
   router.patch('/events/:eventId', (ctx) => {

@@ -85,6 +85,9 @@ const userSchema = new mongoose.Schema(
 
     // People this person never wants to be matched with, in either direction. Private.
     blockedUsers: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], default: [] },
+    // Open events they asked to be reminded about before sign-ups close ("Remind me" on the
+    // event page). The reminder job notifies them 48 h before the deadline (services/reminders.js).
+    watchedEvents: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Event' }], default: [] },
     // Pictures of their art, for matching by style (services/vision.js); up to 3
     styleSamples: { type: [String], default: [] },
     // Their museum avatar, from the avatar creator (shared/looks.mjs); empty until they make one
@@ -188,6 +191,9 @@ userSchema.statics.generateUsername = async function (base) {
   }
   return candidate;
 };
+
+// Who to remind when an event's sign-ups are about to close
+userSchema.index({ watchedEvents: 1 });
 
 // Same mini shape for a populated ref that might be null (deleted user)
 function userMini(user) {

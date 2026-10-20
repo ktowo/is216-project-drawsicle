@@ -18,6 +18,8 @@ import {
   TriangleAlert,
   CircleAlert,
   ScrollText,
+  Bell,
+  BellRing,
 } from 'lucide-vue-next';
 import EventBanner from '@/components/events/EventBanner.vue';
 import LifecycleStepper from '@/components/events/LifecycleStepper.vue';
@@ -194,6 +196,39 @@ function addToCalendar() {
   }
 }
 
+// ---------- Remind me before sign-ups close ----------
+// The reminder job sends a notification 48 h before the deadline (server/services/reminders.js)
+
+const watchBusy = ref(false);
+const watching = computed(() => Boolean(event.value?.viewer?.watching));
+const canWatch = computed(
+  () =>
+    event.value?.status === 'open' &&
+    !event.value.viewer?.isOrganizer &&
+    !(applicationStatus.value && applicationStatus.value !== 'withdrawn')
+);
+
+async function toggleWatch() {
+  if (watchBusy.value || !event.value) return;
+  const next = !watching.value;
+  watchBusy.value = true;
+  try {
+    await api(`/events/${event.value.id}/watch${qs({ invite: invite.value })}`, { method: next ? 'POST' : 'DELETE' });
+    if (event.value.viewer) event.value.viewer.watching = next;
+    toast.success(
+      next ? "We'll remind you 48 hours before sign-ups close." : "Okay, we won't remind you about this event."
+    );
+  } catch (e) {
+    if (e.status === 401) {
+      router.push(loginHere.value);
+      return;
+    }
+    toast.error(e.message);
+  } finally {
+    watchBusy.value = false;
+  }
+}
+
 // ---------- Withdrawing ----------
 
 async function withdraw() {
@@ -361,6 +396,32 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
               <button v-if="canWithdraw" type="button" class="btn btn-ghost btn-block withdraw" @click="confirmWithdraw = true">
                 <LogOut :size="16" aria-hidden="true" /> Withdraw
               </button>
+            </div>
+
+            <div v-if="canWatch" class="watch-row">
+              <button
+                v-if="auth.user"
+                type="button"
+                class="btn btn-block"
+                :class="watching ? 'btn-outline watching' : 'btn-ghost'"
+                :aria-pressed="watching ? 'true' : 'false'"
+                :disabled="watchBusy"
+                @click="toggleWatch"
+              >
+                <BellRing v-if="watching" :size="16" aria-hidden="true" />
+                <Bell v-else :size="16" aria-hidden="true" />
+                {{ watching ? "We'll remind you" : 'Remind me before it closes' }}
+              </button>
+              <RouterLink v-else :to="loginHere" class="btn btn-ghost btn-block">
+                <Bell :size="16" aria-hidden="true" /> Log in to get a reminder
+              </RouterLink>
+              <p class="muted small watch-hint">
+                {{
+                  watching
+                    ? 'You will get a notification 48 hours before sign-ups close. Tap again to stop.'
+                    : 'Not ready to sign up? We can nudge you 48 hours before sign-ups close.'
+                }}
+              </p>
             </div>
 
             <div class="share-row">
@@ -724,6 +785,19 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
 }
 .withdraw {
   color: var(--danger);
+}
+.watch-row {
+  display: grid;
+  gap: 6px;
+}
+.watch-row .watching {
+  border-color: var(--pink-line);
+  background: var(--pink-tint);
+  color: var(--pink-dark);
+}
+.watch-hint {
+  margin: 0;
+  text-align: center;
 }
 .share-row {
   display: flex;

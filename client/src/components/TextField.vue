@@ -2,8 +2,9 @@
 import { ref, computed, useId } from 'vue';
 import { Eye, EyeOff } from 'lucide-vue-next';
 
+const modelValue = defineModel({ type: String, default: '' });
+
 const props = defineProps({
-  modelValue: { type: String, default: '' },
   label: { type: String, required: true },
   type: { type: String, default: 'text' },
   icon: { type: [Object, Function], default: null },
@@ -36,10 +37,10 @@ const describedby = computed(
     <div class="input-wrap" :class="{ 'is-invalid': error, 'is-disabled': disabled || readonly }">
       <component :is="icon" v-if="icon" class="input-icon" :size="20" aria-hidden="true" />
       <input
+        v-model="modelValue"
         :id="id"
         class="input"
         :type="inputType"
-        :value="modelValue"
         :placeholder="placeholder"
         :autocomplete="autocomplete"
         :required="required"
@@ -48,7 +49,6 @@ const describedby = computed(
         :readonly="readonly"
         :aria-invalid="error ? 'true' : undefined"
         :aria-describedby="describedby"
-        @input="emit('update:modelValue', $event.target.value)"
       />
       <button
         v-if="type === 'password'"
