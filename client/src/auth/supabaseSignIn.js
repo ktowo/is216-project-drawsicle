@@ -34,7 +34,8 @@ async function supabase() {
     const { createClient } = await import('@supabase/supabase-js');
     return createClient(config.supabaseUrl, config.supabaseAnonKey, {
       // PKCE: the redirect brings back a one-time code, swapped for a session on /auth/callback
-      auth: { flowType: 'pkce', persistSession: true, autoRefreshToken: false, detectSessionInUrl: false },
+      // The Supabase session is kept (and refreshed) so the account page can link more sign-ins
+      auth: { flowType: 'pkce', persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
     });
   })();
   return clientPromise;
@@ -83,6 +84,36 @@ export async function finishRedirect(code) {
   const { data, error } = await (await supabase()).auth.exchangeCodeForSession(code);
   if (error) fail(error);
   return data.session.access_token;
+}
+
+// ---------- Linked sign-ins (account page) ----------
+
+async function signedInClient() {
+  const client = await supabase();
+  const { data } = await client.auth.getSession();
+  if (!data.session) throw new ApiError('Please log out and in again to change your sign-in methods.', 401, 'SUPABASE_SESSION_EXPIRED');
+  return client;
+}
+
+// -> the Supabase identities of whoever is signed in ([{ provider, identity_id, ... }])
+export async function linkedIdentities() {
+  const { data, error } = await (await signedInClient()).auth.getUserIdentities();
+  if (error) fail(error);
+  return data.identities || [];
+}
+
+// Leaves the page for Google or Discord, comes back to /auth/callback and on to `redirect`
+export async function linkProvider(provider, redirect = '/account') {
+  const { error } = await (await signedInClient()).auth.linkIdentity({
+    provider,
+    options: { redirectTo: callbackUrl(window.location.origin, import.meta.env.BASE_URL, redirect) },
+  });
+  if (error) fail(error);
+}
+
+export async function unlinkIdentity(identity) {
+  const { error } = await (await signedInClient()).auth.unlinkIdentity(identity);
+  if (error) fail(error);
 }
 
 // Ends the Supabase session too (the app's own session is ended by the server)

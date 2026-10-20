@@ -13,6 +13,8 @@ import { api } from '@/api';
 import { formatDate } from '@/utils/format';
 import { saveJson, dateStamp } from '@/utils/download';
 import { LIMITS } from '@shared/constants.mjs';
+import { usingSupabase, linkedIdentities, linkProvider, unlinkIdentity } from '@/auth/supabaseSignIn';
+import { signInMethods } from '@/utils/signInMethods';
 
 const router = useRouter();
 
@@ -71,6 +73,51 @@ const methods = computed(() => {
   return rows;
 });
 const canConnectMore = computed(() => methods.value.some((m) => m.key !== 'password' && !m.connected));
+
+// ---------- Supabase sign-in (AUTH_PROVIDER=supabase): link and unlink from here ----------
+// The list comes from the identities Supabase holds; one can be removed while another remains.
+const viaSupabase = ref(false);
+const identities = ref([]);
+const identityError = ref('');
+const identityBusy = ref('');
+const supabaseMethods = computed(() => signInMethods(identities.value, available.value));
+const shownMethods = computed(() => (viaSupabase.value ? supabaseMethods.value : methods.value));
+
+async function loadIdentities() {
+  identityError.value = '';
+  try {
+    identities.value = await linkedIdentities();
+  } catch (err) {
+    identityError.value = err.message;
+  }
+}
+onMounted(async () => {
+  viaSupabase.value = await usingSupabase();
+  if (viaSupabase.value) await loadIdentities();
+});
+
+async function connectMethod(m) {
+  identityBusy.value = m.key;
+  try {
+    await linkProvider(m.key, '/settings/account');
+  } catch (err) {
+    toast.error(err.message);
+    identityBusy.value = '';
+  }
+}
+async function disconnectMethod(m) {
+  if (!m.canDisconnect) return;
+  identityBusy.value = m.key;
+  try {
+    await unlinkIdentity(m.identity);
+    await loadIdentities();
+    toast.success(`${m.label} disconnected.`);
+  } catch (err) {
+    toast.error(err.message);
+  } finally {
+    identityBusy.value = '';
+  }
+}
 
 // ---------- Password ----------
 
@@ -247,16 +294,41 @@ async function deactivate() {
 
       <h3 class="sub-heading">Ways to sign in</h3>
       <ul class="methods">
-        <li v-for="m in methods" :key="m.key" class="method">
+        <li v-for="m in shownMethods" :key="m.key" class="method">
           <span class="method-icon" :class="{ on: m.connected }" aria-hidden="true">
             <CircleCheck v-if="m.connected" :size="18" />
             <Circle v-else :size="18" />
           </span>
           <span class="method-label">{{ m.label }}</span>
           <span class="method-status" :class="{ on: m.connected }">{{ m.status }}</span>
+          <template v-if="viaSupabase">
+            <button
+              v-if="m.canConnect"
+              type="button"
+              class="btn btn-outline btn-sm method-action"
+              :disabled="Boolean(identityBusy)"
+              @click="connectMethod(m)"
+            >
+              Connect
+            </button>
+            <button
+              v-else-if="m.connected && m.key !== 'password'"
+              type="button"
+              class="btn btn-ghost btn-sm method-action"
+              :disabled="Boolean(identityBusy) || !m.canDisconnect"
+              :title="m.canDisconnect ? '' : 'Add another way to sign in first'"
+              @click="disconnectMethod(m)"
+            >
+              Disconnect
+            </button>
+          </template>
         </li>
       </ul>
-      <p v-if="canConnectMore" class="hint connect-hint">
+      <p v-if="viaSupabase && identityError" class="hint connect-hint" role="alert">{{ identityError }}</p>
+      <p v-else-if="viaSupabase" class="hint connect-hint">
+        Connecting takes you to Google or Discord and back here. You can't remove your last way to sign in.
+      </p>
+      <p v-else-if="canConnectMore" class="hint connect-hint">
         To connect another way to sign in, log out and use its "Continue with" button on the login page with
         this same email address ({{ auth.user.email }}).
       </p>
@@ -457,6 +529,9 @@ async function deactivate() {
 .method-status.on {
   color: var(--success);
   font-weight: 600;
+}
+.method-action {
+  margin-left: 8px;
 }
 .connect-hint {
   margin: 12px 0 0;

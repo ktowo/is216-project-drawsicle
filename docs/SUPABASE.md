@@ -43,7 +43,7 @@ How it signs in, with `AUTH_PROVIDER=supabase`:
 2. Google and Discord come back to `/auth/callback`, which swaps the one-time code for a Supabase session.
 3. Either way, the browser sends the Supabase access token to `POST /api/auth/supabase` and gets the app's normal session. Logging out ends both.
 
-Supabase dashboard setup (team project): **Authentication → Providers**, switch on Google and Discord with the OAuth app keys; **Authentication → URL Configuration**, add `<site>/auth/callback` and `http://localhost:5173/auth/callback` to the redirect URLs. `SUPABASE_OAUTH_PROVIDERS` (default `google,discord`) says which buttons the app shows.
+Supabase dashboard setup (team project): **Authentication → Providers**, switch on Google and Discord with the OAuth app keys; **Authentication → URL Configuration**, add `<site>/auth/callback` and `http://localhost:5173/auth/callback` to the redirect URLs. `SUPABASE_OAUTH_PROVIDERS` (default `google,discord`) says which buttons the app shows. For **Account → Ways to sign in** (connect or disconnect Google / Discord), switch on **Allow manual linking** under **Authentication → Sign In / Providers**.
 
 Each account can hold `supabaseId`, the Supabase Auth user it signs in as. It's cleared when an account is deleted.
 
