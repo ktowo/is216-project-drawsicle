@@ -1,1 +1,334 @@
-# is216-project
+# Drawsicle
+
+Drawsicle runs **art exchange events** for online art communities: Secret Santas, Valentine swaps,
+seasonal trades. It replaces the usual pile of spreadsheets, Google Forms and Discord messages with one
+place that collects everyone's preferences, matches artists automatically and keeps track of deadlines
+and gifts until the big reveal.
+
+IS216 Web Application Development II project (SMU).
+
+## What it does
+
+- **Accounts that last between events**: a profile, default answers for sign-up forms, notification
+  settings, and deactivation with a 30-day grace period.
+- **A private character library**: name, species, pronouns, tags, description, personality, a colour
+  palette, reference links (Toyhou.se, Google Docs...) each with a comment like "skip the tradables
+  folder", and notes for artists, sorted into folders with
+  favourites pinned to the top. Each character has its own page. Reuse characters in every event; ones that
+  were offered in an event can be archived but not deleted.
+- **Screen pets**: any character can come out as a little cartoon pet (cat, dog, fox, bunny, mouse,
+  bear, penguin, bird, dragon, slime, frog or hedgehog, in the character's own colours or one of twelve
+  palettes). Up to four at once wander along the bottom of the screen beside the page, now and then hop
+  up onto a card, say something short, and can be picked up, thrown, fed and petted. The paw button in
+  the navbar puts them away; `/pets` shows every kind.
+- **Sound effects**: small cute sounds made in the browser (no audio files): taps and pops for buttons,
+  chimes and dings for good news and notifications, a voice for each kind of screen pet, footsteps, doors,
+  cats and every emote in the museum, and a fanfare when gifts are unwrapped or matches are made. The
+  speaker button in the navbar turns them off.
+- **Events for organisers**: name, theme, rules, sign-up and submission deadlines, participant limits,
+  allowed gift types (art, adoptables, writing), the community platform, public or invite-only, with
+  optional application review. Lifecycle: *Draft → Open → Matching → Active → Completed*.
+- **Sign-ups for participants**: an event-specific form with preset options, characters to offer (or new
+  ones added on the spot), what you can make and what you'd like, an adopt wishlist when you ask for
+  adoptables, whether you'll be a backup artist, and things you can't draw.
+- **Automatic matching**: one big gift loop where possible, so nobody makes a gift for the person making
+  theirs. It respects "can't draw" tags and gift types. Organisers can swap pairs before publishing.
+- **Deadlines and reminders**: automatic reminders before sign-ups close and before gifts are due,
+  plus reminders organisers can send themselves.
+- **Submissions and the reveal**: upload images and links, organisers verify them, and once the event is
+  completed everyone sees who their Secret Santa was and the whole gallery.
+- **Browse events**: filter by status, season and size, search by name or organiser. The default order
+  is by each event's next deadline: sign-ups closing for open events, gifts due for running ones, and
+  finished events last.
+- **Public artist profiles** at `/users/<username>`: bio, social links (Discord handles come with a copy
+  button), the public events someone organises and how many exchanges they have completed. Organiser
+  names on event pages link there. Deactivated accounts and private details (email, characters,
+  sign-up forms) are never shown.
+- **Event templates and duplicating**: a new event can start from a preset (Secret Santa, Valentine swap,
+  seasonal trade, art trade), and organisers can duplicate any of their events into a fresh draft that keeps
+  the settings, rules, tags and banner but none of the people, matches or gifts.
+- **Calendar export**: an event's deadlines download as an `.ics` file for any calendar app.
+- **Your data**: *Download my data* in the account settings saves one JSON file with your profile,
+  characters, sign-ups, gifts and notifications. Deactivating an account also withdraws its sign-ups in
+  events that haven't published their matches yet; published matches stay, because those gifts are already
+  being made.
+- **Info pages**: About, Help & FAQ (searchable), community guidelines, Privacy and Terms.
+- **Notification history**: the bell shows the latest; the notifications page loads older ones page by page.
+- **Site admin** (`/admin`, accounts with the admin role, e.g. `ada@demo.test` or anyone listed in
+  `ADMIN_EMAILS`):
+  - **Accounts**: search, make or remove admins, ban and unban (with a reason the person sees when they
+    try to log in), and delete accounts.
+  - **Events**: disable or cancel any event, and delete it.
+    - A *cancelled* event keeps its public page with a notice and the reason.
+    - A *disabled* event disappears for everyone except its organisers, who see why.
+    - Both are read-only until an admin restores them.
+  - **Audit log**: every admin action is recorded, with the reason.
+- **Dark mode and the sparkle cursor**: two switches at the top right of every page. The site follows your
+  device's light/dark setting until you pick one. The pencil cursor with sparkles is only for mouse and
+  trackpad users, and turning it off is remembered.
+
+Out of scope for now: messaging, payments, analytics, public galleries, support tickets and custom form
+questions.
+
+## Tech stack
+
+| Part | Built with |
+| --- | --- |
+| Client | Vue 3 (`<script setup>`), Vue Router, Vite, Tailwind CSS 4 utilities, lucide icons |
+| Server | Node.js, Express 5, Mongoose 9 (MongoDB), JWT cookies, multer uploads, nodemailer |
+| Database | MongoDB Atlas, or a local MongoDB the server starts by itself |
+| Shared | `shared/` ES modules used by both sides: constants, the matching algorithm, demo data |
+| Tests | `node:test` + supertest + mongodb-memory-server (server), Vitest (client) |
+
+## Quick start
+
+You need **Node.js 22.18 or newer** (24 LTS recommended) from [nodejs.org](https://nodejs.org).
+[pnpm](https://pnpm.io) is preferred; the start scripts fall back to `corepack pnpm` or npm.
+
+**Windows**: double-click `Start-all.bat`, or run it from a terminal in the project folder:
+
+```bat
+.\Start-all.bat
+```
+
+**macOS, Linux, or Git Bash on Windows**:
+
+```sh
+./Start-all.sh
+```
+
+Then open <http://localhost:5173> and log in as **mika@demo.test** / **drawsicle123**.
+
+What the first run does:
+
+1. Installs the server and client dependencies (`pnpm install` in `server/` and `client/`).
+2. Creates `server/.env` from `server/.env.example` with fresh random secrets. An existing `.env` is never
+   overwritten.
+3. Starts the API on port 8000. With no connection string set, the server starts its own MongoDB (port 27018, data in
+   `server/.data`). **The very first time, the MongoDB download is about 800 MB on Windows**, so allow a few
+   minutes. It is cached afterwards (in `~/.cache/mongodb-binaries`, or the folder in `MONGOMS_DOWNLOAD_DIR`)
+   and later starts take seconds. The script only warns about the download when nothing is cached yet.
+4. Fills the empty local database with the demo accounts and events below.
+5. Starts the client on port 5173 (Vite, which forwards `/api` and `/uploads` to the API).
+
+Logs go to `.run/server.log` and `.run/client.log`. If something is already running, the scripts say so
+instead of starting it twice.
+
+| Option | What it does |
+| --- | --- |
+| `--mock` | Client only, with the API running in the browser (no server, no database) |
+| `--install` | Install dependencies again even if `node_modules` exists |
+| `--no-install` | Never install; stop if dependencies are missing |
+| `--help` | Show the options |
+
+**Stop everything** (API, client and the local MongoDB) with `Stop-all.bat` or `./Stop-all.sh`. They are
+safe to run twice. The local database is asked to shut down cleanly first
+(`server/scripts/stop-local-db.js`), so the last writes are saved even on Windows, where a database that is
+simply killed can lose them. If the database doesn't answer, the script falls back to stopping the process.
+
+## Demo accounts
+
+Every demo account uses the password **drawsicle123**. Dates are relative to when the demo data was
+created, so deadlines always look current.
+Every account also has a character library (with folders, colour palettes and personalities), and most
+have a screen pet or two out. Mika has three.
+
+**OC Secret Santa 2026** (open, organised by Mika) has 192 sign-ups taken from a real community Secret
+Santa's sign-up sheet: every answer is theirs (backup artist or not, what they can draw, art or adopts,
+adopt wishlists, the characters they offered and the comments they wrote on each link), but every name
+is made up and every link points at one of the demo's own reference pictures in
+`client/public/demo-refs` (public-domain artworks, credited in its CREDITS.md). Each of those accounts
+logs in with the same password; the login page lists a few of them.
+
+| Email | Name | Organises | Takes part in |
+| --- | --- | --- | --- |
+| mika@demo.test | Mika (main demo account) | Winter Secret Santa 2026 (open), Valentine Doodle Swap (draft), Studio Club Swap (private, invite code `demo-invite`), Summer Splash Swap (ready to generate matches), Autumn Leaves Art Trade (active) | Summer, Autumn, Spring |
+| sol@demo.test | Sol | | Winter, Moth & Lantern, Summer, Autumn, Spring |
+| juniper@demo.test | Juniper | Spring Bloom Exchange (completed) | Winter, Moth & Lantern, Summer, Autumn |
+| ash@demo.test | Ash | | Winter, Studio Club, Autumn |
+| remy@demo.test | Remy | | Winter, Summer, Spring; Moth & Lantern (waiting for review) |
+| noor@demo.test | Noor | | Winter, Summer, Spring |
+| kit@demo.test | Kit | Moth & Lantern Exchange (open, applications reviewed) | Studio Club, Spring |
+| pip@demo.test | Pip | | Moth & Lantern, Summer, Autumn |
+| ada@demo.test | Ada (**site admin**) | | Nothing: use her for the *Admin* page |
+
+Everyone has a bio and two or three social links, so each public profile has something to show, for example
+`/users/mika`, `/users/kit` (organises *Moth & Lantern Exchange*) or `/users/juniper` (organises the
+completed *Spring Bloom Exchange*). Drafts and private events never appear on a profile.
+
+Things to try as Mika: generate and publish matches for *Summer Splash Swap*, upload your gift for Sol in
+*Autumn Leaves Art Trade*, see who drew for you in *Spring Bloom Exchange*, or apply to Kit's *Moth & Lantern
+Exchange* and then log in as Kit to review it.
+
+To get the demo data back: `cd server && pnpm seed:reset` (local database), or the *Reset demo data* button
+in mock mode.
+
+## Starting things by hand
+
+```sh
+# Terminal 1: the API on http://localhost:8000
+cd server
+pnpm install
+cp .env.example .env      # then fill in SECRET and JWT_SECRET (Start-all does this for you)
+pnpm dev
+
+# Terminal 2: the client on http://localhost:5173
+cd client
+pnpm install
+pnpm dev
+```
+
+Other server scripts: `pnpm start` (no auto-restart), `pnpm seed` (add the demo data to an empty database),
+`pnpm seed:reset` (wipe and add it again).
+
+## Environment variables
+
+The server reads `server/.env` (see `server/.env.example`):
+
+| Variable | Default | What it's for |
+| --- | --- | --- |
+| `DB_MONGODB_URI` | *(placeholder)* | MongoDB connection string, e.g. from MongoDB Atlas (the name Vercel's MongoDB integration uses; `MONGODB_URI` and `DB` work too). Leave the placeholder or empty to use the built-in local database |
+| `SECRET`, `JWT_SECRET` | | Long random strings. `JWT_SECRET` signs the login cookie (`SECRET` is used when it's missing); changing it logs everyone out |
+| `HOST`, `PORT` | `localhost`, `8000` | Where the API listens |
+| `CLIENT_URL` | `http://localhost:5173` | Used in email links and sign-in redirects, and allowed to call the API from another origin. On Vercel it defaults to the production domain |
+| `ADMIN_EMAILS` | | Comma-separated emails that become site admins |
+| `LOCAL_DB_PORT` | `27018` | Port of the built-in MongoDB (only when no connection string is set) |
+| `SEED_DEMO` | `true` | Add the demo data when the built-in database is empty |
+| `REMINDER_INTERVAL_MINUTES` | `60` | How often the deadline reminder job runs (`0` turns it off) |
+| `CRON_SECRET` | | Lets Vercel Cron call `/api/cron/reminders` (Vercel sends it automatically once it's set) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | | Optional "Continue with Google" |
+| `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | | Optional "Continue with Discord" |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | | Real emails. Without them, emails are printed in the server log |
+| `UPLOAD_STORAGE` | *(automatic)* | Where uploaded images go: `azure` when it's configured, `mongodb` (GridFS, served from `/api/files`) when a connection string is set, otherwise `local` (`server/uploads`) |
+| `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGE_CONTAINER` | | Store uploads in Azure Blob Storage |
+
+**MongoDB Atlas or the local database?** For development you don't need anything: with no connection string, the
+server downloads and runs its own MongoDB, keeps the data in `server/.data` between restarts, and seeds the
+demo accounts. To share one database with your team or deploy, create a free cluster on
+[MongoDB Atlas](https://www.mongodb.com/atlas), put its connection string in `DB_MONGODB_URI`, and run `pnpm seed`
+once if you want the demo data there. Uploads then go into the same database, so everyone sharing it sees the
+same images.
+
+The client reads `client/.env*` files (Vite):
+
+| Variable | What it's for |
+| --- | --- |
+| `VITE_API_MODE=mock` | Run the API inside the browser (set by `.env.mock`) |
+| `VITE_ROUTER_MODE=hash` | `/#/events/...` URLs for static hosts (set by `.env.mock`) |
+| `VITE_API_URL` | API on another origin, e.g. `https://api.example.com/api` (default `/api`) |
+| `VITE_PROXY_TARGET` | Where the dev server forwards `/api` (default `http://localhost:8000`) |
+| `VITE_BASE` | Base path when hosting under a sub-folder, e.g. `/is216-project/` |
+
+## Deploying to Vercel
+
+`vercel.json` deploys the client and the API as one Vercel project on one domain, using
+[Vercel Services](https://vercel.com/docs/services):
+
+- **frontend** (`client/`): the Vite build. Any path that isn't a file gets `index.html`, so links like
+  `/events/123` work when opened directly.
+- **backend** (`server/`): `server.js` as one Vercel Function. Every `/api/...` request goes here.
+
+Set these in the Vercel project's *Settings → Environment Variables*:
+
+| Variable | |
+| --- | --- |
+| `DB_MONGODB_URI` | Set for you by the MongoDB Atlas integration (*Storage → MongoDB Atlas*). Any Atlas connection string works; Atlas must allow connections from anywhere (`0.0.0.0/0`), because Vercel has no fixed IP address |
+| `JWT_SECRET` | A long random string (`SECRET` is used if this one is missing) |
+| `CRON_SECRET` | A long random string, so the daily reminder cron can run |
+| `ADMIN_EMAILS` | Optional: accounts that become site admins |
+| Google, Discord, SMTP | Optional, as above. Sign-in callbacks are `https://<your-domain>/api/auth/google/callback` and `.../discord/callback` |
+
+How the server adapts when it runs on Vercel:
+
+- **No start-up step.** The first request connects to the database and runs the start-up data fixes;
+  later requests reuse the connection. If the database can't be reached, the API answers 503 with
+  `DB_UNAVAILABLE` and tries again on the next request.
+- **Uploads go into MongoDB** (GridFS), because a Vercel Function can't keep files on disk. They are
+  served from `/api/files/<id>.<ext>` and cached by Vercel's CDN. Requests are capped at 4.5 MB, so the
+  client shrinks large images before uploading.
+- **Deadline reminders** have no timer to run on. Incoming requests start a pass at most every
+  `REMINDER_INTERVAL_MINUTES` (the `JobRun` collection keeps every instance to one schedule), and Vercel
+  Cron calls `/api/cron/reminders` once a day as a backstop. The free plan allows daily cron jobs only.
+- **Demo data is never loaded automatically.** The demo accounts share a public password and include an
+  admin, so they don't belong on a public site. To add them anyway, run
+  `DB_MONGODB_URI="<connection string>" pnpm seed` from `server/`.
+
+To check a build on your own machine: `npx vercel build` (after `npx vercel link`), or `npx vercel dev`
+to run both services locally.
+
+## Mock mode
+
+Mock mode runs the whole API inside the browser (`client/src/mock`), seeded with the same demo data and
+following the same rules, status codes and responses as the real server. Everything is saved in the
+browser's localStorage, so it's perfect for reviewing the app on a static host such as GitHub Pages.
+
+```sh
+cd client
+pnpm dev:mock     # or: ./Start-all.sh --mock / Start-all.bat --mock
+pnpm build:mock   # static build in client/dist
+```
+
+**Live demo:** https://ktowo.github.io/is216-project-drawsicle/ runs mock mode on GitHub Pages. It is rebuilt by
+`.github/workflows/pages.yml` whenever the `github-demo` branch is pushed (`git push origin dev:github-demo`), and
+the build only goes out if the client tests pass.
+
+The login page has a **Test accounts** dropdown listing every demo account (site staff, organisers, artists): pick one to fill in the form, or *Sign in as* to log straight in. On the GitHub Pages build it also has a *Reset test data* link. It is a testing aid and will be removed before finals: build with `VITE_TEST_LOGINS=false` to hide it, or delete `client/src/utils/testLogins.js`, `client/src/components/TestLogins.vue` and their lines in `LoginView.vue`. Uploaded images are shrunk and kept
+in the browser too, so the browser's storage limit (about 5 MB) applies. The site admin tools work in the demo
+too (log in as ada@demo.test; a few reports are waiting). Google/Discord sign-in, real emails, password-reset
+links, Discord posts and art style scanning need the real server. A picture that can't load anywhere on the
+site is swapped for generated artwork instead of showing as broken.
+
+## Tests
+
+```sh
+cd server && pnpm test   # API tests against a throwaway MongoDB (downloads MongoDB on the first run)
+cd client && pnpm test   # Vitest, including a full exchange driven through the mock API
+cd client && pnpm test:e2e   # Playwright: an exchange and the museum in a real browser
+```
+
+GitHub runs all three, plus both client builds, on every push to `dev` or `main` and on every pull request
+(`.github/workflows/checks.yml`).
+
+## Project structure
+
+```
+is216-project/
+├── client/                 Vue 3 app
+│   ├── src/
+│   │   ├── api.js          fetch wrapper (switches to the mock in mock mode)
+│   │   ├── router/         every page route
+│   │   ├── views/          one file per page
+│   │   ├── components/     Navbar, Footer, NotificationBell, ui/, events/, characters/, profile/, info/
+│   │   ├── stores/         auth, notifications, toasts
+│   │   ├── utils/          formatting, calendar (.ics) files, event templates, social links
+│   │   ├── assets/         drawsicle.css design system + Tailwind theme
+│   │   └── mock/           the in-browser API used in mock mode
+│   └── tests/              Vitest tests
+├── server/                 Express API
+│   ├── server.js           loads .env, connects the database, seeds, starts reminders (exports the app for Vercel)
+│   ├── create-app.js       builds the Express app (used by server.js and the tests)
+│   ├── routes/             one router per feature
+│   ├── models/             Mongoose models
+│   ├── middleware/auth.js  login and event-role checks
+│   ├── services/           notifications, email, uploads, reminders, account deactivation
+│   ├── scripts/            seed.js (demo data), stop-local-db.js (clean database shutdown for Stop-all)
+│   └── tests/              node:test + supertest
+├── shared/                 constants, matching algorithm and demo data used by both sides
+├── docs/ARCHITECTURE.md    conventions, response shapes and every API route
+├── Start-all.sh / .bat     install, configure and start everything
+├── Stop-all.sh / .bat      stop everything
+└── vercel.json             deploys client/ and server/ together on Vercel
+```
+
+## API
+
+Every route, its access rules, status codes and response shapes are documented in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), together with the event lifecycle, the matching rules and the
+reminder schedule. `GET /api/health` tells you whether the API and database are up.
+
+## Branches
+
+- `main`: the stable version. Only tested, working code is merged here.
+- `dev`: where everyone's work comes together. Branch off `dev` for new work and open pull requests into it;
+  `dev` is merged into `main` when it's stable.
+- `github-demo`: what the GitHub Pages demo is built from. Push `dev` to it when you want the demo updated.

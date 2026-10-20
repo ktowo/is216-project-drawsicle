@@ -1,59 +1,723 @@
 <script setup>
-import { useBaseStore } from '@/stores/baseStore';
-import axios from 'axios';
-
-import { onMounted, ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { RouterLink } from 'vue-router';
 import {
-    Sparkles,
-    ArrowRight,
-    CalendarPlus,
-    Share2,
-    Shuffle,
-    CalendarClock,
-    BookHeart,
-    UserRoundPlus,
-    Gift,
-    Upload,
-    PartyPopper,
-    WandSparkles,
-    BellRing,
-    LockKeyhole,
-    LayoutDashboard,
-    ImageUp,
-    Check,
-    Clock,
-    Compass,
-    CalendarHeart,
-    RotateCcw,
-    CircleHelp,
+  Sparkles,
+  ArrowRight,
+  CalendarPlus,
+  Shuffle,
+  Gift,
+  LayoutDashboard,
+  Check,
+  Clock,
+  Compass,
+  CalendarHeart,
+  RotateCcw,
+  CircleHelp,
 } from 'lucide-vue-next';
-import Hero from '@/components/main/Hero.vue';
+import EventCard from '@/components/events/EventCard.vue';
+import EmptyState from '@/components/ui/EmptyState.vue';
+import { auth } from '@/stores/auth';
+import LandingShowcase from '@/components/landing/LandingShowcase.vue';
+import HowItWorks from '@/components/landing/HowItWorks.vue';
+import FeaturesBento from '@/components/landing/FeaturesBento.vue';
+import { api, qs } from '@/api';
 
-const baseStore = useBaseStore();
-const API_URL = baseStore.API_URL;
-const response = ref("-- No Connection --");
-const isAuthenticated = ref(true);
 
-onMounted(async () => {
-    try {
-        const res = await axios.get(API_URL);
-        console.log(res.data);
-        response.value = res.data;
-    } catch (e) {
-        console.error(e);
-    }
-})
+// Preview of events taking sign-ups
+const openEvents = ref([]);
+const eventsState = ref('loading'); // 'loading' | 'ready' | 'error'
+
+async function loadOpenEvents() {
+  eventsState.value = 'loading';
+  try {
+    const data = await api(`/events${qs({ status: 'open', limit: 3 })}`);
+    openEvents.value = (data.events || []).slice(0, 3);
+    eventsState.value = 'ready';
+  } catch {
+    eventsState.value = 'error';
+  }
+}
+onMounted(loadOpenEvents);
 </script>
 
 <template>
-    <main class="overflow-x-clip">
-       <Hero></Hero>
-    </main>
-    <h1 class="text-purple-800 text-4xl"><img class="float-left h-12 m-3" src="/drawsicle.svg">Hello World!</h1>
-    <p>The <a :href="API_URL">server</a> says: <code class="text-blue-500">{{ response }}</code></p>
+  <main id="main" class="home">
+    <section class="hero">
+      <div class="hero-inner">
+        <div class="hero-text">
+          <p class="eyebrow">
+            <Sparkles :size="16" aria-hidden="true" />
+            Secret Santas, Valentine swaps, seasonal exchanges
+          </p>
+          <h1 class="hero-title">Art exchanges, <span class="accent">minus the spreadsheets</span></h1>
+          <p class="lead">
+            Drawsicle collects sign-ups and character references, matches artists with characters they can actually
+            draw, and keeps everyone on track until the reveal.
+          </p>
+          <div class="hero-cta">
+            <template v-if="auth.user">
+              <RouterLink to="/dashboard" class="btn btn-primary">
+                <LayoutDashboard :size="18" aria-hidden="true" /> Go to your dashboard
+              </RouterLink>
+              <RouterLink to="/events/new" class="btn btn-outline">
+                <CalendarPlus :size="18" aria-hidden="true" /> Create an event
+              </RouterLink>
+            </template>
+            <template v-else>
+              <RouterLink to="/register" class="btn btn-primary">
+                Sign up free
+                <ArrowRight :size="18" aria-hidden="true" />
+              </RouterLink>
+              <RouterLink to="/events" class="btn btn-outline">
+                <Compass :size="18" aria-hidden="true" /> Browse events
+              </RouterLink>
+            </template>
+          </div>
+          <RouterLink to="/find-your-style" class="style-cta">
+            <Sparkles :size="20" aria-hidden="true" class="style-icon" />
+            <span>
+              <strong>Find your style</strong>
+              <span class="style-sub">Answer 5 quick questions and meet artists who love what you love.</span>
+            </span>
+            <ArrowRight :size="18" aria-hidden="true" />
+          </RouterLink>
+          <p v-if="!auth.user" class="hero-note">
+            Already have an account? <RouterLink to="/login">Log in</RouterLink>
+          </p>
+          <p v-else class="hero-note">
+            Welcome back, {{ auth.user.displayName }}. <RouterLink to="/events">Browse events</RouterLink> to find
+            one to join.
+          </p>
+        </div>
+
+        <!-- Illustration built from plain markup, so it stays crisp and needs no image files -->
+        <div class="hero-art" aria-hidden="true">
+          <div class="art-card art-back">
+            <p class="art-label">Sign-ups (example)</p>
+            <ul class="art-list">
+              <li><span class="dot" style="background: var(--pink-soft); color: var(--pink-dark)">M</span> Mika <Check :size="14" /></li>
+              <li><span class="dot" style="background: var(--info-soft); color: var(--info)">J</span> Juno <Check :size="14" /></li>
+              <li><span class="dot" style="background: var(--success-soft); color: var(--success)">R</span> Rowan <Check :size="14" /></li>
+              <li><span class="dot" style="background: var(--warning-soft); color: var(--warning)">S</span> Sol <Check :size="14" /></li>
+            </ul>
+          </div>
+
+          <div class="art-card art-front">
+            <div class="art-head">
+              <span class="art-gift"><Gift :size="20" /></span>
+              <div>
+                <p class="art-label">Your match</p>
+                <p class="art-title">You're making a gift for Juno</p>
+              </div>
+            </div>
+            <div class="art-character">
+              <span class="art-tile">P</span>
+              <div>
+                <p class="art-name">Pip</p>
+                <p class="art-species">moth</p>
+              </div>
+            </div>
+            <div class="art-tags">
+              <span>fluffy</span><span>pastel</span><span>wings</span>
+            </div>
+            <div class="art-foot">
+              <span class="art-deadline"><Clock :size="13" /> Reminder before it is due</span>
+              <span class="art-ok"><Check :size="13" /> You can draw this</span>
+            </div>
+          </div>
+
+          <div class="art-pill">
+            <Shuffle :size="15" /> Matched in one click
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <LandingShowcase />
+
+    <HowItWorks />
+
+    <FeaturesBento />
+
+    <section class="section" aria-labelledby="open-heading">
+      <header class="section-head row">
+        <div>
+          <h2 id="open-heading" class="section-heading">Open for sign-ups</h2>
+          <p class="section-lead">Exchanges taking artists right now.</p>
+        </div>
+        <RouterLink
+          v-if="eventsState === 'ready' && openEvents.length"
+          :to="{ path: '/events', query: { status: 'open' } }"
+          class="see-all"
+        >
+          See all open events <ArrowRight :size="16" aria-hidden="true" />
+        </RouterLink>
+      </header>
+
+      <div v-if="eventsState === 'loading'" role="status">
+        <span class="sr-only">Loading open events…</span>
+        <ul class="event-grid" aria-hidden="true">
+          <li v-for="n in 3" :key="n" class="card skeleton">
+            <span class="skeleton-banner" />
+            <span class="skeleton-line short" />
+            <span class="skeleton-line" />
+            <span class="skeleton-line" />
+          </li>
+        </ul>
+      </div>
+
+      <div v-else-if="eventsState === 'error'" class="events-note" role="alert">
+        <p>We couldn't load the latest events just now.</p>
+        <div class="events-note-actions">
+          <button type="button" class="btn btn-outline btn-sm" @click="loadOpenEvents">
+            <RotateCcw :size="16" aria-hidden="true" /> Try again
+          </button>
+          <RouterLink to="/events" class="btn btn-ghost btn-sm">Browse events</RouterLink>
+        </div>
+      </div>
+
+      <EmptyState
+        v-else-if="!openEvents.length"
+        :icon="CalendarHeart"
+        title="Nothing is taking sign-ups right now"
+        message="New exchanges open all the time. See what's running at the moment, or start one for your community."
+      >
+        <RouterLink to="/events" class="btn btn-outline btn-sm">
+          <Compass :size="16" aria-hidden="true" /> Browse events
+        </RouterLink>
+        <RouterLink to="/events/new" class="btn btn-primary btn-sm">
+          <CalendarPlus :size="16" aria-hidden="true" /> Create an event
+        </RouterLink>
+      </EmptyState>
+
+      <ul v-else class="event-grid">
+        <li v-for="event in openEvents" :key="event.id">
+          <EventCard :event="event" class="h-full" />
+        </li>
+      </ul>
+    </section>
+
+    <section class="cta-band" aria-labelledby="cta-heading">
+      <div class="cta-inner">
+        <h2 id="cta-heading" class="cta-title">Ready for your next exchange?</h2>
+        <p class="cta-text">
+          {{
+            auth.user
+              ? 'Set up an event in a few minutes, or find one to join.'
+              : 'Make an account, add your characters and join an event in a few minutes.'
+          }}
+        </p>
+        <div class="cta-actions">
+          <RouterLink :to="auth.user ? '/events/new' : '/register'" class="btn cta-primary">
+            {{ auth.user ? 'Create an event' : 'Sign up free' }}
+          </RouterLink>
+          <RouterLink :to="auth.user ? '/dashboard' : '/events'" class="btn cta-secondary">
+            {{ auth.user ? 'Go to your dashboard' : 'Browse events' }}
+          </RouterLink>
+        </div>
+        <p class="cta-note">
+          <CircleHelp :size="16" aria-hidden="true" /> Questions? <RouterLink to="/help">Read the help &amp; FAQ</RouterLink>
+        </p>
+      </div>
+    </section>
+  </main>
 </template>
 
 <style scoped>
+.home {
+  overflow-x: clip;
+}
 
+/* ---------- Hero ---------- */
+.hero {
+  position: relative;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(236, 106, 147, 0.14), transparent 42%),
+    radial-gradient(circle at 88% 70%, rgba(99, 179, 245, 0.12), transparent 40%);
+}
+.hero-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 72px 24px 80px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  align-items: center;
+  gap: 48px;
+}
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--pink-dark);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.hero-title {
+  margin-top: 20px;
+  font-size: clamp(2.4rem, 5.6vw, 3.9rem);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+}
+.accent {
+  color: var(--pink);
+}
+.lead {
+  margin: 20px 0 0;
+  max-width: 54ch;
+  font-size: 1.15rem;
+  line-height: 1.6;
+  color: var(--text-soft);
+}
+.hero-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 32px;
+}
+.style-cta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 460px;
+  margin-top: 18px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  border: 1px dashed var(--pink);
+  background: var(--pink-soft);
+  color: var(--text);
+  transition: transform 0.12s;
+}
+.style-cta:hover {
+  color: var(--pink-dark);
+  transform: translateY(-1px);
+}
+.style-cta strong {
+  display: block;
+}
+.style-sub {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.style-icon {
+  flex-shrink: 0;
+  color: var(--pink-dark);
+}
+@media (prefers-reduced-motion: reduce) {
+  .style-cta,
+  .style-cta:hover {
+    transition: none;
+    transform: none;
+  }
+}
+.hero-note {
+  margin: 18px 0 0;
+  color: var(--muted);
+}
+
+/* Illustration */
+.hero-art {
+  position: relative;
+  min-height: 400px;
+}
+.art-card {
+  position: absolute;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 18px 40px rgba(90, 65, 30, 0.12);
+  padding: 20px;
+}
+.art-back {
+  top: 0;
+  left: 4%;
+  width: 230px;
+  transform: rotate(-5deg);
+}
+.art-front {
+  top: 70px;
+  right: 2%;
+  width: min(330px, 88%);
+  transform: rotate(2deg);
+}
+.art-label {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.art-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.art-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+}
+.art-list li :deep(svg) {
+  margin-left: auto;
+  color: var(--success);
+}
+.dot {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.art-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.art-gift {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: var(--pink);
+  color: #fff;
+  flex-shrink: 0;
+}
+.art-title {
+  margin: 2px 0 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.15rem;
+  line-height: 1.2;
+}
+.art-character {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--surface-2);
+}
+.art-tile {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--purple-soft);
+  color: var(--purple-ink);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.2rem;
+}
+.art-name {
+  margin: 0;
+  font-weight: 700;
+}
+.art-species {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+.art-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+.art-tags span {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--chip);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.art-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.art-deadline,
+.art-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.art-deadline {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.art-ok {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.art-pill {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg);
+  font-weight: 600;
+  font-size: 0.9rem;
+  box-shadow: 0 10px 24px rgba(47, 45, 43, 0.25);
+}
+
+/* ---------- Sections ---------- */
+.section {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 56px 24px;
+}
+.section-head {
+  margin-bottom: 28px;
+}
+.section-head.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 24px;
+}
+.section-heading {
+  font-size: clamp(1.8rem, 3.6vw, 2.4rem);
+  font-weight: 800;
+}
+.section-lead {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 1.08rem;
+  max-width: 60ch;
+}
+.see-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+/* Open events */
+.event-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 0 22px;
+  overflow: hidden;
+}
+.skeleton-banner,
+.skeleton-line {
+  display: block;
+  background: linear-gradient(90deg, var(--chip) 0%, var(--hover) 50%, var(--chip) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+.skeleton-banner {
+  height: 150px;
+  margin-bottom: 8px;
+}
+.skeleton-line {
+  height: 14px;
+  margin: 0 22px;
+  border-radius: 999px;
+}
+.skeleton-line.short {
+  width: 40%;
+  height: 22px;
+}
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+.events-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  padding: 18px 22px;
+  border-radius: var(--radius-lg);
+  border: 1.5px dashed var(--border);
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+}
+.events-note p {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 500;
+}
+.events-note-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-banner,
+  .skeleton-line {
+    animation: none;
+  }
+}
+
+/* Final call to action */
+.cta-band {
+  padding: 24px 24px 72px;
+}
+.cta-inner {
+  max-width: 1152px;
+  margin: 0 auto;
+  padding: 52px 32px;
+  border-radius: 28px;
+  text-align: center;
+  color: #fff;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(255, 255, 255, 0.18), transparent 40%),
+    linear-gradient(135deg, var(--pink) 0%, var(--pink-dark) 100%);
+  box-shadow: 0 16px 40px rgba(217, 82, 125, 0.28);
+}
+.cta-title {
+  font-size: clamp(1.8rem, 4vw, 2.5rem);
+  font-weight: 800;
+}
+.cta-text {
+  margin: 10px auto 0;
+  max-width: 50ch;
+  font-size: 1.1rem;
+  opacity: 0.95;
+}
+.cta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 26px;
+}
+.cta-primary {
+  background: var(--surface);
+  color: var(--pink-dark);
+}
+.cta-primary:hover {
+  background: var(--pink-tint);
+  color: var(--pink-dark);
+}
+.cta-secondary {
+  background: transparent;
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.7);
+}
+.cta-secondary:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.cta-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 22px 0 0;
+  font-size: 0.95rem;
+  opacity: 0.95;
+}
+.cta-note a {
+  color: #fff;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.cta-note a:focus-visible {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.7);
+}
+.cta-band .btn:focus-visible {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.7);
+}
+
+/* ---------- Smaller screens ---------- */
+@media (max-width: 960px) {
+  .hero-inner {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 48px 24px 56px;
+    gap: 36px;
+  }
+  .hero-art {
+    max-width: 460px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  .event-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .hero-inner {
+    padding: 36px 16px 44px;
+  }
+  .lead {
+    font-size: 1.05rem;
+  }
+  .hero-cta .btn {
+    flex: 1 1 100%;
+  }
+  .hero-art {
+    min-height: 390px;
+  }
+  .art-back {
+    width: 190px;
+    left: 0;
+  }
+  .art-front {
+    top: 60px;
+    right: 0;
+  }
+  .section {
+    padding: 40px 16px;
+  }
+  .event-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cta-band {
+    padding: 16px 16px 48px;
+  }
+  .cta-inner {
+    padding: 40px 20px;
+    border-radius: 22px;
+  }
+  .cta-actions .btn {
+    flex: 1 1 100%;
+  }
+}
 </style>

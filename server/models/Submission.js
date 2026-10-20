@@ -1,0 +1,85 @@
+const mongoose = require('mongoose');
+const { CREATION_TYPE_VALUES, CONTENT_WARNING_VALUES, REACTION_VALUES, LIMITS } = require('../../shared/constants.mjs');
+
+// The finished gift for one match. The recipient only sees it (and who made it)
+// once the event is completed.
+const submissionSchema = new mongoose.Schema(
+  {
+    event: { type: mongoose.Schema.Types.ObjectId, ref: 'Event', required: true, index: true },
+    match: { type: mongoose.Schema.Types.ObjectId, ref: 'Match', required: true, unique: true },
+    giver: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    recipient: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+
+    title: { type: String, trim: true, default: '', maxlength: LIMITS.submissionTitle },
+    message: { type: String, trim: true, default: '', maxlength: LIMITS.submissionMessage }, // note to the recipient
+    type: { type: String, enum: CREATION_TYPE_VALUES, default: 'art' },
+    images: {
+      type: [String], // URLs from services/storage.js
+      default: [],
+      validate: [(v) => v.length <= LIMITS.submissionImages, `Up to ${LIMITS.submissionImages} images.`],
+    },
+    // Small copies for galleries: { src: an entry in images, thumb: its thumbnail URL }
+    thumbnails: {
+      type: [{ _id: false, src: { type: String, required: true }, thumb: { type: String, required: true } }],
+      default: [],
+    },
+    // Alt text for each image, same order as images (empty when the artist didn't write one)
+    imageDescriptions: { type: [{ type: String, maxlength: LIMITS.imageDescription }], default: [] },
+    // Shown before the pictures, which stay blurred until someone chooses to look
+    contentWarnings: { type: [{ type: String, enum: CONTENT_WARNING_VALUES }], default: [] },
+    // For writing or anything hosted elsewhere (Google Docs, Toyhou.se...)
+    links: {
+      type: [
+        {
+          _id: false,
+          label: { type: String, trim: true, default: '', maxlength: 60 },
+          url: { type: String, required: true, trim: true, maxlength: 500, match: [/^https?:\/\/\S+$/i, 'Links must start with http:// or https://'] },
+        },
+      ],
+      default: [],
+      validate: [(v) => v.length <= LIMITS.submissionLinks, `Up to ${LIMITS.submissionLinks} links.`],
+    },
+
+    submittedAt: { type: Date, default: Date.now },
+    late: { type: Boolean, default: false },
+
+    verified: { type: Boolean, default: false }, // organiser checked it
+    verifiedAt: { type: Date, default: null },
+    verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    // The recipient's thank-you after the reveal
+    thanks: {
+      message: { type: String, trim: true, default: '', maxlength: LIMITS.thanksMessage },
+      reaction: { type: String, enum: [...REACTION_VALUES, ''], default: '' },
+      at: { type: Date, default: null },
+    },
+  },
+  { timestamps: true }
+);
+
+submissionSchema.methods.toPublic = function () {
+  const idOf = (x) => (x?._id ? x._id.toString() : String(x));
+  return {
+    id: this._id.toString(),
+    eventId: idOf(this.event),
+    matchId: idOf(this.match),
+    title: this.title || '',
+    message: this.message || '',
+    type: this.type,
+    images: [...(this.images || [])],
+    // Same order as images; the full image when there's no smaller copy
+    thumbnails: (this.images || []).map((src) => this.thumbnails?.find((t) => t.src === src)?.thumb || src),
+    imageDescriptions: (this.images || []).map((_, i) => this.imageDescriptions?.[i] || ''),
+    contentWarnings: [...(this.contentWarnings || [])],
+    links: (this.links || []).map((l) => ({ label: l.label || '', url: l.url })),
+    submittedAt: this.submittedAt,
+    late: Boolean(this.late),
+    verified: Boolean(this.verified),
+    verifiedAt: this.verifiedAt,
+    thanks: this.thanks?.at
+      ? { message: this.thanks.message || '', reaction: this.thanks.reaction || '', at: this.thanks.at }
+      : null,
+    updatedAt: this.updatedAt,
+  };
+};
+
+module.exports = mongoose.models.Submission || mongoose.model('Submission', submissionSchema);
