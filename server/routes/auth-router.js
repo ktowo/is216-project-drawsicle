@@ -7,6 +7,8 @@ const { requireAuth } = require('../middleware/auth.js');
 const { startSession, endSession } = require('../utils/session.js');
 const { sendMail } = require('../services/mailer.js');
 const { asyncHandler, apiErrorHandler, applyAdminList, clientUrl } = require('../utils/helpers.js');
+const { authProvider } = require('../utils/auth-provider.js');
+const { verifyIdentity } = require('../services/supabase-identity.js');
 
 const router = Router();
 
@@ -153,6 +155,72 @@ router.post('/logout', (req, res) => {
   endSession(res);
   res.json({ ok: true });
 });
+
+// ---------- Supabase Auth (AUTH_PROVIDER=supabase) ----------
+// The browser signs in with Supabase, then trades its access token here for the app's own session
+// (docs/adr/0001). The account is the one linked to that Supabase user; otherwise the one with the
+// same email, but only once Supabase has verified it; otherwise a new one.
+router.post('/supabase', authLimiter, asyncHandler(async (req, res) => {
+  if (authProvider() !== 'supabase') {
+    return res.status(404).json({ error: 'Supabase sign-in is not switched on.', code: 'NOT_ENABLED' });
+  }
+  const identity = await verifyIdentity(req.body.accessToken);
+  if (!identity?.id) {
+    return res.status(401).json({ error: 'That sign-in has expired. Please sign in again.', code: 'INVALID_TOKEN' });
+  }
+  const email = normEmail(identity.email);
+
+  let user = await User.findOne({ supabaseId: identity.id });
+  let created = false;
+  if (!user && email) {
+    const sameEmail = await User.findOne({ email });
+    if (sameEmail) {
+      // Someone could sign up with your address; only a verified email may claim your account
+      if (!identity.emailVerified) {
+        return res.status(409).json({
+          error: 'There is already an account with this email. Verify your email address first, then sign in again.',
+          code: 'EMAIL_NOT_VERIFIED',
+        });
+      }
+      if (sameEmail.supabaseId) {
+        return res.status(409).json({
+          error: 'This email belongs to an account that signs in another way. Use that, or link this one from your settings.',
+          code: 'ACCOUNT_LINKED_ELSEWHERE',
+        });
+      }
+      sameEmail.supabaseId = identity.id;
+      user = sameEmail;
+    }
+  }
+
+  if (!user) {
+    if (!email) return res.status(400).json({ error: 'Your sign-in did not share an email address.', code: 'EMAIL_REQUIRED' });
+    const displayName = (identity.name || localPart(email)).trim().slice(0, DISPLAY_NAME_MAX) || localPart(email);
+    user = new User({ email, supabaseId: identity.id, displayName, avatarUrl: identity.avatarUrl || undefined });
+    applyAdminList(user);
+    try {
+      await saveNewUser(user, displayName);
+      created = true;
+    } catch (err) {
+      // Two sign-ins for the same new person at once: the other one won, so use it
+      if (!isDuplicate(err, 'supabaseId') && !isDuplicate(err, 'email')) throw err;
+      user = await User.findOne({ supabaseId: identity.id });
+      if (!user) throw err;
+    }
+  }
+
+  if (user.status === 'banned') return res.status(403).json(bannedBody(user));
+  const reactivated = reactivate(user);
+  applyAdminList(user);
+  // Accounts from before usernames existed
+  if (!user.username) user.username = await User.generateUsername(user.displayName || localPart(user.email));
+  if (user.isModified()) await user.save();
+
+  const remember = typeof req.body.remember === 'boolean' ? req.body.remember : undefined;
+  startSession(res, user, { remember });
+  const body = reactivated ? { user: user.toPublic(), reactivated: true } : { user: user.toPublic() };
+  res.status(created ? 201 : 200).json(body);
+}));
 
 router.get('/me', requireAuth, (req, res) => {
   res.json({ user: req.user.toPublic() });

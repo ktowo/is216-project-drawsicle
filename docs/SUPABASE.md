@@ -35,7 +35,7 @@ Sign-in is moving to Supabase Auth (`docs/specs/supabase-auth-email.md`). Supaba
 | Setting | What it does |
 | --- | --- |
 | `AUTH_PROVIDER=local` | The app's own sign-in (email + password, Google, Discord). The default; used by the tests and for running without a Supabase project. |
-| `AUTH_PROVIDER=supabase` | Sign-in through Supabase Auth. Needs `SUPABASE_URL`. |
+| `AUTH_PROVIDER=supabase` | Sign-in through Supabase Auth. Needs `SUPABASE_URL` and `SUPABASE_ANON_KEY` (the public key). The browser trades its Supabase token for the app's session at `POST /api/auth/supabase`. |
 
 Each account can hold `supabaseId`, the Supabase Auth user it signs in as. It's cleared when an account is deleted.
 
