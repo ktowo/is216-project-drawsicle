@@ -117,7 +117,7 @@ test('creating an event: login required, starts as draft, creator becomes organi
   assert.ok(event.inviteCode);
   assert.equal(event.participantCount, 0);
   assert.deepEqual(event.organizers.map((o) => o.id), [user.id]);
-  assert.deepEqual(event.viewer, { roles: ['organizer'], isOrganizer: true, applicationStatus: null });
+  assert.deepEqual(event.viewer, { roles: ['organizer'], isOrganizer: true, applicationStatus: null, watching: false });
 
   const stored = await Event.findById(event.id);
   assert.equal(stored.createdBy.toString(), user.id);
@@ -182,7 +182,7 @@ test('public events are visible to everyone without the invite code', async () =
 
   const other = await h.signUp(app);
   const res = await other.agent.get(`/api/events/${event.id}`).expect(200);
-  assert.deepEqual(res.body.event.viewer, { roles: [], isOrganizer: false, applicationStatus: null });
+  assert.deepEqual(res.body.event.viewer, { roles: [], isOrganizer: false, applicationStatus: null, watching: false });
   assert.equal(res.body.event.inviteCode, undefined);
 
   const organizers = await h.request(app).get(`/api/events/${event.id}/organizers`).expect(200);
@@ -286,7 +286,7 @@ test('listing shows public, non-draft events with filters, search and sorting', 
   assert.equal(winterRow.viewer.isOrganizer, true);
   assert.ok(winterRow.inviteCode);
   const participantView = await list('?status=active', mika.agent);
-  assert.deepEqual(participantView.events[0].viewer, { roles: [], isOrganizer: false, applicationStatus: null });
+  assert.deepEqual(participantView.events[0].viewer, { roles: [], isOrganizer: false, applicationStatus: null, watching: false });
 });
 
 // ---------- My events ----------
