@@ -1,5 +1,7 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, onMounted } from 'vue';
+import { usingSupabase, startProviderSignIn } from '@/auth/supabaseSignIn';
+import { toast } from '@/stores/toast';
 
 // Full page navigation: the server redirects to Google and back.
 // The "OR" divider lives in the login/register views (OrDivider) so it only shows when a button does.
@@ -14,10 +16,26 @@ const href = computed(() => {
   const safe = props.redirect.startsWith('/') && !props.redirect.startsWith('//');
   return safe ? `${base}?redirect=${encodeURIComponent(props.redirect)}` : base;
 });
+
+// With Supabase sign-in (AUTH_PROVIDER=supabase) the button starts Supabase's redirect instead
+const viaSupabase = ref(false);
+onMounted(async () => {
+  viaSupabase.value = await usingSupabase();
+});
+async function onClick(e) {
+  if (!viaSupabase.value) return;
+  e.preventDefault();
+  const safe = props.redirect.startsWith('/') && !props.redirect.startsWith('//');
+  try {
+    await startProviderSignIn('google', safe ? props.redirect : '');
+  } catch (err) {
+    toast.error(err.message);
+  }
+}
 </script>
 
 <template>
-  <a class="btn btn-outline btn-block provider-btn" :href="href">
+  <a class="btn btn-outline btn-block provider-btn" :href="href" @click="onClick">
     <svg width="22" height="22" viewBox="0 0 48 48" aria-hidden="true">
       <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
       <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />

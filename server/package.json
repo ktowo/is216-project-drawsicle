@@ -15,7 +15,8 @@
     "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\"",
     "supabase:sql": "node scripts/supabase-sync.js --sql",
     "supabase:tables": "node scripts/supabase-sync.js --apply-schema",
-    "supabase:sync": "node scripts/supabase-sync.js"
+    "supabase:sync": "node scripts/supabase-sync.js",
+    "supabase:import-users": "node scripts/supabase-import-users.js"
   },
   "dependencies": {
     "@azure/storage-blob": "^12.34.0",
