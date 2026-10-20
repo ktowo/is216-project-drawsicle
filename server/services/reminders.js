@@ -13,6 +13,7 @@ const Application = require('../models/Application.js');
 const Match = require('../models/Match.js');
 const Submission = require('../models/Submission.js');
 const JobRun = require('../models/JobRun.js');
+const { runDailyDigestIfDue } = require('./digest.js');
 const { organizerIds } = require('./events.js');
 const { notifyMany } = require('./notify.js');
 const { announceMilestone } = require('./discord.js');
@@ -307,6 +308,15 @@ async function runReminders(now = new Date()) {
   return summary;
 }
 
+// The daily digest rides along with the reminder job; it keeps its own once-a-day schedule
+async function digestAlongside(now) {
+  try {
+    await runDailyDigestIfDue(now);
+  } catch (err) {
+    console.error('Daily digest failed:', err);
+  }
+}
+
 async function tick() {
   if (running || mongoose.connection.readyState !== 1) return null;
   running = true;
@@ -315,6 +325,7 @@ async function tick() {
     const summary = await runReminders(new Date());
     const done = Object.entries(summary).filter(([, n]) => n > 0);
     if (done.length) console.log(`Reminders: ${done.map(([k, n]) => `${k} ${n}`).join(', ')}`);
+    await digestAlongside(new Date());
     return summary;
   } catch (err) {
     console.error('Reminders run failed:', err);
@@ -358,6 +369,7 @@ async function runRemindersIfDue(now = new Date()) {
     const summary = await runReminders(now);
     const done = Object.entries(summary).filter(([, n]) => n > 0);
     if (done.length) console.log(`Reminders: ${done.map(([k, n]) => `${k} ${n}`).join(', ')}`);
+    await digestAlongside(now);
     return summary;
   } catch (err) {
     console.error('Reminders run failed:', err);

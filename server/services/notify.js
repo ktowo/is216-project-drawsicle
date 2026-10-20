@@ -62,7 +62,8 @@ async function notify(userId, { type, title, message = '', link = '', email = fa
   const row = toRow(userId, { type, title, message, link });
   const user = email ? await User.findById(userId) : null;
   const mode = emailMode(user, email);
-  const notification = await Notification.create({ ...row, digestPending: mode === 'digest' });
+  const digest = mode === 'digest' ? { digestPending: true, emailType: email } : {};
+  const notification = await Notification.create({ ...row, ...digest });
   if (mode === 'instant') sendNotificationEmail(user, row);
   return notification;
 }
@@ -74,7 +75,10 @@ async function notifyMany(userIds, { type, title, message = '', link = '', email
 
   const users = email ? await User.find({ _id: { $in: ids } }) : [];
   const modes = new Map(users.map((u) => [u._id.toString(), emailMode(u, email)]));
-  const rows = ids.map((id) => ({ ...toRow(id, { type, title, message, link }), digestPending: modes.get(id) === 'digest' }));
+  const rows = ids.map((id) => ({
+    ...toRow(id, { type, title, message, link }),
+    ...(modes.get(id) === 'digest' ? { digestPending: true, emailType: email } : {}),
+  }));
   const created = await Notification.insertMany(rows);
 
   for (const user of users) {
