@@ -7,7 +7,8 @@ const Application = require('../models/Application.js');
 const EventMember = require('../models/EventMember.js');
 const Match = require('../models/Match.js');
 const Submission = require('../models/Submission.js');
-const { userMini } = require('../models/User.js');
+const User = require('../models/User.js');
+const { userMini } = User;
 
 // User ids of everyone with the 'organizer' role in an event
 async function organizerIds(eventId) {
@@ -71,6 +72,12 @@ function canViewEvent(event, ctx, inviteCode) {
 }
 
 // Full Event JSON for one viewer (see docs/ARCHITECTURE.md). Pass ctx if you already have it.
+// Did they ask for a reminder before this event's sign-ups close? (User.watchedEvents)
+function isWatching(user, eventId) {
+  const id = String(eventId);
+  return Boolean(user?.watchedEvents?.some((w) => String(w) === id));
+}
+
 async function serializeEvent(event, user, { ctx } = {}) {
   const context = ctx || (await viewerContext(event, user));
   const [count, organizers] = await Promise.all([participantCount(event._id), organizerMinis(event._id)]);
@@ -78,7 +85,12 @@ async function serializeEvent(event, user, { ctx } = {}) {
     participantCount: count,
     organizers,
     viewer: user
-      ? { roles: context.roles, isOrganizer: context.isOrganizer, applicationStatus: context.applicationStatus }
+      ? {
+          roles: context.roles,
+          isOrganizer: context.isOrganizer,
+          applicationStatus: context.applicationStatus,
+          watching: isWatching(user, event._id),
+        }
       : null,
     includeInvite: context.isOrganizer,
   });
@@ -116,7 +128,9 @@ async function serializeEvents(events, user, { counts } = {}) {
     return event.toPublic({
       participantCount: countMap.get(key) || 0,
       organizers: organizersByEvent.get(key) || [],
-      viewer: user ? { roles, isOrganizer, applicationStatus: statusByEvent.get(key) || null } : null,
+      viewer: user
+        ? { roles, isOrganizer, applicationStatus: statusByEvent.get(key) || null, watching: isWatching(user, event._id) }
+        : null,
       includeInvite: isOrganizer,
     });
   });
@@ -131,6 +145,7 @@ async function deleteEventCascade(event) {
     Announcement.deleteMany({ event: event._id }),
   ]);
   await EventMember.deleteMany({ event: event._id });
+  await User.updateMany({ watchedEvents: event._id }, { $pull: { watchedEvents: event._id } });
   await event.deleteOne();
 }
 
