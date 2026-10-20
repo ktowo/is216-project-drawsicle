@@ -308,6 +308,7 @@ test('accounts deactivated past the grace period are anonymised in place', async
     avatarUrl: '/uploads/avatars/gone.png',
     googleId: 'google-123',
     discordId: 'discord-123',
+    supabaseId: 'supabase-123',
     passwordHash: 'not-a-real-hash',
     bio: 'I draw moths',
     socials: { discord: 'gone', twitter: 'gone_art' },
@@ -332,6 +333,7 @@ test('accounts deactivated past the grace period are anonymised in place', async
   assert.equal(purged.avatarUrl, undefined);
   assert.equal(purged.googleId, undefined);
   assert.equal(purged.discordId, undefined);
+  assert.equal(purged.supabaseId, undefined); // the old Supabase sign-in can't reach it any more
   assert.equal(purged.passwordHash, undefined);
   assert.equal(purged.bio, '');
   assert.deepEqual(purged.toPublic().socials, Object.fromEntries(User.SOCIAL_KEYS.map((k) => [k, ''])));

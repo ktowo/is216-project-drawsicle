@@ -13,6 +13,8 @@ const userSchema = new mongoose.Schema(
     passwordHash: { type: String, select: false }, // empty for Google/Discord-only accounts
     googleId: { type: String, unique: true, sparse: true },
     discordId: { type: String, unique: true, sparse: true },
+    // The Supabase Auth user this account signs in as (AUTH_PROVIDER=supabase; docs/adr/0001)
+    supabaseId: { type: String, unique: true, sparse: true },
 
     // Public handle, e.g. "mika_draws". Generated at sign-up, editable in settings.
     username: {
