@@ -11,6 +11,7 @@ const { sendMail } = require('./mailer.js');
 const { renderEmail } = require('./email-layout.js');
 const { emailModesOf } = require('../../shared/email-types.mjs');
 const { clientUrl } = require('../utils/helpers.js');
+const { unsubscribeFor } = require('./unsubscribe.js');
 
 const JOB = 'daily-digest'; // its JobRun record
 // A little under a day, so a daily trigger that fires a few minutes early still counts
@@ -37,6 +38,7 @@ function groupByEvent(items, eventNames) {
 
 function digestEmail(user, groups, count) {
   const base = clientUrl();
+  const unsubscribe = unsubscribeFor(user._id, 'digest');
   const lines = groups.flatMap((g) => [`${g.name}:`, ...g.items.map((n) => `- ${n.title}${n.message ? ` (${n.message})` : ''}`)]);
   return renderEmail({
     preheader: groups.map((g) => g.name).join(', '),
@@ -48,6 +50,7 @@ function digestEmail(user, groups, count) {
       linkLabel: 'Email settings',
       url: `${base}/notifications`,
     },
+    unsubscribe,
   });
 }
 
@@ -80,7 +83,8 @@ async function sendDigests() {
 
     const { html, text } = digestEmail(user, groups, keep.length);
     const count = keep.length;
-    await sendMail({ to: user.email, subject: `Your Drawsicle day: ${count} ${count === 1 ? 'update' : 'updates'}`, text, html });
+    const { headers } = unsubscribeFor(user._id, 'digest');
+    await sendMail({ to: user.email, subject: `Your Drawsicle day: ${count} ${count === 1 ? 'update' : 'updates'}`, text, html, headers });
     summary.digestsSent++;
   }
   return summary;

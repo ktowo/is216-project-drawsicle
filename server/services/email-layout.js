@@ -19,7 +19,8 @@ function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
-function renderEmail({ preheader = '', heading, paragraphs = [], button = null, footer = null }) {
+// unsubscribe: { label, url } adds an unsubscribe line under the footer
+function renderEmail({ preheader = '', heading, paragraphs = [], button = null, footer = null, unsubscribe = null }) {
   const body = paragraphs
     .filter(Boolean)
     .map((p) => `<p style="margin:0 0 14px;font-size:16px;line-height:1.55;color:${INK}" class="body-text">${escapeHtml(p)}</p>`)
@@ -33,6 +34,9 @@ function renderEmail({ preheader = '', heading, paragraphs = [], button = null, 
     ? `<p style="margin:0;font-size:13px;line-height:1.5;color:${MUTED}" class="muted">${escapeHtml(footer.text)}${
         footer.url ? ` <a href="${escapeHtml(footer.url)}" style="color:${MUTED};text-decoration:underline">${escapeHtml(footer.linkLabel || footer.url)}</a>` : ''
       }</p>`
+    : '';
+  const unsubscribeHtml = unsubscribe
+    ? `<p style="margin:8px 0 0;font-size:13px;line-height:1.5;color:${MUTED}" class="muted"><a href="${escapeHtml(unsubscribe.url)}" style="color:${MUTED};text-decoration:underline">${escapeHtml(unsubscribe.label)}</a></p>`
     : '';
 
   const html = `<!doctype html>
@@ -64,7 +68,7 @@ function renderEmail({ preheader = '', heading, paragraphs = [], button = null, 
 ${body}
 ${buttonHtml}
 </td></tr>
-<tr><td style="padding:16px 8px 0;font-family:Arial,Helvetica,sans-serif">${footerHtml}</td></tr>
+<tr><td style="padding:16px 8px 0;font-family:Arial,Helvetica,sans-serif">${footerHtml}${unsubscribeHtml}</td></tr>
 </table>
 </td></tr>
 </table>
@@ -77,6 +81,7 @@ ${buttonHtml}
     ...paragraphs.filter(Boolean).flatMap((p) => [p, '']),
     ...(button ? [`${button.label}: ${button.url}`, ''] : []),
     ...(footer ? ['--', footer.text, ...(footer.url ? [`${footer.linkLabel || 'Link'}: ${footer.url}`] : [])] : []),
+    ...(unsubscribe ? [`${unsubscribe.label}: ${unsubscribe.url}`] : []),
   ]
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')

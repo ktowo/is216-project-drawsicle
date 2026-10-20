@@ -18,6 +18,7 @@ const favouriteRouter = require('./favourite-router.js');
 const friendsRouter = require('./friends-router.js');
 const fileRouter = require('./file-router.js');
 const cronRouter = require('./cron-router.js');
+const unsubscribeRouter = require('./unsubscribe-router.js');
 
 router.get("/health", (req, res) => {
   res.json({
@@ -48,6 +49,7 @@ router.use("/favourites", favouriteRouter);
 router.use("/friends", friendsRouter);
 router.use("/files", fileRouter);
 router.use("/cron", cronRouter);
+router.use("/unsubscribe", unsubscribeRouter);
 
 // Export
 module.exports = router;
