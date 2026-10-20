@@ -27,6 +27,7 @@ For the deployed site, add the same values in Vercel under **Project → Setting
 | `pnpm supabase:tables` | Creates or updates the tables directly. Needs `SUPABASE_DB_URL`. It only adds what is missing, so it's safe to re-run after a model changes. |
 | `pnpm supabase:sync` | Copies every record and every stored picture across. Uses the app's database, or the local one while the API is running. |
 | `node scripts/supabase-sync.js --move-pictures` | The same, and also points the app's own records at the pictures in Supabase Storage. |
+| `pnpm supabase:import-users` | Creates a Supabase Auth user for every account not linked yet: same email (marked confirmed), same password (the bcrypt hash moves as is) and display name, then saves the account's `supabaseId`. Safe to re-run; prints counts, never hashes. Run it before switching to `AUTH_PROVIDER=supabase`. Google / Discord link themselves the first time an imported person uses them with the same email. |
 
 ## Sign-in (in progress)
 
