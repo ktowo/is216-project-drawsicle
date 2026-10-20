@@ -1098,10 +1098,15 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
   .stepper-btn {
     flex-direction: column;
     gap: 4px;
-    padding: 8px 4px;
+    padding: 8px 2px;
     text-align: center;
-    font-size: 0.78rem;
+    font-size: 0.72rem;
   }
+  .stepper-label {
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+  
   .review-list div {
     grid-template-columns: minmax(0, 1fr);
     gap: 2px;
