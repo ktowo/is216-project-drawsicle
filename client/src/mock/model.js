@@ -231,7 +231,14 @@ export function serializeEvent(state, event, user, ctx = viewerContext(state, ev
     updatedAt: event.updatedAt,
     participantCount: participantCount(state, event.id),
     organizers: organizerMinis(state, event.id),
-    viewer: user ? { roles: ctx.roles, isOrganizer: ctx.isOrganizer, applicationStatus: ctx.applicationStatus } : null,
+    viewer: user
+      ? {
+          roles: ctx.roles,
+          isOrganizer: ctx.isOrganizer,
+          applicationStatus: ctx.applicationStatus,
+          watching: (user.watchedEvents || []).includes(event.id),
+        }
+      : null,
     ...(ctx.isOrganizer
       ? {
           inviteCode: event.inviteCode,

@@ -8,6 +8,7 @@ const Character = require('../models/Character.js');
 const Application = require('../models/Application.js');
 const Submission = require('../models/Submission.js');
 const Notification = require('../models/Notification.js');
+const Event = require('../models/Event.js');
 const { USERNAME_RE, SOCIAL_KEYS, userMini } = User;
 const { requireAuth } = require('../middleware/auth.js');
 const { uploadImage, uploadImageWithThumbnail, looksLikeImage, IMAGE_TYPES } = require('../services/storage.js');
@@ -279,7 +280,7 @@ router.post('/deactivate', requireAuth, asyncHandler(async (req, res) => {
 // "Download my data": everything stored about me, as one JSON document
 router.get('/export', requireAuth, asyncHandler(async (req, res) => {
   const user = req.user;
-  const [characters, applications, submissions, notifications] = await Promise.all([
+  const [characters, applications, submissions, notifications, watched] = await Promise.all([
     Character.find({ owner: user._id }).sort({ createdAt: 1, _id: 1 }),
     Application.find({ user: user._id })
       .sort({ createdAt: -1, _id: -1 })
@@ -287,6 +288,7 @@ router.get('/export', requireAuth, asyncHandler(async (req, res) => {
       .populate('offeredCharacters'),
     Submission.find({ giver: user._id }).sort({ submittedAt: -1, _id: -1 }).populate('event', 'name'),
     Notification.find({ user: user._id }).sort({ createdAt: -1, _id: -1 }),
+    Event.find({ _id: { $in: user.watchedEvents || [] } }).select('name signupDeadline'),
   ]);
   const mini = user.toMini();
 
@@ -304,6 +306,8 @@ router.get('/export', requireAuth, asyncHandler(async (req, res) => {
     })),
     submissions: submissions.map((s) => ({ ...s.toPublic(), eventName: s.event?.name || 'Deleted event' })),
     notifications: notifications.map((n) => n.toPublic()),
+    // Events they tapped "Remind me" on
+    eventReminders: watched.map((e) => ({ id: e._id.toString(), name: e.name, signupDeadline: e.signupDeadline })),
   });
 }));
 
