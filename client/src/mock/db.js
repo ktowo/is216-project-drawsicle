@@ -11,8 +11,49 @@ import { demoArtDataUrl } from '@shared/demo-art.mjs';
 export const STATE_KEY = 'drawsicle-mock-v1';
 export const SESSION_KEY = 'drawsicle-mock-session';
 // Bumped when the demo data changes shape or gains something people should see (2: the
-// Museum Club's sample wings), so saved demos start over with it
-const STATE_VERSION = 2;
+// Museum Club's sample wings; 3: screen pets and the bigger character library; 4: the OC Secret
+// Santa's 192 sign-ups; 5: demo pictures that load on GitHub Pages, sample reports for the admin
+// tools), so saved demos start over with it
+const STATE_VERSION = 5;
+
+// '/demo-art/x.jpg' -> '/is216-project-drawsicle/demo-art/x.jpg' when the site lives in a folder
+const sitePath = (path) => (path.startsWith('/') ? `${import.meta.env?.BASE_URL || '/'}${path.slice(1)}` : path);
+
+// A few reports waiting for the admins, so the moderation queue has something in it
+function sampleReports(users, characters, events, idFor, nowMs) {
+  const DAY = 24 * 60 * 60 * 1000;
+  const user = (key) => users.find((u) => u.id === idFor('user', key));
+  // The OC Secret Santa crowd (their made-up usernames all have an underscore)
+  const crowd = users.filter((u) => u.username?.includes('_') && u.role === 'user');
+  const rows = [];
+  const add = (reporter, targetType, target, label, owner, reason, details, daysAgo, status = 'open') =>
+    reporter &&
+    target &&
+    rows.push({
+      id: newId(),
+      reporter: reporter.id,
+      targetType,
+      targetId: target.id,
+      targetLabel: label,
+      targetOwner: owner || null,
+      reason,
+      details,
+      status,
+      resolution: status === 'open' ? '' : 'Checked the references: they are the owner\'s own designs.',
+      handledBy: status === 'open' ? null : user('ada')?.id || null,
+      handledAt: status === 'open' ? null : new Date(nowMs - (daysAgo - 1) * DAY).toISOString(),
+      createdAt: new Date(nowMs - daysAgo * DAY).toISOString(),
+    });
+  const someone = crowd[3];
+  add(user('sol'), 'user', someone, `${someone?.displayName} (@${someone?.username})`, someone?.id, 'spam',
+    'Keeps posting the same adopt sale link in every museum room.', 2);
+  const theirs = characters.find((c) => c.owner === crowd[10]?.id);
+  add(user('kit'), 'character', theirs, theirs ? `${theirs.name}${theirs.species ? ` (${theirs.species})` : ''}` : '', theirs?.owner,
+    'stolen_art', 'The reference picture looks like a famous painting rather than their own art.', 1);
+  const ev = events.find((e) => e.name === 'Valentine Doodle Swap') || events[0];
+  add(user('remy'), 'event', ev, ev?.name, ev?.createdBy, 'other', 'The rules say sketches are fine but the description says finished pieces only.', 6, 'dismissed');
+  return rows;
+}
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
@@ -103,6 +144,7 @@ export function buildState(now = new Date()) {
       canCreate: [],
       wantsTypes: [],
       likes: '',
+      adoptWishlist: '',
       avoid: '',
       cannotDraw: [],
       ...(u.defaultForm || {}),
@@ -110,8 +152,9 @@ export function buildState(now = new Date()) {
     notificationPrefs: { emailReminders: true, emailMatches: true, emailEventUpdates: false },
     profilePrivacy: { showExchanges: true, showGifts: false, ...(u.profilePrivacy || {}) },
     artistTags: { makes: [], themes: [], activity: '', cardColor: '', ...(u.artistTags || {}) },
-    createdAt: iso(nowMs - (200 - i * 7) * DAY),
-    updatedAt: iso(nowMs - (30 - i) * DAY),
+    // The first accounts joined over months; the OC Secret Santa crowd joined over the past half year
+    createdAt: iso(nowMs - (i < 28 ? 200 - i * 7 : 6 + ((i * 37) % 170)) * DAY),
+    updatedAt: iso(nowMs - (i < 28 ? Math.max(1, 30 - i) : 1 + ((i * 11) % 25)) * DAY),
   }));
 
   const characters = demo.characters.map((c, i) => ({
@@ -121,11 +164,17 @@ export function buildState(now = new Date()) {
     description: c.description || '',
     species: c.species || '',
     tags: [...(c.tags || [])],
-    referenceLinks: (c.referenceLinks || []).map((l) => ({ label: l.label || '', url: l.url })),
+    referenceLinks: (c.referenceLinks || []).map((l) => ({ label: l.label || '', url: l.url, note: l.note || '' })),
     notesForArtists: c.notesForArtists || '',
+    pronouns: c.pronouns || '',
+    personality: c.personality || '',
+    colours: c.colours || [],
+    folder: c.folder || '',
+    favourite: Boolean(c.favourite),
+    pet: { shown: Boolean(c.pet?.shown), kind: c.pet?.kind || '', palette: c.pet?.palette || '' },
     archivedAt: c.archived ? iso(nowMs - 40 * DAY) : null,
-    createdAt: iso(nowMs - (150 - i * 3) * DAY),
-    updatedAt: iso(nowMs - (60 - i) * DAY),
+    createdAt: iso(nowMs - (i < 48 ? 150 - i * 3 : 5 + ((i * 13) % 140)) * DAY),
+    updatedAt: iso(nowMs - (i < 48 ? Math.max(1, 60 - i) : 1 + ((i * 7) % 50)) * DAY),
   }));
 
   const events = [];
@@ -200,9 +249,11 @@ export function buildState(now = new Date()) {
       wantsTypes: [...a.wantsTypes],
       offeredCharacters: a.offeredCharacters.map((key) => idFor('character', key)),
       likes: a.likes || '',
+      adoptWishlist: a.adoptWishlist || '',
       avoid: a.avoid || '',
       cannotDraw: [...(a.cannotDraw || [])],
       notes: a.notes || '',
+      canBackup: Boolean(a.canBackup),
       reviewedBy: null,
       reviewedAt: null,
       createdAt: iso(createdMs),
@@ -249,12 +300,14 @@ export function buildState(now = new Date()) {
       title: s.title || '',
       message: s.message || '',
       type: s.type || 'art',
-      images: (s.art || []).map((art) => demoArtDataUrl(art)),
+      // Real demo pictures live in client/public, under the site's base path (on GitHub Pages too)
+      images: (s.art || []).map((art) => (art.src ? sitePath(art.src) : demoArtDataUrl(art))),
       links: (s.links || []).map((l) => ({ label: l.label || '', url: l.url })),
       submittedAt,
       late: Boolean(s.late),
       verified: Boolean(s.verified),
       verifiedAt: s.verified ? submittedAt : null,
+      ...(s.thanks ? { thanks: { message: s.thanks.message, reaction: s.thanks.reaction || '', at: iso(nowMs - (s.thanks.days || 0) * DAY) } } : {}),
       createdAt: submittedAt,
       updatedAt: submittedAt,
     };
@@ -283,7 +336,8 @@ export function buildState(now = new Date()) {
     submissions,
     notifications,
     announcements: [],
-    reports: [],
+    reports: sampleReports(users, characters, events, idFor, nowMs),
+    audit: [],
     follows: [],
     presence: [],
     chats: [],
@@ -294,7 +348,7 @@ export function buildState(now = new Date()) {
 }
 
 // Collections added after the first release; older saved demos get them empty
-const LATER_COLLECTIONS = ['announcements', 'reports', 'follows', 'presence', 'chats', 'guestbook', 'catPets', 'favourites'];
+const LATER_COLLECTIONS = ['announcements', 'reports', 'audit', 'follows', 'presence', 'chats', 'guestbook', 'catPets', 'favourites'];
 
 // ---------- Loading and saving ----------
 

@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, MousePointerClick, Lightbulb, LightbulbOff } fro
 import MuseumBackdrop from './MuseumBackdrop.vue';
 import MuseumFurniture from './MuseumFurniture.vue';
 import MuseumLights from './MuseumLights.vue';
+import DoodlePattern from './DoodlePattern.vue';
 import PixelAvatar from './PixelAvatar.vue';
 import PixelCat from './PixelCat.vue';
 import ChatBubbles from './ChatBubbles.vue';
@@ -21,6 +22,7 @@ import { roomLights, brightnessAt } from '@/museum/lights';
 import { roomCats, catPlan, petReaction, MOODS, CAT_SLOT_MS } from '@/museum/cats';
 import { lookFor, CHATTER } from '@/museum/looks';
 import { useRoomSync } from '@/museum/sync';
+import { play, EMOTE_SOUNDS } from '@/effects/sfx';
 import { formatTime } from '@/utils/format';
 import { EMOTES, PET_EMOTE } from '@shared/chat.mjs';
 import { themeFor } from '@shared/museum-themes.mjs';
@@ -245,6 +247,7 @@ function goSit(seat) {
 }
 
 function sitDown(seat) {
+  play('sit');
   Object.assign(player, { x: seat.x, y: seat.y, path: [], walking: false, sitting: true, dancing: false, facing: seat.facing });
   sync?.now();
 }
@@ -260,10 +263,12 @@ function arrive() {
   if (action.type === 'frame') {
     player.facing = action.frame.view.facing;
     say(player, '✨', 1200);
+    play('sparkle');
     emit('view', action.frame.artwork);
     sync?.now();
   } else if (action.type === 'door') {
     player.facing = action.door.facing;
+    play('door');
     cameFrom = layout.value.index;
     emit('update:room', action.door.to);
   } else if (action.type === 'seat') {
@@ -273,6 +278,7 @@ function arrive() {
     petCat(action.cat);
   } else if (action.type === 'guestbook') {
     player.facing = facingFor(action.stand.x - player.x, action.stand.y - player.y, player.facing);
+    play('page');
     openPanel('guestbook');
     sync?.now();
   }
@@ -420,12 +426,16 @@ function catReacts(c, by) {
     by.emoteUntil = now + EMOTE_MS;
     by.dancing = false;
   }
+  const close = by === player;
   if (reaction.mood === 'grumpy') {
+    play('hiss', { volume: close ? 0.7 : 0.35 });
     say(c, `${reaction.bubble} ${reaction.say}`, 2400);
     c.holdUntil = 0;
     c.slot = -1; // off somewhere else straight away
     return;
   }
+  play('meow', { volume: close ? 0.8 : 0.4 });
+  if (close) setTimeout(() => play('purr', { volume: 0.7 }), 450);
   say(c, `${reaction.bubble} ${reaction.say}`, 2600);
   Object.assign(c, { path: [], petted: true, petUntil: now + EMOTE_MS, holdUntil: now + 5000 });
   if (by) c.facing = facingFor(by.x - c.x, by.y - c.y, c.facing);
@@ -468,6 +478,7 @@ function step(now) {
   const dt = last ? Math.min(0.05, (now - last) / 1000) : 0;
   last = now;
   if (advance(player, SPEED, dt) === 'stopped') arrive();
+  else if (player.walking) play('step', { volume: 0.5 });
   for (const o of others) {
     if (advance(o, OTHERS_SPEED, dt) === 'stopped') {
       o.sitting = o.pendingSit;
@@ -498,10 +509,16 @@ function step(now) {
   // Chat bubbles drift up a row now and then, like a lift going up
   if (bubbles.value.length && now - lastShift > BUBBLE_DRIFT_MS) shiftBubbles(now);
 }
+// Phones redraw the room at 30 frames a second: smooth enough, and half the work
+const FRAME_MS = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches ? 33 : 0;
 function tick(now) {
   if (!onScreen) {
     raf = 0;
     last = 0;
+    return;
+  }
+  if (FRAME_MS && last && now - last < FRAME_MS) {
+    raf = requestAnimationFrame(tick);
     return;
   }
   try {
@@ -579,6 +596,12 @@ function onMessages(list, { history = false } = {}) {
     if (Date.now() - new Date(m.createdAt).getTime() > NEW_ENOUGH_MS) continue;
     const speaker = mine ? player : others.find((o) => o.user.id === m.user.id);
     addBubble({ user: m.user, name: m.user.displayName, kind: m.kind, text: m.text, left: screenLeft(speaker) });
+    if (!history) {
+      const volume = mine ? 0.85 : 0.45;
+      if (m.kind === 'emote' && m.emote && m.emote !== PET_EMOTE) play(EMOTE_SOUNDS[m.emote] || 'pop', { volume });
+      else if (m.kind === 'shout') play('shout', { volume });
+      else if (m.kind === 'say') play(mine ? 'send' : 'receive', { volume });
+    }
     if (history || m.kind !== 'emote' || !m.emote) continue;
     if (m.emote === PET_EMOTE) {
       const cat = cats.find((c) => c.cat.key === m.target);
@@ -616,6 +639,7 @@ function demoReply() {
   const v = visitors[Math.floor(Math.random() * visitors.length)];
   setTimeout(() => {
     addBubble({ user: v.user, name: v.user.displayName, kind: 'say', text: CHATTER[Math.floor(Math.random() * CHATTER.length)], left: screenLeft(v) });
+    play('receive', { volume: 0.45 });
   }, 1200 + Math.random() * 1500);
 }
 
@@ -817,6 +841,11 @@ defineExpose({ walkTo });
 <template>
   <div class="museum-room" :style="{ background: roomTheme.void }">
     <div class="stage">
+      <!-- Faint doodles behind the room, in their own layer so they aren't redrawn with every frame -->
+      <svg class="room-doodles" aria-hidden="true" focusable="false">
+        <defs><DoodlePattern :id="`${uid}-doodles`" colour="#ffffff" /></defs>
+        <rect width="100%" height="100%" :fill="`url(#${uid}-doodles)`" />
+      </svg>
       <svg
         ref="svgRef"
         :viewBox="view.box"
@@ -947,6 +976,7 @@ defineExpose({ walkTo });
           v-if="canDim"
           type="button"
           class="btn btn-ghost btn-xs lights-switch"
+          data-sfx="toggle"
           :aria-pressed="lightsOn ? 'true' : 'false'"
           @click="lightsOn = !lightsOn"
         >
@@ -994,13 +1024,25 @@ defineExpose({ walkTo });
   flex-direction: column;
   border-radius: 18px;
   overflow: hidden;
+  /* Its own layer: rounded corners clipping a scene that changes every frame flicker on phones otherwise */
+  isolation: isolate;
+  transform: translateZ(0);
   background: #232838;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 .stage {
   position: relative;
 }
+.room-doodles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.06;
+  pointer-events: none;
+}
 .scene {
+  position: relative;
   display: block;
   width: 100%;
   height: auto;

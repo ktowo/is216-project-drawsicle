@@ -199,6 +199,7 @@ function defaultsFromUser(user) {
     canCreate: [...(d.canCreate || [])],
     wantsTypes: [...(d.wantsTypes || [])],
     likes: d.likes || '',
+    adoptWishlist: d.adoptWishlist || '',
     avoid: d.avoid || '',
     cannotDraw: [...(d.cannotDraw || [])],
   };
@@ -214,6 +215,7 @@ const defaultsDirty = computed(() => JSON.stringify(defaults) !== defaultsSaved.
 const DEFAULT_IDS = {
   communityUsername: 'defaults-community',
   likes: 'defaults-likes',
+  adoptWishlist: 'defaults-adopt-wishlist',
   avoid: 'defaults-avoid',
   cannotDraw: 'defaults-cannot-draw',
 };
@@ -225,6 +227,9 @@ function validateDefaults() {
   }
   if (defaults.likes.trim().length > LIMITS.formText) errors.likes = `Keep this under ${LIMITS.formText} characters.`;
   if (defaults.avoid.trim().length > LIMITS.formText) errors.avoid = `Keep this under ${LIMITS.formText} characters.`;
+  if (defaults.adoptWishlist.trim().length > LIMITS.adoptWishlist) {
+    errors.adoptWishlist = `Keep this under ${LIMITS.adoptWishlist} characters.`;
+  }
   if (defaults.cannotDraw.length > LIMITS.tags) errors.cannotDraw = `Up to ${LIMITS.tags} tags.`;
   return errors;
 }
@@ -249,6 +254,7 @@ async function saveDefaults() {
           canCreate: defaults.canCreate,
           wantsTypes: defaults.wantsTypes,
           likes: defaults.likes.trim(),
+          adoptWishlist: defaults.adoptWishlist.trim(),
           avoid: defaults.avoid.trim(),
           cannotDraw: normalizeTags(defaults.cannotDraw),
         },
@@ -511,11 +517,12 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
               aria-describedby="privacy-gifts-hint"
             />
             <span class="track" aria-hidden="true"><span class="thumb" /></span>
-            <span class="switch-label">Allow public display of gifts I made or received</span>
+            <span class="switch-label">Allow public display of gifts I made or received, and my thank-you notes</span>
           </label>
           <p id="privacy-gifts-hint" class="hint">
-            A gift only appears on its artist's profile when both the artist and the person it was made for allow it.
-            Turning this off hides those gifts straight away.
+            A gift only appears on its artist's profile or the home page when both the artist and the person it was made
+            for allow it. Thank-you notes you write for those gifts can appear with them. Turning this off hides them
+            straight away.
           </p>
         </div>
       </fieldset>
@@ -632,6 +639,33 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
           </template>
         </FormField>
       </div>
+
+      <FormField
+        v-if="defaults.wantsTypes.includes('adoptable')"
+        label="Adopt wishlist"
+        :for-id="DEFAULT_IDS.adoptWishlist"
+        :error="defaultsErrors.adoptWishlist"
+        hint="The kind of adoptable you'd love, for events where you ask for adopts."
+        class="spaced"
+      >
+        <template #aside>
+          <span class="hint">{{ count(defaults.adoptWishlist) }}/{{ LIMITS.adoptWishlist }}</span>
+        </template>
+        <template #default="{ describedby, invalid }">
+          <div class="input-wrap">
+            <textarea
+              :id="DEFAULT_IDS.adoptWishlist"
+              v-model="defaults.adoptWishlist"
+              class="textarea short"
+              rows="3"
+              :maxlength="LIMITS.adoptWishlist"
+              placeholder="Pastel humanoids, anything candy-themed, a grunge bat anthro…"
+              :aria-invalid="invalid ? 'true' : undefined"
+              :aria-describedby="describedby"
+            />
+          </div>
+        </template>
+      </FormField>
 
       <FormField
         label="Things you can't draw"

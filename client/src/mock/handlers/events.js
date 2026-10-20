@@ -313,9 +313,17 @@ export function register(router) {
     }
 
     const rows = state.events
-      .filter((e) => e.publicity === 'public' && LIST_STATUSES[status].includes(e.status))
+      .filter((e) => e.publicity === 'public' && !e.disabledAt && LIST_STATUSES[status].includes(e.status))
       .filter((e) => !season || e.season === season)
-      .filter((e) => !re || re.test(e.name) || re.test(e.theme || '') || re.test(e.description || '') || organised.has(e.id))
+      .filter(
+        (e) =>
+          !re ||
+          re.test(e.name) ||
+          re.test(e.theme || '') ||
+          re.test(e.description || '') ||
+          re.test(e.platformName || '') ||
+          organised.has(e.id)
+      )
       .map((event) => ({ event, count: participantCount(state, event.id) }))
       .filter(({ count }) => (minCount === null || count >= minCount) && (maxCount === null || count <= maxCount))
       .sort(LIST_SORTS[sort]);

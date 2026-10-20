@@ -1,4 +1,6 @@
 <script setup>
+import LinkifiedText from '@/components/ui/LinkifiedText.vue';
+import { isReferenceUrl, linkHref } from '@/utils/links';
 import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
 import {
@@ -149,8 +151,11 @@ const characters = computed(() => (recipient.value?.characters || []).map((c) =>
 const referenceLines = computed(() =>
   characters.value.flatMap((c) =>
     (c.referenceLinks || [])
-      .filter((l) => /^https?:\/\//i.test(String(l.url || '')))
-      .map((l) => `${c.name}${l.label ? ` (${l.label})` : ''}: ${l.url}`)
+      .filter((l) => isReferenceUrl(l.url))
+      .map((l) => {
+        const url = l.url.startsWith('/') ? new URL(linkHref(l.url), window.location.href).href : l.url;
+        return `${c.name}${l.label ? ` (${l.label})` : ''}: ${url}${l.note ? ` (${l.note})` : ''}`;
+      })
   )
 );
 
@@ -285,6 +290,11 @@ async function copyUsername() {
                 <h3 class="wish-label"><Heart :size="17" aria-hidden="true" /> They'd love</h3>
                 <p v-if="recipient.likes" class="prose">{{ recipient.likes }}</p>
                 <p v-else class="muted">They didn't say. Surprise them!</p>
+              </div>
+
+              <div v-if="recipient.adoptWishlist && recipient.wantsTypes?.includes('adoptable')" class="wish">
+                <h3 class="wish-label"><Gift :size="17" aria-hidden="true" /> Adopt wishlist</h3>
+                <LinkifiedText class="prose" :text="recipient.adoptWishlist" />
               </div>
 
               <div class="wish">

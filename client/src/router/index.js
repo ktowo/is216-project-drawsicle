@@ -6,6 +6,7 @@ import { can } from '@shared/permissions.mjs';
 //   requiresAuth  - send guests to /login first
 //   guestOnly     - logged-in users go to /dashboard instead
 //   hideChrome    - no navbar/footer (full-page auth screens)
+//   noPets        - screen pets stay away (the museum has its own little people)
 //   title         - browser tab title
 const routes = [
   { path: '/', name: 'home', component: () => import('../views/HomeView.vue'), meta: { title: 'Art exchanges made easy' } },
@@ -26,14 +27,14 @@ const routes = [
   { path: '/events/:id/matches', name: 'event-matches', component: () => import('../views/MatchesView.vue'), meta: { requiresAuth: true, title: 'Your match' } },
   { path: '/events/:id/submit', name: 'event-submit', component: () => import('../views/EventSubmitView.vue'), meta: { requiresAuth: true, title: 'Submit your gift' } },
   { path: '/events/:id/results', name: 'event-results', component: () => import('../views/EventResultsView.vue'), meta: { requiresAuth: true, title: 'Results' } },
-  { path: '/events/:id/museum', name: 'event-museum', component: () => import('../views/EventMuseumView.vue'), meta: { requiresAuth: true, title: 'The gallery' } },
+  { path: '/events/:id/museum', name: 'event-museum', component: () => import('../views/EventMuseumView.vue'), meta: { requiresAuth: true, noPets: true, title: 'The gallery' } },
   { path: '/saved', name: 'saved', component: () => import('../views/FavouritesView.vue'), meta: { requiresAuth: true, title: 'Saved art' } },
   { path: '/find-your-style', name: 'quiz', component: () => import('../views/StyleQuizView.vue'), meta: { title: 'Find your style' } },
   { path: '/discover', name: 'discover', component: () => import('../views/DiscoverView.vue'), meta: { title: 'Discover artists' } },
   { path: '/avatar', name: 'avatar', component: () => import('../views/AvatarView.vue'), meta: { requiresAuth: true, title: 'Your museum avatar' } },
   { path: '/friends', name: 'friends', component: () => import('../views/FriendsView.vue'), meta: { requiresAuth: true, title: 'Friends' } },
-  { path: '/museum', name: 'museum', component: () => import('../views/MuseumView.vue'), meta: { title: 'The museum' } },
-  { path: '/museum/:eventId', name: 'museum-wing', component: () => import('../views/MuseumView.vue'), meta: { title: 'The museum' } },
+  { path: '/museum', name: 'museum', component: () => import('../views/MuseumView.vue'), meta: { noPets: true, title: 'The museum' } },
+  { path: '/museum/:eventId', name: 'museum-wing', component: () => import('../views/MuseumView.vue'), meta: { noPets: true, title: 'The museum' } },
 
   { path: '/my-events', name: 'my-events', component: () => import('../views/MyEventsView.vue'), meta: { requiresAuth: true, title: 'My events' } },
   { path: '/dashboard', name: 'dashboard', component: () => import('../views/DashboardView.vue'), meta: { requiresAuth: true, title: 'Dashboard' } },
@@ -48,6 +49,7 @@ const routes = [
       { path: '/profile', name: 'profile', component: () => import('../views/ProfileView.vue'), meta: { requiresAuth: true, title: 'Your profile' } },
       { path: '/characters', name: 'characters', component: () => import('../views/CharactersView.vue'), meta: { requiresAuth: true, title: 'Character library' } },
       { path: '/characters/new', name: 'character-new', component: () => import('../views/CharacterFormView.vue'), meta: { requiresAuth: true, title: 'New character' } },
+      { path: '/characters/:id', name: 'character', component: () => import('../views/CharacterView.vue'), meta: { requiresAuth: true, title: 'Character' } },
       { path: '/characters/:id/edit', name: 'character-edit', component: () => import('../views/CharacterFormView.vue'), meta: { requiresAuth: true, title: 'Edit character' } },
       { path: '/notification', name: 'notifications', component: () => import('../views/NotificationsView.vue'), meta: { requiresAuth: true, title: 'Notifications' }, alias: '/notifications' },
       { path: '/settings/account', name: 'account', component: () => import('../views/AccountView.vue'), meta: { requiresAuth: true, title: 'Account' } },
@@ -58,6 +60,7 @@ const routes = [
   { path: '/users/:username', name: 'user', component: () => import('../views/UserProfileView.vue'), meta: { title: 'Artist' } },
 
   // Info pages (linked from the footer)
+  { path: '/pets', name: 'pets', component: () => import('../views/PetsView.vue'), meta: { title: 'Screen pets' } },
   { path: '/about', name: 'about', component: () => import('../views/AboutView.vue'), meta: { title: 'About' } },
   { path: '/help', name: 'help', component: () => import('../views/HelpView.vue'), meta: { title: 'Help & FAQ' } },
   { path: '/guidelines', name: 'guidelines', component: () => import('../views/GuidelinesView.vue'), meta: { title: 'Community guidelines' } },

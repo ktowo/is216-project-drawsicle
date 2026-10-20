@@ -3,6 +3,7 @@ import { ref, watch, onMounted } from 'vue';
 import { RouterLink } from 'vue-router';
 import { Flag, ExternalLink, Check, X, Undo2, ImageOff } from 'lucide-vue-next';
 import { api, qs, assetUrl } from '@/api';
+import { linkHref } from '@/utils/links';
 import { toast } from '@/stores/toast';
 import { REPORT_REASONS, REPORT_STATUS_LABELS, CONTENT_WARNINGS } from '@shared/constants.mjs';
 import TabNav from '@/components/ui/TabNav.vue';
@@ -140,8 +141,13 @@ async function setStatus(report, next, resolution = '') {
             <template v-else-if="r.targetType === 'character'">
               <p v-if="r.preview.description" class="m-0">{{ r.preview.description }}</p>
               <p v-if="r.preview.notesForArtists" class="quote">Notes for artists: {{ r.preview.notesForArtists }}</p>
-              <p v-for="url in r.preview.referenceLinks" :key="url" class="m-0 link-line">
-                <a :href="url" target="_blank" rel="noopener noreferrer">{{ url }}</a>
+              <div v-if="r.preview.referenceLinks.some((u) => u.startsWith('/'))" class="thumbs">
+                <a v-for="url in r.preview.referenceLinks.filter((u) => u.startsWith('/'))" :key="url" :href="linkHref(url)" target="_blank" rel="noopener">
+                  <img :src="linkHref(url)" alt="Reference picture" loading="lazy" />
+                </a>
+              </div>
+              <p v-for="url in r.preview.referenceLinks.filter((u) => !u.startsWith('/'))" :key="url" class="m-0 link-line">
+                <a :href="linkHref(url)" target="_blank" rel="noopener noreferrer">{{ url }}</a>
               </p>
             </template>
             <template v-else-if="r.targetType === 'user'">
