@@ -7,6 +7,7 @@ import TextField from '@/components/TextField.vue';
 import PasswordStrength from '@/components/PasswordStrength.vue';
 import { api } from '@/api';
 import { setUser } from '@/stores/auth';
+import { verifyEmailLink, setNewPassword, exchangeForSession } from '@/auth/supabaseSignIn';
 
 const route = useRoute();
 
@@ -14,7 +15,10 @@ const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 128;
 
 const token = typeof route.query.token === 'string' ? route.query.token : '';
-const tokenLooksValid = /^[a-f0-9]{64}$/.test(token);
+// With Supabase sign-in the email links here with a one-time token_hash instead (docs/SUPABASE.md)
+const tokenHash = typeof route.query.token_hash === 'string' ? route.query.token_hash : '';
+const viaSupabase = Boolean(tokenHash) && route.query.type === 'recovery';
+const tokenLooksValid = viaSupabase ? tokenHash.length >= 16 : /^[a-f0-9]{64}$/.test(token);
 
 // The page goes through these:
 //   checking   asking the server if the link still works (before anyone types a password)
@@ -66,6 +70,17 @@ function showProblem(reason, message = '') {
 
 onMounted(async () => {
   if (step.value !== 'checking') return;
+  if (viaSupabase) {
+    // Supabase checks the link and signs the person in for the change
+    try {
+      const { email } = await verifyEmailLink(tokenHash, 'recovery');
+      accountEmail.value = email;
+      step.value = 'form';
+    } catch (e) {
+      showProblem(e.code);
+    }
+    return;
+  }
   try {
     const data = await api(`/auth/reset-password/check?token=${token}`);
     accountEmail.value = data.email || '';
@@ -96,10 +111,12 @@ async function submit() {
 
   loading.value = true;
   try {
-    const { user } = await api('/auth/reset-password', {
-      method: 'POST',
-      body: { token, password: password.value },
-    });
+    const { user } = viaSupabase
+      ? await exchangeForSession(await setNewPassword(password.value), { passwordReset: true })
+      : await api('/auth/reset-password', {
+          method: 'POST',
+          body: { token, password: password.value },
+        });
     setUser(user);
     step.value = 'done';
   } catch (e) {

@@ -7,6 +7,7 @@ import {
   signUpWithPassword,
   exchangeForSession,
   signOutOfSupabase,
+  sendPasswordReset,
 } from '../auth/supabaseSignIn';
 
 // Shared logged-in user. Import `auth` anywhere and read auth.user.
@@ -71,6 +72,12 @@ export async function register(email, password, displayName) {
   auth.user = user;
   auth.checked = true;
   return user;
+}
+
+// "Forgot password": Supabase sends the email when it's on, otherwise the server does
+export async function requestPasswordReset(email) {
+  if (await usingSupabase()) return sendPasswordReset(email);
+  return api('/auth/forgot-password', { method: 'POST', body: { email } });
 }
 
 export async function logout() {

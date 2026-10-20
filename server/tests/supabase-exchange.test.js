@@ -150,3 +150,15 @@ test('the providers list tells the browser how to sign in, with only public Supa
     for (const k of ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_OAUTH_PROVIDERS']) delete process.env[k];
   }
 });
+
+test('after a Supabase password reset, other devices are logged out (as with the app\'s own reset)', async () => {
+  const app = h.makeApp();
+  const { agent: otherDevice, res: first } = exchange(app, 'new-person');
+  await first.expect(201);
+  await otherDevice.get('/api/auth/me').expect(200);
+
+  const { agent: thisDevice, res } = exchange(app, 'new-person', { passwordReset: true });
+  await res.expect(200);
+  await thisDevice.get('/api/auth/me').expect(200);
+  await otherDevice.get('/api/auth/me').expect(401);
+});

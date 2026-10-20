@@ -215,6 +215,8 @@ router.post('/supabase', authLimiter, asyncHandler(async (req, res) => {
   applyAdminList(user);
   // Accounts from before usernames existed
   if (!user.username) user.username = await User.generateUsername(user.displayName || localPart(user.email));
+  // Just reset the password with Supabase: log out every other device, as the app's own reset does
+  if (req.body.passwordReset === true && !created) user.sessionVersion = (user.sessionVersion || 0) + 1;
   if (user.isModified()) await user.save();
 
   const remember = typeof req.body.remember === 'boolean' ? req.body.remember : undefined;
