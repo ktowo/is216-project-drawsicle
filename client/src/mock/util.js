@@ -1,5 +1,8 @@
 // Small helpers shared by the mock handlers: errors, input reading, dates.
-import { LIMITS, normalizeTags, CONTENT_WARNING_VALUES } from '@shared/constants.mjs';
+import { LIMITS, normalizeTags, CONTENT_WARNING_VALUES, REFERENCE_URL_RE } from '@shared/constants.mjs';
+import { PET_KIND_VALUES, PET_PALETTE_VALUES } from '@shared/pets.mjs';
+
+const HEX_RE = /^#[0-9a-f]{6}$/;
 
 // Same default codes as server/utils/helpers.js
 const DEFAULT_CODES = {
@@ -48,8 +51,9 @@ export function readBoolean(value, label) {
   throw invalid(`${label} must be true or false.`);
 }
 
-// [{ label, url }] rows; rows with an empty url are dropped so forms can send blank rows
-export function readLinks(value, { max, what = 'Links', labelMax = 60, urlMax = 500 } = {}) {
+// [{ label, url }] rows; rows with an empty url are dropped so forms can send blank rows.
+// reference: character reference links, which also take the demo's own pictures and a comment
+export function readLinks(value, { max, what = 'Links', labelMax = 60, urlMax = 500, reference = false } = {}) {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value)) throw invalid(`${what} must be a list.`);
   const links = [];
@@ -60,9 +64,15 @@ export function readLinks(value, { max, what = 'Links', labelMax = 60, urlMax = 
     if (!url) continue;
     const label = typeof raw.label === 'string' ? raw.label.trim() : '';
     if (url.length > urlMax) throw invalid(`One of the ${what.toLowerCase()} is too long.`);
-    if (!URL_RE.test(url)) throw invalid(`${what} must start with http:// or https://`);
+    if (!(reference ? REFERENCE_URL_RE : URL_RE).test(url)) throw invalid(`${what} must start with http:// or https://`);
     if (label.length > labelMax) throw invalid(`Link labels can be up to ${labelMax} characters.`);
-    links.push({ label, url });
+    if (!reference) {
+      links.push({ label, url });
+      continue;
+    }
+    const note = typeof raw.note === 'string' ? raw.note.trim() : '';
+    if (note.length > LIMITS.linkNote) throw invalid(`Link comments can be up to ${LIMITS.linkNote} characters.`);
+    links.push({ label, url, note });
   }
   if (max !== undefined && links.length > max) throw invalid(`Up to ${max} ${what.toLowerCase()}.`);
   return links;
@@ -77,13 +87,16 @@ export function readCharacterInput(body) {
     description: ['Description', LIMITS.characterDescription],
     species: ['Species', LIMITS.species],
     notesForArtists: ['Notes for artists', LIMITS.notesForArtists],
+    pronouns: ['Pronouns', LIMITS.pronouns],
+    personality: ['Personality', LIMITS.personality],
+    folder: ['Folder', LIMITS.folder],
   };
   for (const [key, [label, max]] of Object.entries(fields)) {
     if (body[key] !== undefined) input[key] = readText(body[key], label, max);
   }
   if (body.tags !== undefined) input.tags = normalizeTags(body.tags ?? []);
   if (body.referenceLinks !== undefined) {
-    input.referenceLinks = readLinks(body.referenceLinks, { max: LIMITS.referenceLinks, what: 'Reference links' });
+    input.referenceLinks = readLinks(body.referenceLinks, { max: LIMITS.referenceLinks, what: 'Reference links', reference: true });
   }
   if (body.contentWarnings !== undefined) {
     const list = body.contentWarnings ?? [];
@@ -91,6 +104,32 @@ export function readCharacterInput(body) {
       throw invalid('Pick content warnings from the list.');
     }
     input.contentWarnings = [...new Set(list)];
+  }
+  if (body.colours !== undefined) {
+    if (body.colours !== null && !Array.isArray(body.colours)) throw invalid('Colours must be a list.');
+    const colours = [];
+    for (const raw of body.colours || []) {
+      const hex = String(raw ?? '').trim().toLowerCase();
+      if (!HEX_RE.test(hex)) throw invalid('Colours must look like #ff99cc.');
+      if (!colours.includes(hex)) colours.push(hex);
+    }
+    if (colours.length > LIMITS.colours) throw invalid(`Up to ${LIMITS.colours} colours.`);
+    input.colours = colours;
+  }
+  if (body.favourite !== undefined) input.favourite = body.favourite === true;
+  if (body.pet !== undefined) {
+    if (!isPlainObject(body.pet)) throw invalid('Pet settings are missing.');
+    const pet = {};
+    if (body.pet.shown !== undefined) pet.shown = body.pet.shown === true;
+    if (body.pet.kind !== undefined) {
+      if (body.pet.kind !== '' && !PET_KIND_VALUES.includes(body.pet.kind)) throw invalid('Pick a kind of pet from the list.');
+      pet.kind = body.pet.kind;
+    }
+    if (body.pet.palette !== undefined) {
+      if (body.pet.palette !== '' && !PET_PALETTE_VALUES.includes(body.pet.palette)) throw invalid('Pick pet colours from the list.');
+      pet.palette = body.pet.palette;
+    }
+    input.pet = pet;
   }
   return input;
 }

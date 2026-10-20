@@ -5,16 +5,23 @@ import { LIMITS, CONTENT_WARNINGS } from '@shared/constants.mjs';
 import FormField from '@/components/ui/FormField.vue';
 import TagInput from '@/components/ui/TagInput.vue';
 import ChoiceChips from '@/components/ui/ChoiceChips.vue';
+import ColourSwatches from './ColourSwatches.vue';
 
-// Every character input. v-model is { name, species, tags, description, referenceLinks, notesForArtists }
-// (see emptyCharacter() in ./character-form.js). Each change emits a new object.
-// errors: { name, species, tags, description, notesForArtists, referenceLinks, 'referenceLinks.<i>' }
+// Every character input. v-model is the object from emptyCharacter() in ./character-form.js.
+// Each change emits a new object.
+// errors: { name, species, pronouns, folder, tags, description, personality, colours, notesForArtists,
+//           referenceLinks, 'referenceLinks.<i>' }
+// extended: also show pronouns, folder, personality and colours (the library form; the event
+//           sign-up form keeps to the basics)
 const props = defineProps({
   modelValue: { type: Object, required: true },
   errors: { type: Object, default: () => ({}) },
   idPrefix: { type: String, default: '' },
   // Tags to suggest first, e.g. ones the person already uses on their other characters
   tagSuggestions: { type: Array, default: () => [] },
+  extended: { type: Boolean, default: false },
+  // Folder names already in use, offered as the folder is typed
+  folderSuggestions: { type: Array, default: () => [] },
 });
 const emit = defineEmits(['update:modelValue']);
 
@@ -37,6 +44,8 @@ const TAG_SUGGESTIONS = [
   'complex markings',
   'gore',
 ];
+
+const PRONOUNS = ['she/her', 'he/him', 'they/them', 'she/they', 'he/they', 'it/its', 'any pronouns'];
 
 const suggestions = computed(() => [...new Set([...props.tagSuggestions, ...TAG_SUGGESTIONS])]);
 
@@ -66,7 +75,7 @@ function updateLink(index, field, value) {
 async function addLink() {
   const current = latest.referenceLinks || [];
   if (current.length >= LIMITS.referenceLinks) return;
-  update('referenceLinks', [...current, { label: '', url: '' }]);
+  update('referenceLinks', [...current, { label: '', url: '', note: '' }]);
   await nextTick();
   document.getElementById(fid(`link-url-${links.value.length - 1}`))?.focus();
 }
@@ -126,6 +135,57 @@ const count = (value) => String(value || '').length;
       </FormField>
     </div>
 
+    <div v-if="extended" class="two-col">
+      <FormField label="Pronouns" :for-id="fid('pronouns')" :error="errors.pronouns">
+        <template #default="{ describedby, invalid }">
+          <div class="input-wrap">
+            <input
+              :id="fid('pronouns')"
+              class="input"
+              :value="form.pronouns"
+              :maxlength="LIMITS.pronouns"
+              autocomplete="off"
+              :list="fid('pronoun-list')"
+              placeholder="e.g. she/her, they/them"
+              :aria-invalid="invalid ? 'true' : undefined"
+              :aria-describedby="describedby"
+              @input="update('pronouns', $event.target.value)"
+            />
+            <datalist :id="fid('pronoun-list')">
+              <option v-for="p in PRONOUNS" :key="p" :value="p" />
+            </datalist>
+          </div>
+        </template>
+      </FormField>
+
+      <FormField
+        label="Folder"
+        :for-id="fid('folder')"
+        :error="errors.folder"
+        hint="Group characters in your library, e.g. 'OCs' or 'Story cast'."
+      >
+        <template #default="{ describedby, invalid }">
+          <div class="input-wrap">
+            <input
+              :id="fid('folder')"
+              class="input"
+              :value="form.folder"
+              :maxlength="LIMITS.folder"
+              autocomplete="off"
+              :list="fid('folder-list')"
+              placeholder="No folder"
+              :aria-invalid="invalid ? 'true' : undefined"
+              :aria-describedby="describedby"
+              @input="update('folder', $event.target.value)"
+            />
+            <datalist :id="fid('folder-list')">
+              <option v-for="name in folderSuggestions" :key="name" :value="name" />
+            </datalist>
+          </div>
+        </template>
+      </FormField>
+    </div>
+
     <FormField
       label="Tags"
       :for-id="fid('tags')"
@@ -166,12 +226,52 @@ const count = (value) => String(value || '').length;
       </template>
     </FormField>
 
+    <FormField v-if="extended" label="Personality" :for-id="fid('personality')" :error="errors.personality">
+      <template #aside>
+        <span class="hint">{{ count(form.personality) }}/{{ LIMITS.personality }}</span>
+      </template>
+      <template #default="{ describedby, invalid }">
+        <div class="input-wrap">
+          <textarea
+            :id="fid('personality')"
+            class="textarea notes"
+            rows="3"
+            :value="form.personality"
+            :maxlength="LIMITS.personality"
+            placeholder="Likes, dislikes, quirks, how they'd react to being drawn…"
+            :aria-invalid="invalid ? 'true' : undefined"
+            :aria-describedby="describedby"
+            @input="update('personality', $event.target.value)"
+          />
+        </div>
+      </template>
+    </FormField>
+
+    <div v-if="extended" class="field">
+      <div class="field-head">
+        <span :id="fid('colours-label')" class="label">Colour palette</span>
+        <span class="hint">{{ (form.colours || []).length }}/{{ LIMITS.colours }}</span>
+      </div>
+      <p :id="fid('colours-hint')" class="hint links-hint">Their main colours, for artists. Their screen pet can wear them too.</p>
+      <ColourSwatches
+        :model-value="form.colours || []"
+        :id-prefix="prefix"
+        :labelledby="fid('colours-label')"
+        :describedby="fid('colours-hint')"
+        @update:model-value="update('colours', $event)"
+      />
+      <p v-if="errors.colours" class="field-error">{{ errors.colours }}</p>
+    </div>
+
     <div class="field">
       <div class="field-head">
         <span :id="fid('links-label')" class="label">Reference links</span>
         <span class="hint">{{ links.length }}/{{ LIMITS.referenceLinks }}</span>
       </div>
-      <p class="hint links-hint">Toyhou.se profiles, Google Docs, image hosts. Links must start with https://</p>
+      <p class="hint links-hint">
+        Toyhou.se profiles, Google Docs, image hosts. Add a comment to say what to look at, like "only the
+        folder of outfits" or "not my tradables". Links must start with https://
+      </p>
 
       <ul v-if="links.length" class="links" :aria-labelledby="fid('links-label')">
         <li v-for="(link, i) in links" :key="i" class="link-row">
@@ -211,6 +311,17 @@ const count = (value) => String(value || '').length;
             >
               <Trash2 :size="18" aria-hidden="true" />
             </button>
+          </div>
+          <div class="input-wrap note-input">
+            <input
+              :id="fid(`link-note-${i}`)"
+              class="input"
+              :value="link.note"
+              :maxlength="LIMITS.linkNote"
+              placeholder="Comment (optional), e.g. please skip the tradables folder"
+              :aria-label="`Link ${i + 1} comment`"
+              @input="updateLink(i, 'note', $event.target.value)"
+            />
           </div>
           <p v-if="errors[`referenceLinks.${i}`]" :id="fid(`link-error-${i}`)" class="field-error">
             {{ errors[`referenceLinks.${i}`] }}
@@ -323,8 +434,12 @@ const count = (value) => String(value || '').length;
   gap: 8px;
   align-items: center;
 }
-.link-inputs .input {
+.link-inputs .input,
+.note-input .input {
   padding: 11px 0;
+}
+.note-input {
+  margin-top: 6px;
 }
 .link-row .field-error {
   margin: 6px 0 0;

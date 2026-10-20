@@ -57,6 +57,7 @@ const form = reactive({
   canCreate: [],
   wantsTypes: [],
   likes: '',
+  adoptWishlist: '',
   avoid: '',
   cannotDraw: [],
   notes: '',
@@ -66,6 +67,8 @@ const form = reactive({
   saveAsDefault: false,
 });
 const selectedIds = ref([]);
+// Asking for adoptables: show the adopt wishlist
+const wantsAdopts = computed(() => form.wantsTypes.includes('adoptable'));
 const newCharacters = ref([]);
 
 const errors = ref({});
@@ -88,7 +91,7 @@ const STEPS = [
 ];
 const REVIEW = STEPS.length - 1;
 // Which step each answer is on, for sending people back to fix it
-const STEP_OF = { communityUsername: 0, canCreate: 0, wantsTypes: 0, characters: 1, likes: 2, avoid: 2, cannotDraw: 2, notes: 2 };
+const STEP_OF = { communityUsername: 0, canCreate: 0, wantsTypes: 0, characters: 1, likes: 2, adoptWishlist: 2, avoid: 2, cannotDraw: 2, notes: 2 };
 
 const step = ref(0);
 const reached = ref(0); // furthest step opened so far; the indicator lets you jump back to any of them
@@ -143,6 +146,7 @@ function prefill() {
   form.canCreate = (source.canCreate || []).filter((t) => allowed.includes(t));
   form.wantsTypes = (source.wantsTypes || []).filter((t) => allowed.includes(t));
   form.likes = source.likes || '';
+  form.adoptWishlist = source.adoptWishlist || '';
   form.avoid = source.avoid || '';
   form.cannotDraw = [...(source.cannotDraw || [])];
   form.notes = application.value?.notes || '';
@@ -279,6 +283,9 @@ function validate() {
   for (const key of ['likes', 'avoid', 'notes']) {
     if (form[key].trim().length > LIMITS.formText) e[key] = `Keep this under ${LIMITS.formText} characters.`;
   }
+  if (form.adoptWishlist.trim().length > LIMITS.adoptWishlist) {
+    e.adoptWishlist = `Keep this under ${LIMITS.adoptWishlist} characters.`;
+  }
   if (form.cannotDraw.length > LIMITS.tags) e.cannotDraw = `Up to ${LIMITS.tags} tags.`;
   if (event.value.adultOnly && !existing.value && !form.confirmAdult) {
     e.confirmAdult = "This event is for adults. Confirm you're 18 or older to sign up.";
@@ -293,6 +300,7 @@ const stepErrors = (index) => Object.keys(errors.value).filter((key) => STEP_OF[
 const STEP_FIELD_IDS = {
   communityUsername: 'apply-community',
   likes: 'apply-likes',
+  adoptWishlist: 'apply-adopt-wishlist',
   avoid: 'apply-avoid',
   notes: 'apply-notes',
 };
@@ -384,6 +392,7 @@ async function submit() {
     offeredCharacterIds: [...selectedIds.value],
     newCharacters: newCharacters.value.map(cleanCharacterDraft),
     likes: form.likes.trim(),
+    adoptWishlist: wantsAdopts.value ? form.adoptWishlist.trim() : '',
     avoid: form.avoid.trim(),
     cannotDraw: [...form.cannotDraw],
     notes: form.notes.trim(),
@@ -641,6 +650,23 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
               </div>
             </FormField>
             <FormField
+              v-if="wantsAdopts"
+              label="Adopt wishlist"
+              :hint="`The kind of adoptable you'd love: species, colours, themes, or links to designs you like. ${form.adoptWishlist.trim().length} / ${LIMITS.adoptWishlist}`"
+              :error="errors.adoptWishlist"
+              for-id="apply-adopt-wishlist"
+            >
+              <div class="input-wrap">
+                <textarea
+                  id="apply-adopt-wishlist"
+                  v-model="form.adoptWishlist"
+                  class="textarea short"
+                  :maxlength="LIMITS.adoptWishlist"
+                  placeholder="Pastel humanoids, anything candy-themed, a grunge bat anthro…"
+                />
+              </div>
+            </FormField>
+            <FormField
               label="Anything to avoid?"
               :hint="`Things you'd rather not see in your gift. ${counter(form.avoid)}`"
               :error="errors.avoid"
@@ -741,6 +767,7 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
               </div>
               <dl class="review-list">
                 <div><dt>You'd love</dt><dd class="pre">{{ form.likes.trim() || 'Nothing in particular' }}</dd></div>
+                <div v-if="wantsAdopts"><dt>Adopt wishlist</dt><dd class="pre">{{ form.adoptWishlist.trim() || 'Nothing in particular' }}</dd></div>
                 <div><dt>Please avoid</dt><dd class="pre">{{ form.avoid.trim() || 'Nothing in particular' }}</dd></div>
                 <div><dt>Can't draw</dt><dd>{{ form.cannotDraw.join(', ') || 'Nothing listed' }}</dd></div>
                 <div v-if="form.notes.trim()"><dt>Notes for organisers</dt><dd class="pre">{{ form.notes.trim() }}</dd></div>

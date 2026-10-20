@@ -11,7 +11,7 @@ is216-project/
 │       ├── router/index.js      every page route
 │       ├── stores/              reactive() stores: auth.js, notifications.js, toast.js
 │       ├── views/               one file per page (XxxView.vue)
-│       ├── components/          Navbar, Footer, NotificationBell, ...; ui/ (generic), events/ (event pages)
+│       ├── components/          Navbar, Footer, NotificationBell, ...; ui/ (generic), events/ (event pages), landing/ (landing page showcase sections, see docs/specs/showcase.md)
 │       ├── utils/               format.js (dates, numbers), calendar.js (.ics files), eventTemplates.js (event presets), social.js (profile links)
 │       └── mock/                in-browser copy of the API (VITE_API_MODE=mock, for static hosting)
 ├── server/          Express 5 + Mongoose 9 (CommonJS)
@@ -69,11 +69,14 @@ Event         { id, name, description, theme, season, rules, tags[], platform, p
                 organizers: UserMini[],
                 viewer: null | { roles: string[], isOrganizer: bool, applicationStatus: null|'pending'|'accepted'|'rejected'|'withdrawn' },
                 inviteCode? }                // organisers only
-Character     { id, ownerId, name, description, species, tags[], referenceLinks: [{label,url}], notesForArtists,
+Character     { id, ownerId, name, description, species, pronouns, personality, colours[] ('#rrggbb', max 6),
+                folder, favourite, pet: { shown, kind, palette },   // kind/palette '' = worked out from the character
+                tags[], referenceLinks: [{label,url,note}], notesForArtists,   // url: http(s) or /demo-refs/<file>
                 archived, archivedAt, createdAt, updatedAt, inUse?, eventCount?,
                 usedIn? }                    // GET /characters/:id only: [{ eventId, eventName, eventStatus, applicationStatus }]
 Application   { id, eventId, userId, user: UserMini|null, status, communityUsername, canCreate[], wantsTypes[],
-                offeredCharacterIds[], offeredCharacters: Character[]|null, likes, avoid, cannotDraw[], notes,
+                offeredCharacterIds[], offeredCharacters: Character[]|null, likes, adoptWishlist, avoid, cannotDraw[], notes,
+                canBackup,
                 reviewedAt, createdAt, updatedAt }
 MatchAdmin    { id, giver: UserMini, recipient: UserMini, score, reasons[], status: 'assigned'|'submitted',
                 published, submission: null | { id, submittedAt, late, verified } }
@@ -131,6 +134,7 @@ All routes are under `/api`. (auth) = must be logged in, (org) = event organiser
 | GET | /users/:username/gifts?limit=&before= | (optional auth) the artist's public gift gallery → `{ items: [{ submission: { id, title, type, images, links, submittedAt }, event: { id, name }, giver: UserMini, recipient: UserMini }], hasMore }`, newest first, 12 per page (max 48). `before` is an ISO date cursor (gifts submitted strictly earlier). Only gifts they *made*, in public, completed, non-disabled events, where both they and the recipient have `profilePrivacy.showGifts` and the recipient's account is active; never the private message or verification details. Same answer for every viewer. 400 `VALIDATION` for a bad `before`; 404 `USER_NOT_FOUND` like the profile |
 | GET | /discover/artists?q=&makes=&themes=&hasGifts=&following=&sort=&limit=&cursor= | (optional auth) Discover → `{ items: ArtistCard[], hasMore, nextCursor, total }`. Only active artists with `profilePrivacy.listInDiscover` (default true), never the viewer. `q` matches display name or username. `makes`/`themes` are comma lists (any value in a list matches; all filters must match); `hasGifts=true`; `following=true` needs a login (401). `sort`: default (having tags/gifts/exchanges, then exchanges, then newest), `newest`, `exchanges`, `recommended` (best fit by `shared/taste.mjs`, people you follow after new faces; each item gets `reasons`; falls back to default without a taste, and the response's `sort` says which was used); unknown values → 400 `VALIDATION`. The taste for `recommended` comes from `tasteMakes`/`tasteWants`/`tasteThemes`/`tasteActivity` (quiz answers, works logged out) or else the viewer's artist tags plus their sign-up `wantsTypes`. Other artists are only compared on their public tags. `cursor` is the offset from `nextCursor`; a bad one → 400 `VALIDATION` |
 | GET | /discover/recommendations?tasteMakes=&tasteWants=&tasteThemes=&tasteActivity= | (optional auth) → `{ hasTaste, artists: (ArtistCard + reasons)[≤3], events: [{ event: Event, reasons }] (≤3) }`. Same taste rules as the Recommended sort. Artists: listed, active, not you, scoring above 0. Events: open, public, not disabled, sign-ups still open, not ones you organise or already applied to. No taste → `{ hasTaste: false, artists: [], events: [] }` |
+| GET | /showcase | (optional auth) landing page showcase → `{ stats: { exchanges, artists, giftsRevealed, communities }, communities: [{ name, platform, colour, ink, initials, exchanges, artists }], feed: [{ event: { id, name }, community, artists, kind: open\|matching\|active\|revealed, at, spotsLeft? }], gifts: [{ submission (public fields, no message), event, giver: UserMini + cardColor, recipient: UserMini, characterName, thanks: { message, reaction } \| null }] }`. Only public, non-draft, non-cancelled, non-disabled exchanges; artists are distinct accepted participants; gifts need both people's `profilePrivacy.showGifts` and active accounts (max 12, newest first); `characterName` only when the recipient offered exactly one character. Helpers in `shared/showcase.mjs` |
 | GET | /notifications?limit=&before= | (auth) → `{ items: Notification[], unreadCount, hasMore }`, newest first. `before` is an ISO date cursor (items strictly older than it); 400 `VALIDATION` if it isn't a date. `hasMore` says whether an older page exists |
 | GET | /notifications/unread-count | (auth) |
 | PATCH | /notifications/:id/read | (auth) |
@@ -153,12 +157,14 @@ createdAt }`. `profilePrivacy` only ever appears in the owner's own `user`, neve
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| GET | /characters?archived=false\|true\|all | default `false` → `{ characters: Character[] }` (with `inUse`, `eventCount`), newest first |
+| GET | /characters?archived=false\|true\|all&folder= | default `false` → `{ characters: Character[] }` (with `inUse`, `eventCount`), newest first |
+| GET | /characters/pets | → `{ pets: Character[] }`: the ones out as screen pets (`pet.shown`, not archived), at most `MAX_SHOWN_PETS` (4) |
+| GET | /characters/folders | → `{ folders: [{ name, count }] }`, biggest first |
 | POST | /characters | → 201 `{ character }` |
 | GET | /characters/:id | → `{ character }`, which also has `usedIn` (the events it was offered in, newest sign-up first) |
-| PATCH | /characters/:id | → `{ character }` |
+| PATCH | /characters/:id | → `{ character }`. `pet` can be partial (`{ pet: { shown: true } }` keeps the kind and colours). 409 `TOO_MANY_PETS` past four pets out, 400 for an archived character's pet |
 | DELETE | /characters/:id | → `{ ok }`, or 409 `CHARACTER_IN_USE` if any application offered it (archive instead) |
-| POST | /characters/:id/archive | → `{ character }` (archived characters can't be offered in new sign-ups) |
+| POST | /characters/:id/archive | → `{ character }` (archived characters can't be offered in new sign-ups, and their pet is put away) |
 | POST | /characters/:id/restore | → `{ character }` |
 
 ### Events: `routes/event-router.js`
@@ -184,7 +190,7 @@ createdAt }`. `profilePrivacy` only ever appears in the owner's own `user`, neve
 | Method | Path | Notes |
 | --- | --- | --- |
 | GET | /application | (auth) → `{ application: Application\|null }` (mine, with offeredCharacters) |
-| PUT | /application | (auth) create/update while sign-ups are open. Body: `{ communityUsername, canCreate[], wantsTypes[], offeredCharacterIds[], newCharacters: [{ name, species, tags, description, referenceLinks, notesForArtists }], likes, avoid, cannotDraw[], notes, saveAsDefault }` → `{ application, createdCharacters: Character[] }` (201 when new). New characters are saved to the library first. New applications are `accepted` unless the event `requireApproval` (then `pending`, organisers notified). Errors: 409 `SIGNUPS_CLOSED`, 409 `EVENT_FULL`, 403 `APPLICATION_REJECTED`, 400 for types outside `allowedTypes` or characters that aren't yours / are archived |
+| PUT | /application | (auth) create/update while sign-ups are open. Body: `{ communityUsername, canCreate[], wantsTypes[], offeredCharacterIds[], newCharacters: [{ name, species, tags, description, referenceLinks, notesForArtists }], likes, adoptWishlist, avoid, cannotDraw[], notes, canBackup, saveAsDefault }` → `{ application, createdCharacters: Character[] }` (201 when new). New characters are saved to the library first. New applications are `accepted` unless the event `requireApproval` (then `pending`, organisers notified). Errors: 409 `SIGNUPS_CLOSED`, 409 `EVENT_FULL`, 403 `APPLICATION_REJECTED`, 400 for types outside `allowedTypes` or characters that aren't yours / are archived |
 | DELETE | /application | (auth) withdraw while sign-ups are open → `{ ok }` |
 | GET | /applications?status= | (org) → `{ applications: Application[], counts: { pending, accepted, rejected, withdrawn } }` |
 | PATCH | /applications/:applicationId | (org) `{ status: 'accepted'\|'rejected' }` while open or matching (before publish) → `{ application }`; notifies the applicant; 409 `EVENT_FULL` |

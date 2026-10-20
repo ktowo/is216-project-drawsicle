@@ -1,4 +1,5 @@
 <script setup>
+import { play } from '@/effects/sfx';
 import { ref, computed, onMounted, useId } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 import { BookOpen, Loader2, Trash2, X } from 'lucide-vue-next';
@@ -55,7 +56,8 @@ async function sign() {
     total.value++;
     text.value = '';
     nextAt.value = new Date(Date.now() + GUESTBOOK.gapMs).toISOString();
-    toast.success('Thanks for signing the guestbook!');
+    play('scribble');
+    toast.success('Thanks for signing the guestbook!', { quiet: true });
   } catch (e) {
     problem.value = e.message;
     if (e.data?.retryAfterMs) nextAt.value = new Date(Date.now() + e.data.retryAfterMs).toISOString();

@@ -35,6 +35,9 @@ import { api, qs, assetUrl } from '@/api';
 import { auth } from '@/stores/auth';
 import { toast } from '@/stores/toast';
 import { signupsOpen } from '@shared/constants.mjs';
+import { ImageDown } from 'lucide-vue-next';
+import ShareCardDialog from '@/components/share-card/ShareCardDialog.vue';
+import { cardStage } from '@/utils/shareCard';
 import { formatDateTime, pluralize, timeInZone } from '@/utils/format';
 import {
   viewerActions,
@@ -138,6 +141,14 @@ const canShare = computed(
   () => event.value && (!isPrivate.value || (event.value.viewer?.isOrganizer && event.value.inviteCode))
 );
 const shareLabel = computed(() => (isPrivate.value ? 'Share invite link' : 'Share event'));
+
+// Share card: an image of the event to post (components/share-card)
+const cardOpen = ref(false);
+// Same people as Share, and only while the event is running or finished (no drafts or cancelled events)
+const hasCard = computed(() => canShare.value && Boolean(cardStage(event.value)));
+const shareUrl = computed(() =>
+  event.value ? absoluteEventUrl(router, event.value, { invite: isPrivate.value ? event.value.inviteCode : undefined }) : ''
+);
 
 async function share() {
   if (sharing.value) return;
@@ -417,6 +428,9 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
               <button v-if="canShare" type="button" class="btn btn-ghost btn-sm" :disabled="sharing" @click="share">
                 <Share2 :size="16" aria-hidden="true" /> {{ shareLabel }}
               </button>
+              <button v-if="hasCard" type="button" class="btn btn-ghost btn-sm" @click="cardOpen = true">
+                <ImageDown :size="16" aria-hidden="true" /> Share card
+              </button>
               <p v-else-if="isPrivate" class="muted small share-note">
                 <Lock :size="14" aria-hidden="true" /> Private event: only organisers can share the invite link.
               </p>
@@ -546,6 +560,14 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
         @cancel="confirmWithdraw = false"
       />
     </template>
+    <ShareCardDialog
+      v-if="event && hasCard"
+      :open="cardOpen"
+      :event="event"
+      :url="shareUrl"
+      :private-event="isPrivate"
+      @close="cardOpen = false"
+    />
   </main>
 </template>
 

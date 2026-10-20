@@ -268,7 +268,7 @@ test('new characters from the sign-up form are saved to the library, all or noth
   assert.equal(created.name, 'Lumen');
   assert.equal(created.ownerId, person.user.id);
   assert.deepEqual(created.tags, ['glowing', 'moth']);
-  assert.deepEqual(created.referenceLinks, [{ label: 'Toyhouse', url: 'https://toyhou.se/lumen' }]);
+  assert.deepEqual(created.referenceLinks, [{ label: 'Toyhouse', url: 'https://toyhou.se/lumen', note: '' }]);
   assert.deepEqual(res.body.application.offeredCharacterIds, [created.id]);
 
   const library = await person.agent.get('/api/characters').expect(200);
@@ -292,6 +292,7 @@ test('saveAsDefault copies the answers into the profile', async () => {
     canCreate: ['art', 'writing'],
     wantsTypes: ['art'],
     likes: 'Soft colours and moths',
+    adoptWishlist: '',
     avoid: 'Gore',
     cannotDraw: ['mecha', 'humans'],
   });

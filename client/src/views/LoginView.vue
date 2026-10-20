@@ -1,23 +1,24 @@
 <script setup>
+import { play } from '@/effects/sfx';
 import { ref, computed, onMounted, nextTick } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
-import { LogIn, Mail, Lock, Loader2, FlaskConical, X } from 'lucide-vue-next';
+import { LogIn, Mail, Lock, Loader2, X } from 'lucide-vue-next';
 import AuthLayout from '@/components/AuthLayout.vue';
 import TextField from '@/components/TextField.vue';
 import GoogleButton from '@/components/GoogleButton.vue';
 import DiscordButton from '@/components/DiscordButton.vue';
 import OrDivider from '@/components/ui/OrDivider.vue';
 import UserAvatar from '@/components/UserAvatar.vue';
+import TestLogins from '@/components/TestLogins.vue';
+import { TEST_LOGINS_ENABLED } from '@/utils/testLogins';
 import { recentLogins, rememberLogin, forgetLogin, rememberPreference, setRememberPreference } from '@/utils/recentLogins';
 import { login } from '@/stores/auth';
 import { toast } from '@/stores/toast';
-import { api, isMockMode } from '@/api';
+import { api } from '@/api';
 import { safeRedirect } from '@/router';
 
 const route = useRoute();
 const router = useRouter();
-
-const DEMO = { email: 'mika@demo.test', password: 'drawsicle123' };
 
 // Codes the server puts in ?error= when a Google/Discord sign-in fails
 const PROVIDER_ERRORS = {
@@ -75,9 +76,16 @@ function forget(account) {
   if (email.value === account.email) email.value = '';
 }
 
-function fillDemo() {
-  email.value = DEMO.email;
-  password.value = DEMO.password;
+// Test accounts dropdown: picking fills the form, "Sign in as" logs straight in
+function fillAccount(account) {
+  email.value = account.email;
+  password.value = account.password;
+  error.value = '';
+}
+
+function quickLogin(account) {
+  fillAccount(account);
+  submit();
 }
 
 async function submit() {
@@ -93,9 +101,11 @@ async function submit() {
     setRememberPreference(remember.value);
     if (remember.value) rememberLogin(user);
     else forgetLogin(user.email);
-    if (reactivated) toast.success('Welcome back, your account is active again.');
+    if (reactivated) toast.success('Welcome back, your account is active again.', { quiet: true });
+    play('chime');
     router.replace(redirectTo.value);
   } catch (e) {
+    play('bonk');
     error.value = e.message;
   } finally {
     loading.value = false;
@@ -105,14 +115,7 @@ async function submit() {
 
 <template>
   <AuthLayout :icon="LogIn" title="Welcome back" subtitle="Log in to your account">
-    <div v-if="isMockMode" class="demo-box">
-      <FlaskConical :size="18" class="demo-icon" aria-hidden="true" />
-      <div class="demo-text">
-        <strong>Demo mode.</strong> Log in as Mika with
-        <code>{{ DEMO.email }}</code> / <code>{{ DEMO.password }}</code>
-      </div>
-      <button type="button" class="btn btn-outline btn-xs" @click="fillDemo">Fill in</button>
-    </div>
+    <TestLogins v-if="TEST_LOGINS_ENABLED" :busy="loading" @pick="fillAccount" @login="quickLogin" />
 
     <template v-if="showProviders">
       <div class="providers">
@@ -305,32 +308,5 @@ async function submit() {
   margin-top: 32px;
   font-size: 1.1rem;
   padding: 16px;
-}
-.demo-box {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 24px;
-  padding: 12px 14px;
-  border-radius: 14px;
-  background: var(--info-soft, var(--blue-soft));
-  color: var(--info, var(--blue-ink));
-  font-size: 0.92rem;
-}
-.demo-icon {
-  flex-shrink: 0;
-}
-.demo-text {
-  flex: 1 1 200px;
-  line-height: 1.5;
-}
-.demo-text code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.85rem;
-  background: color-mix(in srgb, var(--surface) 70%, transparent);
-  padding: 1px 5px;
-  border-radius: 6px;
-  word-break: break-all;
 }
 </style>

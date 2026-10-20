@@ -11,6 +11,7 @@ import * as auth from './handlers/auth.js';
 import * as profile from './handlers/profile.js';
 import * as users from './handlers/users.js';
 import * as discover from './handlers/discover.js';
+import * as showcase from './handlers/showcase.js';
 import * as notifications from './handlers/notifications.js';
 import * as characters from './handlers/characters.js';
 import * as events from './handlers/events.js';
@@ -23,6 +24,7 @@ import * as reports from './handlers/reports.js';
 import * as museum from './handlers/museum.js';
 import * as museumRooms from './handlers/museum-rooms.js';
 import * as favourites from './handlers/favourites.js';
+import * as admin from './handlers/admin.js';
 
 const router = createRouter();
 // Order matters where paths overlap: events.js adds /events/mine before /events/:eventId
@@ -43,6 +45,8 @@ for (const feature of [
   favourites,
   dashboard,
   discover,
+  showcase,
+  admin,
 ]) {
   feature.register(router);
 }
@@ -121,6 +125,7 @@ async function handle(path, { method, body, form }) {
       requireAuth() {
         if (!session) throw new MockHttpError(401, 'Please log in.', 'AUTH_REQUIRED');
         const user = sessionUser(state, session);
+        if (user?.status === 'banned') throw new MockHttpError(403, 'This account has been suspended by the site admins.', 'ACCOUNT_BANNED');
         if (!user) throw new MockHttpError(401, 'Your session has expired. Please log in again.', 'SESSION_EXPIRED');
         return user;
       },
@@ -147,9 +152,6 @@ async function handle(path, { method, body, form }) {
 
 export async function mockRequest(path, { method = 'GET', body, form } = {}) {
   await wait();
-  if (path.startsWith('/admin')) {
-    return { status: 501, data: { error: 'The admin tools need the real server, so they are not part of demo mode.', code: 'NOT_IN_DEMO' } };
-  }
   return exclusive(() => handle(path, { method: String(method).toUpperCase(), body, form }));
 }
 

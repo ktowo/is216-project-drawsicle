@@ -3,7 +3,8 @@ const mongoose = require('mongoose');
 const Character = require('../models/Character.js');
 const Application = require('../models/Application.js');
 const { requireAuth } = require('../middleware/auth.js');
-const { LIMITS, normalizeTags, CONTENT_WARNING_VALUES } = require('../../shared/constants.mjs');
+const { LIMITS, normalizeTags, CONTENT_WARNING_VALUES, REFERENCE_URL_RE } = require('../../shared/constants.mjs');
+const { PET_KIND_VALUES, PET_PALETTE_VALUES, MAX_SHOWN_PETS } = require('../../shared/pets.mjs');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
 
 const router = Router();
@@ -14,10 +15,14 @@ const TEXT_FIELDS = {
   description: { label: 'Description', max: LIMITS.characterDescription },
   species: { label: 'Species', max: LIMITS.species },
   notesForArtists: { label: 'Notes for artists', max: LIMITS.notesForArtists },
+  pronouns: { label: 'Pronouns', max: LIMITS.pronouns },
+  personality: { label: 'Personality', max: LIMITS.personality },
+  folder: { label: 'Folder', max: LIMITS.folder },
 };
-const LINK_LABEL_MAX = 60;
+const HEX_RE = /^#[0-9a-f]{6}$/;
+const LINK_LABEL_MAX = LIMITS.linkLabel;
 const LINK_URL_MAX = 500;
-const URL_RE = /^https?:\/\/\S+$/i;
+const URL_RE = REFERENCE_URL_RE;
 
 function readText(value, label, max) {
   if (value === null) return '';
@@ -47,12 +52,51 @@ function readLinks(value) {
     if (label.length > LINK_LABEL_MAX) {
       throw httpError(400, `Link labels can be up to ${LINK_LABEL_MAX} characters.`, 'VALIDATION');
     }
-    links.push({ label, url });
+    const note = typeof raw.note === 'string' ? raw.note.trim() : '';
+    if (note.length > LIMITS.linkNote) {
+      throw httpError(400, `Link comments can be up to ${LIMITS.linkNote} characters.`, 'VALIDATION');
+    }
+    links.push({ label, url, note });
   }
   if (links.length > LIMITS.referenceLinks) {
     throw httpError(400, `Up to ${LIMITS.referenceLinks} reference links.`, 'VALIDATION');
   }
   return links;
+}
+
+function readColours(value) {
+  if (value === null) return [];
+  if (!Array.isArray(value)) throw httpError(400, 'Colours must be a list.', 'VALIDATION');
+  const colours = [];
+  for (const raw of value) {
+    const hex = String(raw ?? '').trim().toLowerCase();
+    if (!HEX_RE.test(hex)) throw httpError(400, 'Colours must look like #ff99cc.', 'VALIDATION');
+    if (!colours.includes(hex)) colours.push(hex);
+  }
+  if (colours.length > LIMITS.colours) throw httpError(400, `Up to ${LIMITS.colours} colours.`, 'VALIDATION');
+  return colours;
+}
+
+// { shown, kind, palette }: any of them; kind/palette '' means automatic
+function readPet(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw httpError(400, 'Pet settings are missing.', 'VALIDATION');
+  }
+  const pet = {};
+  if (value.shown !== undefined) pet.shown = value.shown === true;
+  if (value.kind !== undefined) {
+    if (value.kind !== '' && !PET_KIND_VALUES.includes(value.kind)) {
+      throw httpError(400, 'Pick a kind of pet from the list.', 'VALIDATION');
+    }
+    pet.kind = value.kind;
+  }
+  if (value.palette !== undefined) {
+    if (value.palette !== '' && !PET_PALETTE_VALUES.includes(value.palette)) {
+      throw httpError(400, 'Pick pet colours from the list.', 'VALIDATION');
+    }
+    pet.palette = value.palette;
+  }
+  return pet;
 }
 
 // Only these fields can be set from a request. Also used by the sign-up form
@@ -75,6 +119,9 @@ function readCharacterInput(body = {}) {
     }
     input.contentWarnings = [...new Set(list)];
   }
+  if (body.colours !== undefined) input.colours = readColours(body.colours);
+  if (body.favourite !== undefined) input.favourite = body.favourite === true;
+  if (body.pet !== undefined) input.pet = readPet(body.pet);
   return input;
 }
 
@@ -113,6 +160,7 @@ router.get('/', asyncHandler(async (req, res) => {
   }
 
   const filter = { owner: req.user._id };
+  if (typeof req.query.folder === 'string') filter.folder = req.query.folder.trim();
   if (archived === 'false') filter.archivedAt = null;
   if (archived === 'true') filter.archivedAt = { $ne: null };
 
@@ -125,6 +173,40 @@ router.get('/', asyncHandler(async (req, res) => {
     }),
   });
 }));
+
+// The screen pets someone has out (client/src/components/pets)
+router.get('/pets', asyncHandler(async (req, res) => {
+  const pets = await Character.find({ owner: req.user._id, archivedAt: null, 'pet.shown': true })
+    .sort({ updatedAt: -1, _id: -1 })
+    .limit(MAX_SHOWN_PETS);
+  res.json({ pets: pets.map((c) => c.toPublic()) });
+}));
+
+// Folder names in use, with how many (unarchived) characters are in each
+router.get('/folders', asyncHandler(async (req, res) => {
+  const rows = await Character.aggregate([
+    { $match: { owner: req.user._id, archivedAt: null, folder: { $nin: ['', null] } } },
+    { $group: { _id: '$folder', count: { $sum: 1 } } },
+    { $sort: { _id: 1 } },
+  ]);
+  res.json({ folders: rows.map((r) => ({ name: r._id, count: r.count })) });
+}));
+
+// Pets can't be switched on for an archived character
+function rejectArchivedPet(character, input) {
+  if (character.archivedAt && input.pet?.shown) {
+    throw httpError(400, 'Archived characters can’t be out as pets. Restore it first.', 'VALIDATION');
+  }
+}
+
+// Partial pet settings ({ shown } alone, say) are merged into the saved ones
+function applyInput(character, input) {
+  const { pet, ...rest } = input;
+  character.set(rest);
+  if (pet) {
+    for (const [key, value] of Object.entries(pet)) character.set(`pet.${key}`, value);
+  }
+}
 
 router.post('/', asyncHandler(async (req, res) => {
   const character = new Character({ ...readCharacterInput(req.body), owner: req.user._id });
@@ -155,7 +237,9 @@ router.get('/:id', asyncHandler(async (req, res) => {
 
 router.patch('/:id', asyncHandler(async (req, res) => {
   const character = await findOwnCharacter(req);
-  character.set(readCharacterInput(req.body));
+  const input = readCharacterInput(req.body);
+  rejectArchivedPet(character, input);
+  applyInput(character, input);
   await character.save();
   res.json({ character: await withUsage(character) });
 }));
