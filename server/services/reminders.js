@@ -277,6 +277,7 @@ async function purgeDeactivated(now, summary) {
             avatarUrl: 1,
             googleId: 1,
             discordId: 1,
+            supabaseId: 1,
             passwordHash: 1,
             resetTokenHash: 1,
             resetTokenExpires: 1,

@@ -28,6 +28,17 @@ For the deployed site, add the same values in Vercel under **Project → Setting
 | `pnpm supabase:sync` | Copies every record and every stored picture across. Uses the app's database, or the local one while the API is running. |
 | `node scripts/supabase-sync.js --move-pictures` | The same, and also points the app's own records at the pictures in Supabase Storage. |
 
+## Sign-in (in progress)
+
+Sign-in is moving to Supabase Auth (`docs/specs/supabase-auth-email.md`). Supabase proves who someone is, and the app still gives them its own session (`docs/adr/0001-supabase-proves-identity-app-keeps-sessions.md`).
+
+| Setting | What it does |
+| --- | --- |
+| `AUTH_PROVIDER=local` | The app's own sign-in (email + password, Google, Discord). The default; used by the tests and for running without a Supabase project. |
+| `AUTH_PROVIDER=supabase` | Sign-in through Supabase Auth. Needs `SUPABASE_URL`. |
+
+Each account can hold `supabaseId`, the Supabase Auth user it signs in as. It's cleared when an account is deleted.
+
 ## Security
 
 - **No public access to the tables.** Every table has row-level security switched on with no policies. Only the service role (the server and the sync) can read or write them. The anon and publishable keys are meant to be public, and they see nothing.
