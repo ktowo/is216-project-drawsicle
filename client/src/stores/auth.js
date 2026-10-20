@@ -1,6 +1,13 @@
 import { reactive } from 'vue';
-import { api } from '../api';
+import { api, ApiError } from '../api';
 import { resetNotifications } from './notifications';
+import {
+  usingSupabase,
+  signInWithPassword,
+  signUpWithPassword,
+  exchangeForSession,
+  signOutOfSupabase,
+} from '../auth/supabaseSignIn';
 
 // Shared logged-in user. Import `auth` anywhere and read auth.user.
 export const auth = reactive({
@@ -37,7 +44,10 @@ export async function refreshUser() {
 // -> { user, reactivated } (reactivated is true when this login woke up a deactivated account)
 // remember: stay logged in for 30 days (true) or until the browser closes (false)
 export async function login(email, password, { remember } = {}) {
-  const { user, reactivated } = await api('/auth/login', { method: 'POST', body: { email, password, remember } });
+  // With Supabase sign-in, Supabase checks the password and the server trades that for a session
+  const { user, reactivated } = (await usingSupabase())
+    ? await exchangeForSession(await signInWithPassword(email, password), { remember })
+    : await api('/auth/login', { method: 'POST', body: { email, password, remember } });
   resetNotifications();
   auth.user = user;
   auth.checked = true;
@@ -48,7 +58,15 @@ export async function register(email, password, displayName) {
   const body = { email, password };
   const name = typeof displayName === 'string' ? displayName.trim() : '';
   if (name) body.displayName = name;
-  const { user } = await api('/auth/register', { method: 'POST', body });
+  let user;
+  if (await usingSupabase()) {
+    const token = await signUpWithPassword(email, password, name);
+    // Supabase wants the address confirmed first: the link in that email finishes signing up
+    if (!token) throw new ApiError('Check your email: we sent you a link to confirm your account.', 202, 'CHECK_EMAIL');
+    ({ user } = await exchangeForSession(token));
+  } else {
+    ({ user } = await api('/auth/register', { method: 'POST', body }));
+  }
   resetNotifications();
   auth.user = user;
   auth.checked = true;
@@ -57,6 +75,7 @@ export async function register(email, password, displayName) {
 
 export async function logout() {
   await api('/auth/logout', { method: 'POST' }).catch(() => {});
+  await signOutOfSupabase();
   setUser(null);
 }
 

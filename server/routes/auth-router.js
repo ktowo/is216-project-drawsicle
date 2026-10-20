@@ -228,6 +228,19 @@ router.get('/me', requireAuth, (req, res) => {
 
 // Which "Continue with ..." buttons the login page should show
 router.get('/providers', (req, res) => {
+  if (authProvider() === 'supabase') {
+    // Sign-in happens in the browser with Supabase: it needs the project's address and public key
+    // (both meant to be public). SUPABASE_OAUTH_PROVIDERS lists the buttons switched on in Supabase.
+    const oauth = (process.env.SUPABASE_OAUTH_PROVIDERS ?? 'google,discord').split(',').map((p) => p.trim().toLowerCase());
+    return res.json({
+      provider: 'supabase',
+      google: oauth.includes('google'),
+      discord: oauth.includes('discord'),
+      supabaseUrl: (process.env.SUPABASE_URL || '').trim(),
+      supabaseAnonKey: (process.env.SUPABASE_ANON_KEY || '').trim(),
+    });
+  }
+  // The app's own sign-in (no "provider" field, as before: the browser reads that as local)
   res.json({
     google: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
     discord: Boolean(process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET),

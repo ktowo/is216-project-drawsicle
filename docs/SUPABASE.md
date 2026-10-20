@@ -37,6 +37,14 @@ Sign-in is moving to Supabase Auth (`docs/specs/supabase-auth-email.md`). Supaba
 | `AUTH_PROVIDER=local` | The app's own sign-in (email + password, Google, Discord). The default; used by the tests and for running without a Supabase project. |
 | `AUTH_PROVIDER=supabase` | Sign-in through Supabase Auth. Needs `SUPABASE_URL` and `SUPABASE_ANON_KEY` (the public key). The browser trades its Supabase token for the app's session at `POST /api/auth/supabase`. |
 
+How it signs in, with `AUTH_PROVIDER=supabase`:
+
+1. The log-in and sign-up pages sign in with supabase-js in the browser (email + password, or Google / Discord with the PKCE redirect). The browser gets the project URL and public key from `GET /api/auth/providers`; nothing secret leaves the server.
+2. Google and Discord come back to `/auth/callback`, which swaps the one-time code for a Supabase session.
+3. Either way, the browser sends the Supabase access token to `POST /api/auth/supabase` and gets the app's normal session. Logging out ends both.
+
+Supabase dashboard setup (team project): **Authentication → Providers**, switch on Google and Discord with the OAuth app keys; **Authentication → URL Configuration**, add `<site>/auth/callback` and `http://localhost:5173/auth/callback` to the redirect URLs. `SUPABASE_OAUTH_PROVIDERS` (default `google,discord`) says which buttons the app shows.
+
 Each account can hold `supabaseId`, the Supabase Auth user it signs in as. It's cleared when an account is deleted.
 
 ## Security

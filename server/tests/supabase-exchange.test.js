@@ -126,3 +126,27 @@ test('is switched off while the app uses its own sign-in', async () => {
   const app = h.makeApp();
   assert.equal((await exchange(app, 'new-person').res.expect(404)).body.code, 'NOT_ENABLED');
 });
+
+test('the providers list tells the browser how to sign in, with only public Supabase settings', async () => {
+  process.env.SUPABASE_URL = 'https://abc.supabase.co';
+  process.env.SUPABASE_ANON_KEY = 'public-anon-key';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'very-secret';
+  process.env.SUPABASE_OAUTH_PROVIDERS = 'google';
+  try {
+    const app = h.makeApp();
+    const body = (await h.request(app).get('/api/auth/providers').expect(200)).body;
+    assert.deepEqual(body, {
+      provider: 'supabase',
+      google: true,
+      discord: false,
+      supabaseUrl: 'https://abc.supabase.co',
+      supabaseAnonKey: 'public-anon-key',
+    });
+    assert.doesNotMatch(JSON.stringify(body), /very-secret/);
+
+    process.env.AUTH_PROVIDER = 'local';
+    assert.equal((await h.request(app).get('/api/auth/providers').expect(200)).body.provider, undefined);
+  } finally {
+    for (const k of ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_OAUTH_PROVIDERS']) delete process.env[k];
+  }
+});
