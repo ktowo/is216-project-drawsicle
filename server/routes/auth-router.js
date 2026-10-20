@@ -6,6 +6,7 @@ const User = require('../models/User.js');
 const { requireAuth } = require('../middleware/auth.js');
 const { startSession, endSession } = require('../utils/session.js');
 const { sendMail } = require('../services/mailer.js');
+const { renderEmail } = require('../services/email-layout.js');
 const { asyncHandler, apiErrorHandler, applyAdminList, clientUrl } = require('../utils/helpers.js');
 const { authProvider } = require('../utils/auth-provider.js');
 const { verifyIdentity } = require('../services/supabase-identity.js');
@@ -261,12 +262,14 @@ router.post('/forgot-password', authLimiter, asyncHandler(async (req, res) => {
     await user.save();
 
     const link = `${clientUrl()}/reset-password?token=${token}`;
-    await sendMail({
-      to: user.email,
-      subject: 'Reset your Drawsicle password',
-      text: `Someone asked to reset your Drawsicle password.\n\nReset it here (link works for 1 hour):\n${link}\n\nIf this wasn't you, ignore this email.`,
-      html: `<p>Someone asked to reset your Drawsicle password.</p><p><a href="${link}">Reset your password</a> (link works for 1 hour)</p><p>If this wasn't you, ignore this email.</p>`,
+    const { html, text } = renderEmail({
+      preheader: 'Your reset link works for 1 hour.',
+      heading: 'Reset your Drawsicle password',
+      paragraphs: ['Someone asked to reset your Drawsicle password. The link works for 1 hour.'],
+      button: { label: 'Reset your password', url: link },
+      footer: { text: "If this wasn't you, you can ignore this email: your password stays the same." },
     });
+    await sendMail({ to: user.email, subject: 'Reset your Drawsicle password', text, html });
   }
 
   // Same answer either way, so nobody can use this to check who has an account
