@@ -9,6 +9,7 @@ import { X, ArrowLeft, ArrowRight } from 'lucide-vue-next';
 import { assetUrl } from '@/api';
 import { createTilt } from '@/utils/holoTilt';
 import { sparkleTile } from '@/utils/sparkles';
+import { holoSlides, firstSlideOf } from '@/utils/holoSlides';
 
 // The museum's Holo view (docs/specs/holo-view.md): one gift's picture as a holographic card that
 // tilts toward the pointer, with an iridescent sheen, a soft glare and sparkles that light up under
@@ -24,20 +25,26 @@ const props = defineProps({
 });
 const emit = defineEmits(['close', 'update:index']);
 
-const item = computed(() => props.items[props.index] || null);
+// Every picture of every gift is its own slide (utils/holoSlides.js); gifts without pictures are
+// skipped. ← → go picture by picture, on into the next gift; the viewer behind follows along.
+const slides = computed(() => holoSlides(props.items));
+const slideIndex = ref(firstSlideOf(slides.value, props.index));
+const slide = computed(() => slides.value[slideIndex.value] || null);
+const item = computed(() => (slide.value ? props.items[slide.value.itemIndex] : null));
 const sub = computed(() => item.value?.submission || null);
-const image = computed(() => assetUrl(sub.value?.images?.[0] || ''));
+const image = computed(() => assetUrl(slide.value?.image || ''));
 const warned = computed(() => (sub.value?.contentWarnings || []).length > 0);
-const revealed = ref(false);
-const foil = computed(() => !warned.value || revealed.value);
+// "Show it" on a warned gift covers all of that gift's pictures
+const revealedFor = ref('');
+const foil = computed(() => !warned.value || revealedFor.value === sub.value?.id);
 const nameOf = (u) => u?.displayName || 'Someone';
-const altText = computed(() => sub.value?.imageDescriptions?.[0] || sub.value?.title || 'A gift');
+const altText = computed(() => slide.value?.alt || 'A gift');
 
 const sparkles = computed(() => {
-  const id = sub.value?.id;
-  if (!id) return '';
-  if (!tiles.has(id)) tiles.set(id, `url(${sparkleTile(id)})`);
-  return tiles.get(id);
+  const seed = slide.value?.seed;
+  if (!seed) return '';
+  if (!tiles.has(seed)) tiles.set(seed, `url(${sparkleTile(seed)})`);
+  return tiles.get(seed);
 });
 
 // ---------- Tilt ----------
@@ -126,18 +133,23 @@ function onKeyup(e) {
 // ---------- Flip, close, focus ----------
 const stage = ref(null);
 function go(step) {
-  const next = props.index + step;
-  if (next >= 0 && next < props.items.length) emit('update:index', next);
+  const next = slideIndex.value + step;
+  if (next < 0 || next >= slides.value.length) return;
+  slideIndex.value = next;
+  box = null;
+  // Keep the museum viewer behind on the same gift
+  const itemIndex = slides.value[next].itemIndex;
+  if (itemIndex !== props.index) emit('update:index', itemIndex);
 }
+// The viewer moved to another gift some other way: start at its first picture
 watch(
   () => props.index,
-  () => {
-    revealed.value = false;
-    box = null;
+  (index) => {
+    if (slide.value?.itemIndex !== index) slideIndex.value = firstSlideOf(slides.value, index);
   }
 );
-// New foil layers (another artwork, or a warned picture just shown) need this frame's pose
-watch([() => props.index, foil], async () => {
+// New foil layers (another picture, or a warned picture just shown) need this frame's pose
+watch([slideIndex, foil], async () => {
   await nextTick();
   if (!frame) draw(performance.now());
 });
@@ -254,11 +266,14 @@ onBeforeUnmount(() => {
             </div>
             <div v-else class="warning">
               <p>Content warning: {{ sub.contentWarnings.join(', ') }}</p>
-              <button type="button" class="btn btn-outline btn-sm" @click="revealed = true">Show it</button>
+              <button type="button" class="btn btn-outline btn-sm" @click="revealedFor = sub.id">Show it</button>
             </div>
           </div>
           <figcaption class="caption">
-            <b>{{ sub.title || 'Untitled gift' }}</b>
+            <b>
+              {{ sub.title || 'Untitled gift' }}
+              <small v-if="slide.pictureCount > 1" class="picture-count">Picture {{ slide.imageIndex + 1 }} of {{ slide.pictureCount }}</small>
+            </b>
             <span>
               by {{ nameOf(item.giver) }} for {{ nameOf(item.recipient) }}<template v-if="item.event"> · {{ item.event.name }}</template>
             </span>
@@ -267,11 +282,11 @@ onBeforeUnmount(() => {
       </figure>
 
       <div class="holo-flip">
-        <button type="button" :disabled="index <= 0" aria-label="Previous artwork" @click="go(-1)">
+        <button type="button" :disabled="slideIndex <= 0" aria-label="Previous picture" @click="go(-1)">
           <ArrowLeft :size="18" aria-hidden="true" />
         </button>
-        <span aria-live="polite">{{ index + 1 }} / {{ items.length }}</span>
-        <button type="button" :disabled="index >= items.length - 1" aria-label="Next artwork" @click="go(1)">
+        <span aria-live="polite">{{ slideIndex + 1 }} / {{ slides.length }}</span>
+        <button type="button" :disabled="slideIndex >= slides.length - 1" aria-label="Next picture" @click="go(1)">
           <ArrowRight :size="18" aria-hidden="true" />
         </button>
       </div>
@@ -443,6 +458,13 @@ onBeforeUnmount(() => {
   padding: 12px 4px 14px;
   font-size: 0.85rem;
   color: #2f2d2b;
+}
+.picture-count {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #a33b62;
 }
 .caption b {
   font-size: 1.05rem;
