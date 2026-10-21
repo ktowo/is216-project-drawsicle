@@ -612,6 +612,7 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
 }
 .panel {
   padding: 26px 28px;
+  width: 100%;
 }
 .panel-title {
   display: flex;

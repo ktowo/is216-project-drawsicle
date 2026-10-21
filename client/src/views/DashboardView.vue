@@ -209,7 +209,7 @@ async function sendTestNotification() {
 
     <section v-if="!auth.user.profileComplete && data && !isNewUser" class="card nudge" aria-labelledby="nudge-title">
       <span class="nudge-icon" aria-hidden="true"><UserRound :size="22" /></span>
-      <div class="min-w-0 flex-1">
+      <div class="min-w-32 flex-1">
         <h2 id="nudge-title" class="nudge-title">Finish setting up your profile</h2>
         <p class="m-0 text-cocoa">
           Add a short bio and your community usernames so organisers and your Secret Santa know who you are.

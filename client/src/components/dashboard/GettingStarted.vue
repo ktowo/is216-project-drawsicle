@@ -79,7 +79,7 @@ const nextKey = computed(() => steps.value.find((s) => !s.done)?.key);
           <CircleCheck v-if="step.done" :size="20" />
           <Circle v-else :size="20" />
         </span>
-        <div class="min-w-0 flex-1">
+        <div class="min-w-32 flex-1">
           <p class="step-title">
             {{ step.title }}<span class="sr-only">{{ step.done ? ' (done)' : '' }}</span>
           </p>
