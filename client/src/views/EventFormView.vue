@@ -39,6 +39,7 @@ import { auth } from '@/stores/auth';
 import { toLocalInput, fromLocalInput, formatDateTime, formatTime, timeAgo, pluralize } from '@/utils/format';
 import { eventLink, isHttpUrl, platformLabel } from '@/utils/events';
 import { EVENT_TEMPLATES, applyTemplate, findTemplate } from '@/utils/eventTemplates';
+import EventPreview from '@/components/events/EventPreview.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -1074,22 +1075,7 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
             </div>
           </nav>
 
-          <section class="preview" aria-labelledby="preview-title">
-            <h2 id="preview-title" class="aside-title">Preview</h2>
-            <p class="hint m-0">How your event looks on Browse events.</p>
-            <div class="preview-frame" inert>
-              <EventCard :event="previewEvent" />
-            </div>
-            <dl class="preview-facts">
-              <div v-for="fact in previewFacts" :key="fact.label">
-                <dt>{{ fact.label }}</dt>
-                <dd>{{ fact.value }}</dd>
-              </div>
-            </dl>
-            <ul v-if="form.tags.length" class="preview-tags" aria-label="Tags">
-              <li v-for="tag in form.tags" :key="tag" class="badge badge-muted">{{ tag }}</li>
-            </ul>
-          </section>
+          <EventPreview class="preview" :preview-event="previewEvent" :preview-facts="previewFacts" :form="form"/>
         </aside>
 
         <form id="event-form" class="event-form" novalidate @submit.prevent="submit">
@@ -1632,6 +1618,8 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
             </section>
           </fieldset>
 
+          <EventPreview class="preview block lg:hidden" :preview-event="previewEvent" :preview-facts="previewFacts" :form="form"/>
+
           <!-- Banner (edit only: it needs the saved event) -->
           <section v-if="isEdit && event" id="part-banner" class="card section" aria-labelledby="sec-banner">
             <h2 id="sec-banner" class="section-title" tabindex="-1">Banner</h2>
@@ -2156,46 +2144,6 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
   gap: 8px;
 }
 
-/* ---------- Live preview ---------- */
-.preview-frame {
-  margin-top: 12px;
-  pointer-events: none;
-}
-.preview-facts {
-  margin: 14px 0 0;
-  display: grid;
-  gap: 10px;
-}
-.preview-facts > div {
-  display: grid;
-  gap: 2px;
-}
-.preview-facts dt {
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--muted);
-}
-.preview-facts dd {
-  margin: 0;
-  font-weight: 600;
-}
-.preview-tags {
-  list-style: none;
-  margin: 12px 0 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-
 /* Narrower screens: no preview, and the section links become a scrollable row */
 @media (max-width: 1023px) {
   .form-layout {
@@ -2209,7 +2157,7 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
     z-index: 5;
     gap: 0;
   }
-  .preview,
+  aside .preview,
   .aside-title,
   .aside-save {
     display: none;
