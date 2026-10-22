@@ -3,16 +3,16 @@
   --surface: #fffdfa;
   --border: #efe5d3;
   --text: #2f2d2b;
-  --muted: #8a6e4e;
-  --pink: #ec6a93;
-  --pink-dark: #d9527d;
+  --muted: #7d6243;
+  --pink: #c9416f;
+  --pink-dark: #b83a64;
   --pink-soft: #fde6ee;
   --blue: #63b3f5;
   --danger: #c2414b;
   --danger-soft: #fdecee;
-  --success: #3f8f5b;
+  --success: #2f7a4a;
   --success-soft: #e8f5ec;
-  --warning: #b7791f;
+  --warning: #8f5d0e;
   --warning-soft: #fdf3e1;
 
   /* Secondary surfaces and tints (each has a dark-mode value below) */
@@ -20,7 +20,7 @@
   --hover: #f5eee1;
   --chip: #f3ebdc;
   --border-strong: #e6dccb;
-  --subtle: #a88d6e;
+  --subtle: #806546;
   --text-soft: #5a4a3a;
   --pink-tint: #fff7fa;
   --pink-line: #f4c9ce;
@@ -98,11 +98,11 @@
 
 /* Filled pink buttons keep white text readable on dark backgrounds */
 :root[data-theme='dark'] .btn-primary {
-  background: #d04876;
+  background: #c23a69;
   box-shadow: 0 2px 10px rgba(208, 72, 118, 0.3);
 }
 :root[data-theme='dark'] .btn-primary:hover:not(:disabled) {
-  background: #b93d68;
+  background: #ad3460;
 }
 /* Pastel event banners would glare on a dark page */
 :root[data-theme='dark'] .event-banner .banner-img,
@@ -332,7 +332,7 @@ button {
 
 /* ---------- Additions: focus, sizes, states ---------- */
 :root {
-  --warning: #b7791f;
+  --warning: #8f5d0e;
   --warning-soft: #fdf3e1;
   --info: #2f6f9f;
   --info-soft: #e6f2fc;
