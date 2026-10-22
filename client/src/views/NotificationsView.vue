@@ -903,4 +903,10 @@ function onModeKey(e, legacyKey) {
     transition: none;
   }
 }
+/* Phone: keep the hidden screen-reader text inside the scrolling chip row, so the page doesn't scroll sideways */
+@media (max-width: 640px) {
+  .types {
+    position: relative;
+  }
+}
 </style>
