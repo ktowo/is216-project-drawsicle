@@ -118,4 +118,11 @@ function flipSound() {
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+/* iPhone 6/7/8 width: slightly smaller buttons so the whole top bar fits */
+@media (max-width: 420px) {
+  .toggle {
+    width: 34px;
+    height: 34px;
+  }
+}
 </style>
