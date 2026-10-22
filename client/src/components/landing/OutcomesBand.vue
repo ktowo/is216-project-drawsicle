@@ -142,6 +142,8 @@ const fmt = (n) => (n || 0).toLocaleString('en-GB');
 .stat.pink { --tone: var(--pink-dark); --tint: var(--pink-soft); }
 .stat.green { --tone: #2f8f66; --tint: color-mix(in srgb, #a8e0c4 45%, transparent); }
 .stat.gold { --tone: #a87a20; --tint: color-mix(in srgb, #f6df8f 50%, transparent); }
+:root[data-theme='dark'] .stat.green { --tone: var(--success); --tint: var(--success-soft); }
+:root[data-theme='dark'] .stat.gold { --tone: var(--warning); --tint: var(--warning-soft); }
 .icon {
   position: absolute;
   top: 16px;
