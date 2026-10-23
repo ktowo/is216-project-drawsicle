@@ -182,7 +182,7 @@ async function sendTestNotification() {
   try {
     await api('/notifications/test', { method: 'POST' });
     await loadNotifications();
-    toast.success('Test notification sent. Check the bell.');
+    toast.success('Test notification created. GitHub Pages simulates the branded email; check the bell.');
   } catch (e) {
     toast.error(e.message);
   } finally {
