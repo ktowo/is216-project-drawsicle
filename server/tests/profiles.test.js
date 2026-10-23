@@ -96,7 +96,7 @@ test('public profiles show public events, stats and socials, never private detai
   // Logged in: events carry the viewer, and the id works as well as the username
   const asViewer = await viewer.agent.get(`/api/users/${mika.id}`).expect(200);
   assert.equal(asViewer.body.profile.id, mika.id);
-  assert.deepEqual(asViewer.body.organizing[0].viewer, { roles: [], isOrganizer: false, applicationStatus: null });
+  assert.deepEqual(asViewer.body.organizing[0].viewer, { roles: [], isOrganizer: false, applicationStatus: null, watching: false });
 
   for (const missing of ['nobody_here', 'x', '000000000000000000000000']) {
     const notFound = await h.request(app).get(`/api/users/${missing}`).expect(404);
@@ -447,6 +447,8 @@ test('export gives back everything stored about me and nothing about anyone else
   await Submission.create({ event: event._id, match: theirMatch._id, giver: them.id, recipient: me.id, title: 'Their gift' });
   await Notification.create({ user: me.id, type: 'test', title: 'Hello' });
   await Notification.create({ user: them.id, type: 'test', title: 'Not for me' });
+  const watched = await makeEvent(them.id, { name: 'Spring Swap' });
+  await me.agent.post(`/api/events/${watched._id}/watch`).expect(200);
 
   const res = await me.agent.get('/api/profile/export').expect(200);
   assert.equal(res.headers['cache-control'], 'no-store');
@@ -461,6 +463,7 @@ test('export gives back everything stored about me and nothing about anyone else
   assert.equal(data.applications[0].offeredCharacters[0].name, 'Pip');
   assert.deepEqual(data.submissions.map((s) => [s.title, s.eventName]), [['My gift', 'Autumn Trade']]);
   assert.deepEqual(data.notifications.map((n) => n.title), ['Hello']);
+  assert.deepEqual(data.eventReminders.map((e) => e.name), ['Spring Swap']);
   assert.equal(JSON.stringify(data).includes('passwordHash'), false);
 });
 

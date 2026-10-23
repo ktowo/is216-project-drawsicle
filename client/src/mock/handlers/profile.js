@@ -1,6 +1,7 @@
 // /profile and /memberships (server/routes/profile-router.js, membership-router.js)
 import { CREATION_TYPE_VALUES, EVENT_ROLES, LIMITS, normalizeTags } from '@shared/constants.mjs';
 import { artistTagsOf, artistTagsUpdate } from '@shared/taste.mjs';
+import { EMAIL_TYPES, EMAIL_MODES } from '@shared/email-types.mjs';
 import { checkImage, filesFrom, imageToDataUrl, looksLikeImage } from '../files.js';
 import { withdrawApplications } from '../accounts.js';
 import {
@@ -130,11 +131,27 @@ export function register(router) {
 
     if (notificationPrefs !== undefined) {
       if (!isPlainObject(notificationPrefs)) throw invalid('notificationPrefs must be an object.');
-      for (const key of ['emailReminders', 'emailMatches', 'emailEventUpdates']) {
-        if (notificationPrefs[key] === undefined) continue;
-        if (typeof notificationPrefs[key] !== 'boolean') throw invalid(`${key} must be true or false.`);
-        next.notificationPrefs[key] = notificationPrefs[key];
+      const modes = { ...(next.notificationPrefs.emailModes || {}) };
+      // The older on/off switches: off is off, on brings back the usual mode (as the server)
+      for (const type of EMAIL_TYPES) {
+        const on = notificationPrefs[type.legacy];
+        if (on === undefined) continue;
+        if (typeof on !== 'boolean') throw invalid(`${type.legacy} must be true or false.`);
+        next.notificationPrefs[type.legacy] = on;
+        if (!on) modes[type.key] = 'off';
+        else if (modes[type.key] === 'off') delete modes[type.key];
       }
+      if (notificationPrefs.emailModes !== undefined) {
+        if (!isPlainObject(notificationPrefs.emailModes)) throw invalid('emailModes must be an object.');
+        for (const type of EMAIL_TYPES) {
+          const mode = notificationPrefs.emailModes[type.key];
+          if (mode === undefined) continue;
+          if (!EMAIL_MODES.includes(mode)) throw invalid(`${type.label} must be instant, digest or off.`);
+          modes[type.key] = mode;
+          next.notificationPrefs[type.legacy] = mode !== 'off';
+        }
+      }
+      next.notificationPrefs.emailModes = modes;
     }
 
     if (artistTags !== undefined) {
@@ -219,6 +236,11 @@ export function register(router) {
         .filter((n) => n.user === user.id)
         .sort(byDate('createdAt'))
         .map(notificationPublic),
+      // Events they tapped "Remind me" on
+      eventReminders: (user.watchedEvents || [])
+        .map((id) => state.events.find((e) => e.id === id))
+        .filter(Boolean)
+        .map((e) => ({ id: e.id, name: e.name, signupDeadline: e.signupDeadline })),
     };
   });
 

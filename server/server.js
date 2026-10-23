@@ -21,6 +21,7 @@ const { startReminders, stopReminders, runRemindersIfDue } = require('./services
 const { seedIfEmpty } = require('./scripts/seed.js');
 const { runMigrations } = require('./services/migrations.js');
 const { httpError } = require('./utils/helpers.js');
+const { authProvider } = require('./utils/auth-provider.js');
 
 const serverless = Boolean(process.env.VERCEL);
 const production =
@@ -40,12 +41,26 @@ function ensureSecret() {
   console.warn('JWT_SECRET is not set in server/.env, using a temporary one.');
 }
 
+// AUTH_PROVIDER must be "local" or "supabase"; Supabase sign-in also needs the project's URL
+function ensureAuthProvider() {
+  let provider;
+  try {
+    provider = authProvider();
+  } catch (err) {
+    throw httpError(503, err.message, 'MISCONFIGURED');
+  }
+  if (provider === 'supabase' && !(process.env.SUPABASE_URL || '').trim()) {
+    throw httpError(503, 'AUTH_PROVIDER is "supabase" but SUPABASE_URL is not set.', 'MISCONFIGURED');
+  }
+}
+
 // Connects once per server instance, runs the start-up data fixes and, for the built-in
 // local database, loads the demo data. A failure is retried on the next request.
 let starting = null;
 function prepare() {
   starting ??= (async () => {
     ensureSecret();
+    ensureAuthProvider();
     const db = await connectDB();
     await runMigrations();
     if (db.mode === 'local') {

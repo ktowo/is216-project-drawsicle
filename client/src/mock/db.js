@@ -149,7 +149,7 @@ export function buildState(now = new Date()) {
       cannotDraw: [],
       ...(u.defaultForm || {}),
     },
-    notificationPrefs: { emailReminders: true, emailMatches: true, emailEventUpdates: false },
+    notificationPrefs: { emailReminders: true, emailMatches: true, emailEventUpdates: true },
     profilePrivacy: { showExchanges: true, showGifts: false, ...(u.profilePrivacy || {}) },
     artistTags: { makes: [], themes: [], activity: '', cardColor: '', ...(u.artistTags || {}) },
     // The first accounts joined over months; the OC Secret Santa crowd joined over the past half year

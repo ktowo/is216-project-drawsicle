@@ -11,7 +11,6 @@ import {
   ChevronRight,
   ChevronDown,
   Filter,
-  CalendarSearch,
 } from 'lucide-vue-next';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import TabNav from '@/components/ui/TabNav.vue';
@@ -20,8 +19,13 @@ import ErrorBlock from '@/components/ui/ErrorBlock.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import {
   notifications,
+  filtered,
+  groupCounts,
   loadNotifications,
   loadMoreNotifications,
+  loadFiltered,
+  loadMoreFiltered,
+  loadGroupCounts,
   markRead,
   markAllRead,
   removeNotification,
@@ -32,6 +36,7 @@ import {
 import { auth, setUser } from '@/stores/auth';
 import { toast } from '@/stores/toast';
 import { api } from '@/api';
+import { EMAIL_TYPES, emailModesOf } from '@shared/email-types.mjs';
 import { timeAgo, formatDateTime, toDate, pluralize } from '@/utils/format';
 
 const PAGE = 30;
@@ -64,6 +69,7 @@ watch(
 );
 
 const filtersOn = computed(() => show.value !== 'all' || Boolean(type.value));
+const currentFilter = () => ({ show: show.value, group: type.value });
 
 function clearFilters() {
   show.value = 'all';
@@ -82,8 +88,9 @@ async function load() {
   loading.value = true;
   error.value = '';
   moreError.value = '';
+  loadGroupCounts(show.value);
   try {
-    await loadNotifications(PAGE);
+    await Promise.all([loadNotifications(PAGE), filtersOn.value ? loadFiltered(currentFilter(), PAGE) : null]);
   } catch (e) {
     error.value = e.message;
   } finally {
@@ -95,11 +102,26 @@ onMounted(load);
 async function loadMore() {
   moreError.value = '';
   try {
-    await loadMoreNotifications(PAGE);
+    if (filtersOn.value) await loadMoreFiltered(currentFilter(), PAGE);
+    else await loadMoreNotifications(PAGE);
   } catch (e) {
     moreError.value = e.message;
   }
 }
+
+// Changing a filter asks the server for that filter's first page (and the chip counts for All/Unread)
+const filterError = ref('');
+watch([show, type], async ([s], [prevShow]) => {
+  moreError.value = '';
+  filterError.value = '';
+  if (s !== prevShow) loadGroupCounts(s);
+  if (!filtersOn.value) return;
+  try {
+    await loadFiltered(currentFilter(), PAGE);
+  } catch (e) {
+    filterError.value = e.message;
+  }
+});
 
 // "3 hours ago" stays right while the page is open
 const now = ref(Date.now());
@@ -113,21 +135,24 @@ const tabs = computed(() => [
   { key: 'unread', label: 'Unread', count: notifications.unreadCount },
 ]);
 
-const byReadState = computed(() =>
-  show.value === 'unread' ? notifications.items.filter((n) => !n.read) : notifications.items
+// With a filter on, the list comes from the server already filtered; without one it's the shared list
+const list = computed(() => (filtersOn.value ? filtered.items : notifications.items));
+const listHasMore = computed(() => (filtersOn.value ? filtered.hasMore : notifications.hasMore));
+const listLoadingMore = computed(() => (filtersOn.value ? filtered.loadingMore : notifications.loadingMore));
+const filterLoading = computed(
+  () => filtersOn.value && filtered.loading && filtered.key !== '' && !filtered.items.length
 );
 
-const typeOptions = computed(() => [
-  { key: '', label: 'Every type', count: byReadState.value.length },
-  ...NOTIFICATION_GROUPS.map((g) => ({
-    ...g,
-    count: byReadState.value.filter((n) => notificationKind(n.type).group === g.key).length,
-  })),
-]);
+// Totals from the server, so they count everything and not just what's loaded
+const typeOptions = computed(() => {
+  const counts = groupCounts.key === show.value ? groupCounts.counts : null;
+  return [
+    { key: '', label: 'Every type', count: counts?.all },
+    ...NOTIFICATION_GROUPS.map((g) => ({ ...g, count: counts?.[g.key] })),
+  ];
+});
 
-const shown = computed(() =>
-  type.value ? byReadState.value.filter((n) => notificationKind(n.type).group === type.value) : byReadState.value
-);
+const shown = list;
 
 // Today / Yesterday / This week / Earlier, in the browser's time zone
 const SECTIONS = [
@@ -178,9 +203,7 @@ const emptyCopy = computed(() => {
   return {
     icon: Filter,
     title: 'Nothing matches these filters',
-    message: notifications.hasMore
-      ? `No ${show.value === 'unread' ? 'unread ' : ''}${typeName || ''} notifications in what's loaded so far. Older ones might have some.`
-      : `No ${show.value === 'unread' ? 'unread ' : ''}${typeName || ''} notifications right now.`,
+    message: `No ${show.value === 'unread' ? 'unread ' : ''}${typeName || ''} notifications right now.`,
   };
 });
 
@@ -233,7 +256,8 @@ const PREFS = [
   {
     key: 'emailReminders',
     label: 'Deadline reminders',
-    description: 'Sign-ups closing soon and submission deadlines for gifts you still owe.',
+    description:
+      'Sign-ups closing soon (including events you asked to be reminded about) and submission deadlines for gifts you still owe.',
   },
   {
     key: 'emailMatches',
@@ -247,30 +271,48 @@ const PREFS = [
   },
 ];
 
-const prefs = reactive({
-  emailReminders: auth.user?.notificationPrefs?.emailReminders !== false,
-  emailMatches: auth.user?.notificationPrefs?.emailMatches !== false,
-  emailEventUpdates: Boolean(auth.user?.notificationPrefs?.emailEventUpdates),
-});
+// Instant, daily digest or off for each email type (shared/email-types.mjs)
+const MODE_CHOICES = [
+  { value: 'instant', label: 'Instant' },
+  { value: 'digest', label: 'Daily' },
+  { value: 'off', label: 'Off' },
+];
+const typeOf = (legacyKey) => EMAIL_TYPES.find((t) => t.legacy === legacyKey);
+const modes = reactive({ ...(auth.user?.emailModes || emailModesOf(auth.user?.notificationPrefs)) });
 const savingPref = ref('');
 
-// Each switch saves straight away; it flips back if the server says no
-async function togglePref(key) {
-  if (savingPref.value) return;
-  const next = !prefs[key];
-  prefs[key] = next;
-  savingPref.value = key;
+// Each choice saves straight away; it goes back if the server says no
+async function setMode(legacyKey, mode) {
+  const type = typeOf(legacyKey);
+  if (savingPref.value || !type || modes[type.key] === mode) return;
+  const before = modes[type.key];
+  modes[type.key] = mode;
+  savingPref.value = legacyKey;
   try {
-    const { user } = await api('/profile', { method: 'PATCH', body: { notificationPrefs: { [key]: next } } });
+    const { user } = await api('/profile', { method: 'PATCH', body: { notificationPrefs: { emailModes: { [type.key]: mode } } } });
     setUser(user);
-    Object.assign(prefs, user.notificationPrefs || {});
-    toast.success(next ? 'We will email you about this.' : 'Okay, no more emails about this.');
+    Object.assign(modes, user.emailModes || {});
+    toast.success(
+      mode === 'instant' ? 'We will email you as it happens.' : mode === 'digest' ? 'These will come in one email a day.' : 'Okay, no more emails about this.'
+    );
   } catch (e) {
-    prefs[key] = !next;
+    modes[type.key] = before;
     toast.error(e.message);
   } finally {
     savingPref.value = '';
   }
+}
+
+// Arrow keys move between the three choices, as in any radio group
+function onModeKey(e, legacyKey) {
+  if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+  e.preventDefault();
+  const type = typeOf(legacyKey);
+  const i = MODE_CHOICES.findIndex((c) => c.value === modes[type.key]);
+  const step = e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 1;
+  const next = MODE_CHOICES[(i + step + MODE_CHOICES.length) % MODE_CHOICES.length];
+  setMode(legacyKey, next.value);
+  e.currentTarget.parentElement.querySelectorAll('button')[MODE_CHOICES.indexOf(next)]?.focus();
 }
 </script>
 
@@ -315,8 +357,10 @@ async function togglePref(key) {
           @click="type = option.key"
         >
           {{ option.label }}
-          <span class="type-count" aria-hidden="true">{{ option.count }}</span>
-          <span class="sr-only">({{ option.count }} loaded)</span>
+          <template v-if="typeof option.count === 'number'">
+            <span class="type-count" aria-hidden="true">{{ option.count }}</span>
+            <span class="sr-only">({{ option.count }})</span>
+          </template>
         </button>
       </div>
 
@@ -328,19 +372,18 @@ async function togglePref(key) {
         <p v-if="error" class="alert alert-error list-alert" role="alert">
           Couldn't refresh: {{ error }}
         </p>
+        <p v-if="filterError" class="alert alert-error list-alert" role="alert">
+          Couldn't load this filter: {{ filterError }}
+        </p>
 
-        <EmptyState v-if="!shown.length" :icon="emptyCopy.icon" :title="emptyCopy.title" :message="emptyCopy.message">
-          <button
-            v-if="notifications.hasMore && filtersOn"
-            type="button"
-            class="btn btn-primary btn-sm"
-            :disabled="notifications.loadingMore"
-            @click="loadMore"
-          >
-            <Loader2 v-if="notifications.loadingMore" :size="16" class="spin" aria-hidden="true" />
-            <CalendarSearch v-else :size="16" aria-hidden="true" />
-            Look further back
-          </button>
+        <LoadingBlock v-if="filterLoading" label="Loading notifications…" />
+
+        <EmptyState
+          v-else-if="!shown.length"
+          :icon="emptyCopy.icon"
+          :title="emptyCopy.title"
+          :message="emptyCopy.message"
+        >
           <button v-if="filtersOn" type="button" class="btn btn-outline btn-sm" @click="clearFilters">
             Show everything
           </button>
@@ -417,21 +460,21 @@ async function togglePref(key) {
           </section>
         </div>
 
-        <div v-if="notifications.items.length" class="list-foot">
+        <div v-if="shown.length && !filterLoading" class="list-foot">
           <p v-if="moreError" class="alert alert-error" role="alert">{{ moreError }}</p>
           <button
-            v-if="notifications.hasMore && (shown.length || !filtersOn)"
+            v-if="listHasMore"
             type="button"
             class="btn btn-outline btn-sm"
-            :disabled="notifications.loadingMore"
+            :disabled="listLoadingMore"
             @click="loadMore"
           >
-            <Loader2 v-if="notifications.loadingMore" :size="16" class="spin" aria-hidden="true" />
+            <Loader2 v-if="listLoadingMore" :size="16" class="spin" aria-hidden="true" />
             <ChevronDown v-else :size="16" aria-hidden="true" />
-            {{ notifications.loadingMore ? 'Loading…' : 'Load older notifications' }}
+            {{ listLoadingMore ? 'Loading…' : 'Load older notifications' }}
           </button>
-          <p v-else-if="!notifications.hasMore" class="hint end-note">
-            That's everything: {{ pluralize(notifications.items.length, 'notification') }}.
+          <p v-else class="hint end-note">
+            That's everything{{ filtersOn ? ' for this filter' : '' }}: {{ pluralize(shown.length, 'notification') }}.
           </p>
         </div>
       </template>
@@ -439,7 +482,10 @@ async function togglePref(key) {
 
     <section class="card panel" aria-labelledby="email-heading">
       <h2 id="email-heading" class="section-title">Email me about</h2>
-      <p class="section-sub">In-app notifications are always on. Choose which ones also come by email.</p>
+      <p class="section-sub">
+        In-app notifications are always on. Choose how each kind also comes by email: as it happens, in one
+        email a day, or not at all.
+      </p>
 
       <ul class="prefs">
         <li v-for="p in PREFS" :key="p.key" class="pref">
@@ -447,20 +493,29 @@ async function togglePref(key) {
             <span :id="`pref-${p.key}`" class="pref-label">{{ p.label }}</span>
             <span :id="`pref-${p.key}-desc`" class="pref-desc">{{ p.description }}</span>
           </div>
-          <button
-            type="button"
-            role="switch"
-            class="switch"
-            :class="{ on: prefs[p.key] }"
-            :aria-checked="prefs[p.key] ? 'true' : 'false'"
+          <div
+            class="modes"
+            role="radiogroup"
             :aria-labelledby="`pref-${p.key}`"
             :aria-describedby="`pref-${p.key}-desc`"
             :aria-busy="savingPref === p.key ? 'true' : undefined"
-            :disabled="Boolean(savingPref)"
-            @click="togglePref(p.key)"
           >
-            <span class="knob" aria-hidden="true" />
-          </button>
+            <button
+              v-for="c in MODE_CHOICES"
+              :key="c.value"
+              type="button"
+              role="radio"
+              class="mode"
+              :class="{ on: modes[typeOf(p.key).key] === c.value }"
+              :aria-checked="modes[typeOf(p.key).key] === c.value ? 'true' : 'false'"
+              :tabindex="modes[typeOf(p.key).key] === c.value ? 0 : -1"
+              :disabled="Boolean(savingPref)"
+              @click="setMode(p.key, c.value)"
+              @keydown="onModeKey($event, p.key)"
+            >
+              {{ c.label }}
+            </button>
+          </div>
         </li>
       </ul>
     </section>
@@ -750,6 +805,31 @@ async function togglePref(key) {
   color: var(--muted);
   font-size: 0.92rem;
 }
+.modes {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.mode {
+  border: 0;
+  background: none;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+.mode.on {
+  background: var(--pink);
+  color: #fff;
+}
+.mode:disabled {
+  cursor: progress;
+}
 .switch {
   position: relative;
   flex-shrink: 0;
@@ -821,6 +901,12 @@ async function togglePref(key) {
   .switch,
   .knob {
     transition: none;
+  }
+}
+/* Phone: keep the hidden screen-reader text inside the scrolling chip row, so the page doesn't scroll sideways */
+@media (max-width: 640px) {
+  .types {
+    position: relative;
   }
 }
 </style>
