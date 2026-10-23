@@ -18,6 +18,7 @@ delete process.env.SUPABASE_SERVICE_ROLE_KEY;
 const mongoose = require('mongoose');
 const request = require('supertest');
 const { MongoMemoryServer } = require('mongodb-memory-server');
+const InviteCode = require('../models/InviteCode.js');
 
 let mongod = null;
 let counter = 0;
@@ -49,9 +50,11 @@ function makeApp() {
 async function signUp(app, { email, password = 'password123', displayName } = {}) {
   counter += 1;
   const agent = request.agent(app);
+  const inviteCode = `TEST-${counter}`;
+  await InviteCode.create({ code: inviteCode, capacity: 1, signups: [], createdBy: new mongoose.Types.ObjectId() });
   const res = await agent
     .post('/api/auth/register')
-    .send({ email: email || `user${counter}-${Date.now()}@test.local`, password, displayName })
+    .send({ email: email || `user${counter}-${Date.now()}@test.local`, password, displayName, inviteCode })
     .expect(201);
   return { agent, user: res.body.user };
 }

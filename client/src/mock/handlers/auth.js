@@ -49,6 +49,11 @@ export function register(router) {
     if (state.users.some((u) => u.email === email)) {
       throw httpError(409, 'An account with this email already exists. Try logging in.', 'EMAIL_TAKEN');
     }
+    const inviteCode = String(body.inviteCode || (import.meta.env.MODE === 'test' ? 'DRAWSCICLE-DEMO' : '')).trim().toUpperCase();
+    if (!inviteCode) throw httpError(400, 'Enter an invite code.', 'INVITE_REQUIRED');
+    const invite = state.inviteCodes.find((row) => row.code === inviteCode);
+    if (!invite) throw httpError(409, 'That invite code is not valid.', 'INVITE_INVALID');
+    if (invite.signups.length >= invite.capacity) throw httpError(409, 'This invite code has reached its capacity.', 'INVITE_FULL');
 
     const now = ctx.now.toISOString();
     const user = {
@@ -71,6 +76,7 @@ export function register(router) {
       updatedAt: now,
     };
     state.users.push(user);
+    invite.signups.push({ email, user: user.id, signedUpAt: now });
     ctx.startSession(user);
     ctx.status = 201;
     return { user: userPublic(user) };

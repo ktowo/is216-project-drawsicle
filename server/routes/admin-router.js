@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const mongoose = require('mongoose');
 const User = require('../models/User.js');
+const InviteCode = require('../models/InviteCode.js');
 const Event = require('../models/Event.js');
 const EventMember = require('../models/EventMember.js');
 const Application = require('../models/Application.js');
@@ -31,6 +32,7 @@ const may = requirePermission;
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const str = (v) => (typeof v === 'string' ? v.trim() : '');
+const isDuplicate = (err, field) => err?.code === 11000 && Boolean(err.keyPattern?.[field] || err.keyValue?.[field]);
 
 function paging(req) {
   const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
@@ -120,18 +122,67 @@ router.get('/stats', may('stats.view'), asyncHandler(async (req, res) => {
   const byStatus = Object.fromEntries(ALL_EVENT_STATUSES.map((s) => [s, 0]));
   for (const row of eventRows) byStatus[row._id] = row.n;
 
+  const inviteSummary = await InviteCode.aggregate([
+    { $project: { capacity: 1, used: { $size: '$signups' } } },
+    { $group: { _id: null, codes: { $sum: 1 }, capacity: { $sum: '$capacity' }, used: { $sum: '$used' } } },
+  ]);
   res.json({
     users: { ...users, total: Object.values(users).reduce((a, b) => a + b, 0), admins, moderators },
     events: { byStatus, total: Object.values(byStatus).reduce((a, b) => a + b, 0), disabled },
     applications,
     matches,
     submissions,
+    invites: inviteSummary[0] || { codes: 0, capacity: 0, used: 0 },
     openReports,
     recent: {
       users: newestUsers.map((u) => adminUser(u)),
       events: newestEvents.map((e) => e.toMini()),
     },
   });
+}));
+
+router.get('/invites', may('invites.manage'), asyncHandler(async (req, res) => {
+  const invites = await InviteCode.find().sort({ createdAt: -1 }).populate('signups.user', 'displayName username email');
+  res.json({
+    invites: invites.map((invite) => ({
+      id: invite._id.toString(),
+      code: invite.code,
+      capacity: invite.capacity,
+      used: invite.signups.length,
+      createdAt: invite.createdAt,
+      signups: invite.signups.map((signup) => ({
+        email: signup.email,
+        signedUpAt: signup.signedUpAt,
+        user: signup.user ? { id: signup.user._id.toString(), displayName: signup.user.displayName, username: signup.user.username } : null,
+      })),
+    })),
+  });
+}));
+
+router.post('/invites', may('invites.manage'), asyncHandler(async (req, res) => {
+  const code = str(req.body?.code).toUpperCase();
+  const capacity = Number(req.body?.capacity);
+  if (!/^[A-Z0-9_-]{3,40}$/.test(code)) throw httpError(400, 'Use 3-40 letters, numbers, hyphens or underscores.', 'VALIDATION');
+  if (!Number.isInteger(capacity) || capacity < 1 || capacity > 10000) throw httpError(400, 'Capacity must be a whole number from 1 to 10,000.', 'VALIDATION');
+  try {
+    const invite = await InviteCode.create({ code, capacity, createdBy: req.user._id });
+    await audit(req, 'invite.create', 'invite', invite._id, invite.code, `Capacity: ${capacity}`);
+    res.status(201).json({ invite: { id: invite._id.toString(), code: invite.code, capacity: invite.capacity, used: 0, signups: [], createdAt: invite.createdAt } });
+  } catch (err) {
+    if (isDuplicate(err, 'code')) throw httpError(409, 'That invite code already exists.', 'INVITE_TAKEN');
+    throw err;
+  }
+}));
+
+router.patch('/invites/:inviteId', may('invites.manage'), asyncHandler(async (req, res) => {
+  const capacity = Number(req.body?.capacity);
+  if (!Number.isInteger(capacity) || capacity < 1 || capacity > 10000) throw httpError(400, 'Capacity must be a whole number from 1 to 10,000.', 'VALIDATION');
+  const invite = await InviteCode.findById(req.params.inviteId);
+  if (!invite) throw httpError(404, 'Invite code not found.', 'NOT_FOUND');
+  if (capacity < invite.signups.length) throw httpError(400, `Capacity cannot be below the ${invite.signups.length} existing sign-ups.`, 'VALIDATION');
+  invite.capacity = capacity;
+  await invite.save();
+  res.json({ invite: { id: invite._id.toString(), code: invite.code, capacity: invite.capacity, used: invite.signups.length, signups: invite.signups, createdAt: invite.createdAt } });
 }));
 
 // ---------- Users ----------

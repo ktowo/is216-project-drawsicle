@@ -27,6 +27,7 @@ async function askSupabase(accessToken) {
     emailVerified: Boolean(user.email_confirmed_at),
     name: meta.full_name || meta.name || meta.user_name || '',
     avatarUrl: meta.avatar_url || meta.picture || '',
+    inviteCode: meta.invite_code || '',
   };
 }
 

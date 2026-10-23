@@ -55,16 +55,17 @@ export async function login(email, password, { remember } = {}) {
   return { user, reactivated: Boolean(reactivated) };
 }
 
-export async function register(email, password, displayName) {
+export async function register(email, password, displayName, inviteCode) {
   const body = { email, password };
   const name = typeof displayName === 'string' ? displayName.trim() : '';
   if (name) body.displayName = name;
+  if (inviteCode) body.inviteCode = inviteCode.trim();
   let user;
   if (await usingSupabase()) {
-    const token = await signUpWithPassword(email, password, name);
+    const token = await signUpWithPassword(email, password, name, inviteCode);
     // Supabase wants the address confirmed first: the link in that email finishes signing up
     if (!token) throw new ApiError('Check your email: we sent you a link to confirm your account.', 202, 'CHECK_EMAIL');
-    ({ user } = await exchangeForSession(token));
+    ({ user } = await exchangeForSession(token, { inviteCode }));
   } else {
     ({ user } = await api('/auth/register', { method: 'POST', body }));
   }

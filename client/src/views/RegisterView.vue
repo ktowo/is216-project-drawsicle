@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
-import { UserPlus, Mail, Lock, Loader2, Smile } from 'lucide-vue-next';
+import { UserPlus, Mail, Lock, Loader2, Smile, Ticket } from 'lucide-vue-next';
 import AuthLayout from '@/components/AuthLayout.vue';
 import TextField from '@/components/TextField.vue';
 import GoogleButton from '@/components/GoogleButton.vue';
@@ -26,10 +26,11 @@ const displayName = ref('');
 const email = ref('');
 const password = ref('');
 const confirm = ref('');
+const inviteCode = ref('');
 const loading = ref(false);
 const error = ref('');
 // Problems shown under each field. They appear after the first try and then update as you type.
-const fieldErrors = reactive({ displayName: '', email: '', password: '', confirm: '' });
+const fieldErrors = reactive({ displayName: '', email: '', password: '', confirm: '', inviteCode: '' });
 const tried = ref(false);
 // The email that already has an account, so the links can offer to log in with it
 const takenEmail = ref('');
@@ -67,6 +68,7 @@ function checkFields() {
   else fieldErrors.password = '';
   fieldErrors.confirm =
     !fieldErrors.password && password.value !== confirm.value ? "This doesn't match the password above." : '';
+  fieldErrors.inviteCode = inviteCode.value.trim() ? '' : 'Enter the invite code you were given.';
   return !Object.values(fieldErrors).some(Boolean);
 }
 
@@ -88,7 +90,7 @@ async function submit() {
 
   loading.value = true;
   try {
-    const user = await register(email.value.trim(), password.value, displayName.value);
+    const user = await register(email.value.trim(), password.value, displayName.value, inviteCode.value);
     toast.success(`Welcome to Drawsicle, ${user.displayName}!`);
     router.replace(redirectTo.value);
   } catch (e) {
@@ -117,6 +119,15 @@ async function submit() {
     </template>
 
     <form novalidate @submit.prevent="submit">
+      <TextField
+        v-model="inviteCode"
+        label="Invite code"
+        :icon="Ticket"
+        placeholder="Paste your invite code"
+        autocomplete="off"
+        :error="fieldErrors.inviteCode"
+        required
+      />
       <TextField
         v-model="displayName"
         label="Display name (optional)"

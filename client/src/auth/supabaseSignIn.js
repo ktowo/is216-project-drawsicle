@@ -47,8 +47,8 @@ function fail(error) {
 
 // The app's session for this Supabase sign-in -> { user, reactivated }
 // passwordReset: just changed the password, so the server logs out the account's other devices
-export async function exchangeForSession(accessToken, { remember, passwordReset } = {}) {
-  return api('/auth/supabase', { method: 'POST', body: { accessToken, remember, passwordReset } });
+export async function exchangeForSession(accessToken, { remember, passwordReset, inviteCode } = {}) {
+  return api('/auth/supabase', { method: 'POST', body: { accessToken, remember, passwordReset, inviteCode } });
 }
 
 export async function signInWithPassword(email, password) {
@@ -58,12 +58,12 @@ export async function signInWithPassword(email, password) {
 }
 
 // -> the access token, or null when Supabase wants the email confirmed first
-export async function signUpWithPassword(email, password, displayName) {
+export async function signUpWithPassword(email, password, displayName, inviteCode) {
   const { data, error } = await (await supabase()).auth.signUp({
     email,
     password,
     options: {
-      data: displayName ? { full_name: displayName } : {},
+      data: { ...(displayName ? { full_name: displayName } : {}), ...(inviteCode ? { invite_code: inviteCode.trim() } : {}) },
       emailRedirectTo: callbackUrl(window.location.origin, import.meta.env.BASE_URL, ''),
     },
   });
