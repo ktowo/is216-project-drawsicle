@@ -18,6 +18,7 @@ export const PERMISSIONS = {
   'users.roles': 'Change site roles',
   'events.moderate': 'Disable, cancel, restore and delete events',
   'audit.view': 'See the audit log',
+  'invites.manage': 'Create and manage signup invite codes',
 };
 
 const MODERATOR = ['admin.access', 'stats.view', 'reports.review', 'chat.logs', 'chat.moderate', 'users.view', 'audit.view'];

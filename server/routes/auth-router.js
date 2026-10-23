@@ -3,11 +3,12 @@ const crypto = require('node:crypto');
 const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
 const User = require('../models/User.js');
+const InviteCode = require('../models/InviteCode.js');
 const { requireAuth } = require('../middleware/auth.js');
 const { startSession, endSession } = require('../utils/session.js');
 const { sendMail } = require('../services/mailer.js');
 const { renderEmail } = require('../services/email-layout.js');
-const { asyncHandler, apiErrorHandler, applyAdminList, clientUrl } = require('../utils/helpers.js');
+const { asyncHandler, apiErrorHandler, applyAdminList, clientUrl, httpError } = require('../utils/helpers.js');
 const { authProvider } = require('../utils/auth-provider.js');
 const { verifyIdentity } = require('../services/supabase-identity.js');
 
@@ -20,6 +21,22 @@ const hashToken = (t) => crypto.createHash('sha256').update(t).digest('hex');
 const normEmail = (e) => (typeof e === 'string' ? e.trim().toLowerCase() : '');
 const isProd = () => process.env.NODE_ENV === 'production';
 const localPart = (email) => email.split('@')[0].slice(0, DISPLAY_NAME_MAX);
+const normInvite = (code) => (typeof code === 'string' ? code.trim().toUpperCase() : '');
+
+async function reserveInvite(code, email) {
+  if (!code && process.env.NODE_ENV === 'test') return null;
+  if (!code) throw httpError(400, 'Enter an invite code.', 'INVITE_REQUIRED');
+  const invite = await InviteCode.findOneAndUpdate(
+    { code, $expr: { $lt: [{ $size: '$signups' }, '$capacity'] } },
+    { $push: { signups: { email } } },
+    { new: true }
+  );
+  if (!invite) {
+    const exists = await InviteCode.exists({ code });
+    throw httpError(409, exists ? 'This invite code has reached its capacity.' : 'That invite code is not valid.', exists ? 'INVITE_FULL' : 'INVITE_INVALID');
+  }
+  return invite;
+}
 
 // Slows down password guessing: 20 tries per 15 min per IP
 const LIMITER_OPTIONS = {
@@ -103,6 +120,8 @@ router.post('/register', authLimiter, asyncHandler(async (req, res) => {
 
   if (await User.exists({ email })) return taken();
 
+  const invite = await reserveInvite(normInvite(req.body.inviteCode), email);
+
   const user = new User({
     email,
     passwordHash: await bcrypt.hash(password, 12),
@@ -111,8 +130,13 @@ router.post('/register', authLimiter, asyncHandler(async (req, res) => {
   applyAdminList(user);
 
   try {
+    if (invite) {
+      invite.signups[invite.signups.length - 1].user = user._id;
+      await invite.save();
+    }
     await saveNewUser(user, displayName);
   } catch (err) {
+    if (invite) await InviteCode.updateOne({ _id: invite._id }, { $pop: { signups: 1 } });
     if (isDuplicate(err, 'email')) return taken();
     throw err;
   }
@@ -197,10 +221,15 @@ router.post('/supabase', authLimiter, asyncHandler(async (req, res) => {
   if (!user) {
     if (!email) return res.status(400).json({ error: 'Your sign-in did not share an email address.', code: 'EMAIL_REQUIRED' });
     const displayName = (identity.name || localPart(email)).trim().slice(0, DISPLAY_NAME_MAX) || localPart(email);
+    const invite = await reserveInvite(normInvite(req.body.inviteCode || identity.inviteCode), email);
     user = new User({ email, supabaseId: identity.id, displayName, avatarUrl: identity.avatarUrl || undefined });
     applyAdminList(user);
     try {
       await saveNewUser(user, displayName);
+      if (invite) {
+        invite.signups[invite.signups.length - 1].user = user._id;
+        await invite.save();
+      }
       created = true;
     } catch (err) {
       // Two sign-ins for the same new person at once: the other one won, so use it

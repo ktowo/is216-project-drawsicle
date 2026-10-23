@@ -14,7 +14,7 @@ export const SESSION_KEY = 'drawsicle-mock-session';
 // Museum Club's sample wings; 3: screen pets and the bigger character library; 4: the OC Secret
 // Santa's 192 sign-ups; 5: demo pictures that load on GitHub Pages, sample reports for the admin
 // tools), so saved demos start over with it
-const STATE_VERSION = 5;
+const STATE_VERSION = 6;
 
 // '/demo-art/x.jpg' -> '/is216-project-drawsicle/demo-art/x.jpg' when the site lives in a folder
 const sitePath = (path) => (path.startsWith('/') ? `${import.meta.env?.BASE_URL || '/'}${path.slice(1)}` : path);
@@ -338,6 +338,9 @@ export function buildState(now = new Date()) {
     announcements: [],
     reports: sampleReports(users, characters, events, idFor, nowMs),
     audit: [],
+    inviteCodes: [
+      { id: newId(), code: 'DRAWSCICLE-DEMO', capacity: 25, signups: [], createdAt: iso(now), updatedAt: iso(now) },
+    ],
     follows: [],
     presence: [],
     chats: [],
@@ -348,7 +351,7 @@ export function buildState(now = new Date()) {
 }
 
 // Collections added after the first release; older saved demos get them empty
-const LATER_COLLECTIONS = ['announcements', 'reports', 'audit', 'follows', 'presence', 'chats', 'guestbook', 'catPets', 'favourites'];
+const LATER_COLLECTIONS = ['announcements', 'reports', 'audit', 'inviteCodes', 'follows', 'presence', 'chats', 'guestbook', 'catPets', 'favourites'];
 
 // ---------- Loading and saving ----------
 
