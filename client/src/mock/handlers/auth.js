@@ -51,7 +51,8 @@ export function register(router) {
     }
     const inviteCode = String(body.inviteCode || (import.meta.env.MODE === 'test' ? 'DRAWSCICLE-DEMO' : '')).trim().toUpperCase();
     if (!inviteCode) throw httpError(400, 'Enter an invite code.', 'INVITE_REQUIRED');
-    const invite = state.inviteCodes.find((row) => row.code === inviteCode);
+    const inviteCodes = Array.isArray(state.inviteCodes) ? state.inviteCodes : (state.inviteCodes = []);
+    const invite = inviteCodes.find((row) => row.code === inviteCode);
     if (!invite) throw httpError(409, 'That invite code is not valid.', 'INVITE_INVALID');
     if (invite.signups.length >= invite.capacity) throw httpError(409, 'This invite code has reached its capacity.', 'INVITE_FULL');
 
