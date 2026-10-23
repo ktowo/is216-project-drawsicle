@@ -13,6 +13,7 @@ import AdminActivity from '@/components/admin/AdminActivity.vue';
 import AdminReports from '@/components/admin/AdminReports.vue';
 import AdminChat from '@/components/admin/AdminChat.vue';
 import AdminVision from '@/components/admin/AdminVision.vue';
+import AdminInvites from '@/components/admin/AdminInvites.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -26,6 +27,7 @@ const ALL_TABS = [
   { key: 'events', label: 'Events', permission: 'events.moderate' },
   { key: 'activity', label: 'Audit log', permission: 'audit.view' },
   { key: 'vision', label: 'Vision (Ollama)', permission: 'stats.view' },
+  { key: 'invites', label: 'Invite codes', permission: 'invites.manage' },
 ];
 const TABS = computed(() => ALL_TABS.filter((t) => can(auth.user, t.permission)));
 const isAdmin = computed(() => auth.user?.role === 'admin');
@@ -37,6 +39,7 @@ const PANELS = {
   events: AdminEvents,
   activity: AdminActivity,
   vision: AdminVision,
+  invites: AdminInvites,
 };
 
 const tab = computed({
