@@ -6,7 +6,10 @@ const User = require('../models/User.js');
 const { requireAuth } = require('../middleware/auth.js');
 const { startSession, endSession } = require('../utils/session.js');
 const { sendMail } = require('../services/mailer.js');
+const { renderEmail } = require('../services/email-layout.js');
 const { asyncHandler, apiErrorHandler, applyAdminList, clientUrl } = require('../utils/helpers.js');
+const { authProvider } = require('../utils/auth-provider.js');
+const { verifyIdentity } = require('../services/supabase-identity.js');
 
 const router = Router();
 
@@ -154,12 +157,93 @@ router.post('/logout', (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Supabase Auth (AUTH_PROVIDER=supabase) ----------
+// The browser signs in with Supabase, then trades its access token here for the app's own session
+// (docs/adr/0001). The account is the one linked to that Supabase user; otherwise the one with the
+// same email, but only once Supabase has verified it; otherwise a new one.
+router.post('/supabase', authLimiter, asyncHandler(async (req, res) => {
+  if (authProvider() !== 'supabase') {
+    return res.status(404).json({ error: 'Supabase sign-in is not switched on.', code: 'NOT_ENABLED' });
+  }
+  const identity = await verifyIdentity(req.body.accessToken);
+  if (!identity?.id) {
+    return res.status(401).json({ error: 'That sign-in has expired. Please sign in again.', code: 'INVALID_TOKEN' });
+  }
+  const email = normEmail(identity.email);
+
+  let user = await User.findOne({ supabaseId: identity.id });
+  let created = false;
+  if (!user && email) {
+    const sameEmail = await User.findOne({ email });
+    if (sameEmail) {
+      // Someone could sign up with your address; only a verified email may claim your account
+      if (!identity.emailVerified) {
+        return res.status(409).json({
+          error: 'There is already an account with this email. Verify your email address first, then sign in again.',
+          code: 'EMAIL_NOT_VERIFIED',
+        });
+      }
+      if (sameEmail.supabaseId) {
+        return res.status(409).json({
+          error: 'This email belongs to an account that signs in another way. Use that, or link this one from your settings.',
+          code: 'ACCOUNT_LINKED_ELSEWHERE',
+        });
+      }
+      sameEmail.supabaseId = identity.id;
+      user = sameEmail;
+    }
+  }
+
+  if (!user) {
+    if (!email) return res.status(400).json({ error: 'Your sign-in did not share an email address.', code: 'EMAIL_REQUIRED' });
+    const displayName = (identity.name || localPart(email)).trim().slice(0, DISPLAY_NAME_MAX) || localPart(email);
+    user = new User({ email, supabaseId: identity.id, displayName, avatarUrl: identity.avatarUrl || undefined });
+    applyAdminList(user);
+    try {
+      await saveNewUser(user, displayName);
+      created = true;
+    } catch (err) {
+      // Two sign-ins for the same new person at once: the other one won, so use it
+      if (!isDuplicate(err, 'supabaseId') && !isDuplicate(err, 'email')) throw err;
+      user = await User.findOne({ supabaseId: identity.id });
+      if (!user) throw err;
+    }
+  }
+
+  if (user.status === 'banned') return res.status(403).json(bannedBody(user));
+  const reactivated = reactivate(user);
+  applyAdminList(user);
+  // Accounts from before usernames existed
+  if (!user.username) user.username = await User.generateUsername(user.displayName || localPart(user.email));
+  // Just reset the password with Supabase: log out every other device, as the app's own reset does
+  if (req.body.passwordReset === true && !created) user.sessionVersion = (user.sessionVersion || 0) + 1;
+  if (user.isModified()) await user.save();
+
+  const remember = typeof req.body.remember === 'boolean' ? req.body.remember : undefined;
+  startSession(res, user, { remember });
+  const body = reactivated ? { user: user.toPublic(), reactivated: true } : { user: user.toPublic() };
+  res.status(created ? 201 : 200).json(body);
+}));
+
 router.get('/me', requireAuth, (req, res) => {
   res.json({ user: req.user.toPublic() });
 });
 
 // Which "Continue with ..." buttons the login page should show
 router.get('/providers', (req, res) => {
+  if (authProvider() === 'supabase') {
+    // Sign-in happens in the browser with Supabase: it needs the project's address and public key
+    // (both meant to be public). SUPABASE_OAUTH_PROVIDERS lists the buttons switched on in Supabase.
+    const oauth = (process.env.SUPABASE_OAUTH_PROVIDERS ?? 'google,discord').split(',').map((p) => p.trim().toLowerCase());
+    return res.json({
+      provider: 'supabase',
+      google: oauth.includes('google'),
+      discord: oauth.includes('discord'),
+      supabaseUrl: (process.env.SUPABASE_URL || '').trim(),
+      supabaseAnonKey: (process.env.SUPABASE_ANON_KEY || '').trim(),
+    });
+  }
+  // The app's own sign-in (no "provider" field, as before: the browser reads that as local)
   res.json({
     google: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
     discord: Boolean(process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET),
@@ -180,32 +264,66 @@ router.post('/forgot-password', authLimiter, asyncHandler(async (req, res) => {
     await user.save();
 
     const link = `${clientUrl()}/reset-password?token=${token}`;
-    await sendMail({
-      to: user.email,
-      subject: 'Reset your Drawsicle password',
-      text: `Someone asked to reset your Drawsicle password.\n\nReset it here (link works for 1 hour):\n${link}\n\nIf this wasn't you, ignore this email.`,
-      html: `<p>Someone asked to reset your Drawsicle password.</p><p><a href="${link}">Reset your password</a> (link works for 1 hour)</p><p>If this wasn't you, ignore this email.</p>`,
+    const { html, text } = renderEmail({
+      preheader: 'Your reset link works for 1 hour.',
+      heading: 'Reset your Drawsicle password',
+      paragraphs: ['Someone asked to reset your Drawsicle password. The link works for 1 hour.'],
+      button: { label: 'Reset your password', url: link },
+      footer: { text: "If this wasn't you, you can ignore this email: your password stays the same." },
     });
+    await sendMail({ to: user.email, subject: 'Reset your Drawsicle password', text, html });
   }
 
   // Same answer either way, so nobody can use this to check who has an account
   res.json({ message: 'If an account exists for that email, a reset link is on its way.' });
 }));
 
+// Why a reset link can't be used, so the page can say so before anyone types a new password:
+//   expired  the hour is up
+//   used     already used, or replaced by a newer reset email (the old link stops working)
+const RESET_LINK_PROBLEMS = {
+  expired: 'This reset link has expired. Links work for 1 hour, so request a new one.',
+  used: 'This reset link was already used, or a newer reset email replaced it. Request a new one if you still need it.',
+};
+
+function resetLinkError(res, reason) {
+  return res.status(400).json({ error: RESET_LINK_PROBLEMS[reason], code: 'INVALID_TOKEN', reason });
+}
+
+// The account a reset link belongs to, or the reason it can't be used
+async function userForResetToken(token) {
+  if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) return { reason: 'used' };
+  const user = await User.findOne({ resetTokenHash: hashToken(token) }).select('+resetTokenExpires');
+  if (!user) return { reason: 'used' };
+  if (!user.resetTokenExpires || user.resetTokenExpires <= new Date()) return { reason: 'expired' };
+  return { user };
+}
+
+// "mika.draws@gmail.com" -> "mi•••@gmail.com", so people know which account they're resetting
+// without the page giving the full address to whoever has the link
+function maskEmail(email) {
+  const [name, domain] = String(email).split('@');
+  if (!domain) return '';
+  return `${name.slice(0, Math.min(2, Math.max(1, name.length - 1)))}•••@${domain}`;
+}
+
+// Checked when the reset page opens. Doesn't use the link up.
+router.get('/reset-password/check', authLimiter, asyncHandler(async (req, res) => {
+  const { user, reason } = await userForResetToken(req.query.token);
+  if (!user) return resetLinkError(res, reason);
+  if (user.status === 'banned') return res.status(403).json(bannedBody(user));
+  res.json({ ok: true, email: maskEmail(user.email), expiresAt: user.resetTokenExpires });
+}));
+
 router.post('/reset-password', authLimiter, asyncHandler(async (req, res) => {
   const { token, password } = req.body;
-  const invalid = () =>
-    res.status(400).json({ error: 'This reset link has expired or was already used.', code: 'INVALID_TOKEN' });
 
-  if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) return invalid();
+  if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) return resetLinkError(res, 'used');
   const pwError = passwordProblem(password);
   if (pwError) return res.status(400).json({ error: pwError, code: 'VALIDATION' });
 
-  const user = await User.findOne({
-    resetTokenHash: hashToken(token),
-    resetTokenExpires: { $gt: new Date() },
-  });
-  if (!user) return invalid();
+  const { user, reason } = await userForResetToken(token);
+  if (!user) return resetLinkError(res, reason);
   if (user.status === 'banned') return res.status(403).json(bannedBody(user));
 
   user.passwordHash = await bcrypt.hash(password, 12);

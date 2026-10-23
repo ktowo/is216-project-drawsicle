@@ -701,4 +701,20 @@ watch(
   align-items: center;
   gap: 6px;
 }
+/* iPhone 6/7/8 width: tighten the bar so the menu button stays on screen */
+@media (max-width: 420px) {
+  .bar {
+    padding: 9px 10px;
+    gap: 4px;
+  }
+  .brand {
+    gap: 6px;
+  }
+  .brand-name {
+    font-size: 1.1rem;
+  }
+  .right {
+    gap: 0;
+  }
+}
 </style>

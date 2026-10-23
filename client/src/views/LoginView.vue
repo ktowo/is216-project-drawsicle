@@ -13,6 +13,7 @@ import TestLogins from '@/components/TestLogins.vue';
 import { TEST_LOGINS_ENABLED } from '@/utils/testLogins';
 import { recentLogins, rememberLogin, forgetLogin, rememberPreference, setRememberPreference } from '@/utils/recentLogins';
 import { login } from '@/stores/auth';
+import ConfirmEmailNotice from '@/components/ConfirmEmailNotice.vue';
 import { toast } from '@/stores/toast';
 import { api } from '@/api';
 import { safeRedirect } from '@/router';
@@ -42,7 +43,8 @@ function providerError(code) {
   return '';
 }
 
-const email = ref('');
+// ?email= fills it in, e.g. from "Log in" on the sign-up page when the email already has an account
+const email = ref(typeof route.query.email === 'string' ? route.query.email.slice(0, 254) : '');
 const password = ref('');
 const remember = ref(rememberPreference());
 // Accounts that ticked "Remember me" here before: one click fills in the email
@@ -87,8 +89,12 @@ function quickLogin(account) {
   submit();
 }
 
+// Supabase sign-in: an address that still needs confirming
+const confirmEmail = ref('');
+
 async function submit() {
   error.value = '';
+  confirmEmail.value = '';
   if (!email.value.trim() || !password.value) {
     error.value = 'Enter your email and password.';
     return;
@@ -105,7 +111,9 @@ async function submit() {
     router.replace(redirectTo.value);
   } catch (e) {
     play('bonk');
-    error.value = e.message;
+    // Supabase sign-in: an unconfirmed address gets the "check your email" box instead
+    if (e.code === 'email_not_confirmed') confirmEmail.value = email.value.trim();
+    else error.value = e.message;
   } finally {
     loading.value = false;
   }
@@ -175,6 +183,7 @@ async function submit() {
         </span>
       </label>
 
+      <ConfirmEmailNotice v-if="confirmEmail" :email="confirmEmail" />
       <p v-if="error" class="alert alert-error" role="alert">{{ error }}</p>
 
       <button type="submit" class="btn btn-primary btn-block submit" :disabled="loading">
