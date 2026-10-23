@@ -1,4 +1,5 @@
 const { Router } = require('express');
+const { EMAIL_TYPES, EMAIL_MODES } = require('../../shared/email-types.mjs');
 const mongoose = require('mongoose');
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
@@ -7,6 +8,7 @@ const Character = require('../models/Character.js');
 const Application = require('../models/Application.js');
 const Submission = require('../models/Submission.js');
 const Notification = require('../models/Notification.js');
+const Event = require('../models/Event.js');
 const { USERNAME_RE, SOCIAL_KEYS, userMini } = User;
 const { requireAuth } = require('../middleware/auth.js');
 const { uploadImage, uploadImageWithThumbnail, looksLikeImage, IMAGE_TYPES } = require('../services/storage.js');
@@ -122,10 +124,27 @@ router.patch('/', requireAuth, asyncHandler(async (req, res) => {
 
   if (notificationPrefs !== undefined) {
     if (!isPlainObject(notificationPrefs)) throw invalid('notificationPrefs must be an object.');
-    for (const key of ['emailReminders', 'emailMatches', 'emailEventUpdates']) {
-      if (notificationPrefs[key] === undefined) continue;
-      if (typeof notificationPrefs[key] !== 'boolean') throw invalid(`${key} must be true or false.`);
-      user.notificationPrefs[key] = notificationPrefs[key];
+    const modes = user.notificationPrefs.emailModes;
+    // The older on/off switches: off is off, on brings back that type's usual mode
+    for (const type of EMAIL_TYPES) {
+      const on = notificationPrefs[type.legacy];
+      if (on === undefined) continue;
+      if (typeof on !== 'boolean') throw invalid(`${type.legacy} must be true or false.`);
+      user.notificationPrefs[type.legacy] = on;
+      // Off means off; on brings back the usual mode if it had been turned off
+      if (!on) modes[type.key] = 'off';
+      else if (modes[type.key] === 'off') modes[type.key] = undefined;
+    }
+    // Instant / daily digest / off per email type
+    if (notificationPrefs.emailModes !== undefined) {
+      if (!isPlainObject(notificationPrefs.emailModes)) throw invalid('emailModes must be an object.');
+      for (const type of EMAIL_TYPES) {
+        const mode = notificationPrefs.emailModes[type.key];
+        if (mode === undefined) continue;
+        if (!EMAIL_MODES.includes(mode)) throw invalid(`${type.label} must be instant, digest or off.`);
+        modes[type.key] = mode;
+        user.notificationPrefs[type.legacy] = mode !== 'off';
+      }
     }
   }
 
@@ -261,7 +280,7 @@ router.post('/deactivate', requireAuth, asyncHandler(async (req, res) => {
 // "Download my data": everything stored about me, as one JSON document
 router.get('/export', requireAuth, asyncHandler(async (req, res) => {
   const user = req.user;
-  const [characters, applications, submissions, notifications] = await Promise.all([
+  const [characters, applications, submissions, notifications, watched] = await Promise.all([
     Character.find({ owner: user._id }).sort({ createdAt: 1, _id: 1 }),
     Application.find({ user: user._id })
       .sort({ createdAt: -1, _id: -1 })
@@ -269,6 +288,7 @@ router.get('/export', requireAuth, asyncHandler(async (req, res) => {
       .populate('offeredCharacters'),
     Submission.find({ giver: user._id }).sort({ submittedAt: -1, _id: -1 }).populate('event', 'name'),
     Notification.find({ user: user._id }).sort({ createdAt: -1, _id: -1 }),
+    Event.find({ _id: { $in: user.watchedEvents || [] } }).select('name signupDeadline'),
   ]);
   const mini = user.toMini();
 
@@ -286,6 +306,8 @@ router.get('/export', requireAuth, asyncHandler(async (req, res) => {
     })),
     submissions: submissions.map((s) => ({ ...s.toPublic(), eventName: s.event?.name || 'Deleted event' })),
     notifications: notifications.map((n) => n.toPublic()),
+    // Events they tapped "Remind me" on
+    eventReminders: watched.map((e) => ({ id: e._id.toString(), name: e.name, signupDeadline: e.signupDeadline })),
   });
 }));
 

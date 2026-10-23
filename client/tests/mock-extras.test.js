@@ -626,3 +626,18 @@ describe('automatic and random matching', () => {
     expect(created.autoMatch).toMatchObject({ enabled: true, mode: 'random', publish: true });
   });
 });
+
+describe('email modes', () => {
+  it('sets instant, daily digest or off per email type, like the server', async () => {
+    await loginAs('mika');
+    let { user } = await ok('/profile', { method: 'PATCH', body: { notificationPrefs: { emailModes: { matches: 'digest' } } } });
+    expect(user.emailModes).toEqual({ reminders: 'instant', matches: 'digest', eventUpdates: 'digest' });
+    expect(user.notificationPrefs.emailMatches).toBe(true);
+
+    ({ user } = await ok('/profile', { method: 'PATCH', body: { notificationPrefs: { emailReminders: false } } }));
+    expect(user.emailModes.reminders).toBe('off');
+
+    const res = await mockRequest('/profile', { method: 'PATCH', body: { notificationPrefs: { emailModes: { matches: 'weekly' } } } }).catch((e) => e);
+    expect(res.status).toBe(400);
+  });
+});

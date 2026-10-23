@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { EMAIL_MODES, emailModesOf } = require('../../shared/email-types.mjs');
 const { SITE_ROLES } = require('../../shared/constants.mjs');
 const { permissionsFor } = require('../../shared/permissions.mjs');
 const { artistTagsOf } = require('../../shared/taste.mjs');
@@ -13,6 +14,8 @@ const userSchema = new mongoose.Schema(
     passwordHash: { type: String, select: false }, // empty for Google/Discord-only accounts
     googleId: { type: String, unique: true, sparse: true },
     discordId: { type: String, unique: true, sparse: true },
+    // The Supabase Auth user this account signs in as (AUTH_PROVIDER=supabase; docs/adr/0001)
+    supabaseId: { type: String, unique: true, sparse: true },
 
     // Public handle, e.g. "mika_draws". Generated at sign-up, editable in settings.
     username: {
@@ -85,6 +88,9 @@ const userSchema = new mongoose.Schema(
 
     // People this person never wants to be matched with, in either direction. Private.
     blockedUsers: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], default: [] },
+    // Open events they asked to be reminded about before sign-ups close ("Remind me" on the
+    // event page). The reminder job notifies them 48 h before the deadline (services/reminders.js).
+    watchedEvents: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Event' }], default: [] },
     // Pictures of their art, for matching by style (services/vision.js); up to 3
     styleSamples: { type: [String], default: [] },
     // Their museum avatar, from the avatar creator (shared/looks.mjs); empty until they make one
@@ -101,7 +107,15 @@ const userSchema = new mongoose.Schema(
     notificationPrefs: {
       emailReminders: { type: Boolean, default: true },
       emailMatches: { type: Boolean, default: true },
-      emailEventUpdates: { type: Boolean, default: false },
+      // On for new accounts since 20 Oct 2026: event updates arrive in the daily digest
+      emailEventUpdates: { type: Boolean, default: true },
+      // How each email type arrives, once chosen (shared/email-types.mjs: instant / digest / off).
+      // Unset types follow the on/off switches above; emailModesOf() works out the result.
+      emailModes: {
+        reminders: { type: String, enum: EMAIL_MODES },
+        matches: { type: String, enum: EMAIL_MODES },
+        eventUpdates: { type: String, enum: EMAIL_MODES },
+      },
     },
 
     // Password reset (we only store a hash of the token, never the token itself)
@@ -139,11 +153,16 @@ userSchema.methods.toPublic = function () {
       avoid: this.defaultForm?.avoid || '',
       cannotDraw: [...(this.defaultForm?.cannotDraw || [])],
     },
-    notificationPrefs: {
-      emailReminders: this.notificationPrefs?.emailReminders !== false,
-      emailMatches: this.notificationPrefs?.emailMatches !== false,
-      emailEventUpdates: Boolean(this.notificationPrefs?.emailEventUpdates),
-    },
+    notificationPrefs: (() => {
+      const modes = emailModesOf(this.notificationPrefs);
+      return {
+        emailReminders: modes.reminders !== 'off',
+        emailMatches: modes.matches !== 'off',
+        emailEventUpdates: modes.eventUpdates !== 'off',
+      };
+    })(),
+    // Instant / daily digest / off for each email type
+    emailModes: emailModesOf(this.notificationPrefs),
     artistTags: artistTagsOf(this.artistTags),
     profilePrivacy: {
       showExchanges: this.profilePrivacy?.showExchanges !== false,
@@ -188,6 +207,9 @@ userSchema.statics.generateUsername = async function (base) {
   }
   return candidate;
 };
+
+// Who to remind when an event's sign-ups are about to close
+userSchema.index({ watchedEvents: 1 });
 
 // Same mini shape for a populated ref that might be null (deleted user)
 function userMini(user) {

@@ -3,7 +3,7 @@
 // Each reminder fires once per event, tracked in event.remindersSent like on the server.
 import { LIMITS } from '@shared/constants.mjs';
 import { emptySocials } from './db.js';
-import { acceptedUserIds, notifyMany, organizerIds, setStatus } from './model.js';
+import { acceptedUserIds, notifyMany, organizerIds, participantCount, setStatus } from './model.js';
 import { plural, timeLeft, toMs } from './util.js';
 import { runAutoMatch } from './handlers/matches.js';
 
@@ -12,6 +12,7 @@ const DAY = 24 * HOUR;
 
 const KEYS = {
   signupWarning: 'signup-48h',
+  watchersWarning: 'watchers-48h',
   signupClosed: 'signup-closed',
   autoMatched: 'auto-matched',
   submission72h: 'submission-72h',
@@ -96,6 +97,41 @@ function warnSignupsClosing(state, now) {
   return changed;
 }
 
+// People who tapped "Remind me" on an open event, 48 h before sign-ups close
+function remindWatchers(state, now) {
+  let changed = false;
+  for (const event of state.events) {
+    const left = toMs(event.signupDeadline) - now.getTime();
+    if (event.status !== 'open' || event.disabledAt || left <= 0 || left > 48 * HOUR) continue;
+    const watchers = state.users.filter((u) => u.status === 'active' && (u.watchedEvents || []).includes(event.id));
+    if (!watchers.length) continue;
+    if (!claim(event, KEYS.watchersWarning)) continue;
+    changed = true;
+
+    const skip = new Set([
+      ...state.applications.filter((a) => a.event === event.id).map((a) => a.user),
+      ...organizerIds(state, event.id),
+    ]);
+    const toRemind = watchers.map((u) => u.id).filter((id) => !skip.has(id));
+    if (!toRemind.length) continue;
+
+    const count = participantCount(state, event.id);
+    const spots = event.maxParticipants ? Math.max(0, event.maxParticipants - count) : null;
+    let message;
+    if (spots === 0) message = 'Every spot is taken right now, but you can still join the waitlist.';
+    else if (spots !== null) message = `${plural(spots, 'spot is', 'spots are')} still open. Sign up before it closes.`;
+    else message = 'There is still time to sign up. Sign up before it closes.';
+
+    notifyMany(state, toRemind, {
+      type: 'event_closing_soon',
+      title: `Sign-ups for ${event.name} close ${timeLeft(event.signupDeadline, now)}`,
+      message,
+      link: `/events/${event.id}`,
+    });
+  }
+  return changed;
+}
+
 function remindGivers(state, now) {
   let changed = false;
   for (const event of state.events) {
@@ -165,6 +201,7 @@ function purgeDeactivated(state, now) {
       password: '',
       socials: emptySocials(),
       defaultForm: { communityUsername: '', canCreate: [], wantsTypes: [], likes: '', adoptWishlist: '', avoid: '', cannotDraw: [] },
+      watchedEvents: [],
       // A deleted account can't agree to anything being shown
       profilePrivacy: { showExchanges: false, showGifts: false, listInDiscover: false },
       artistTags: { makes: [], themes: [], activity: '', cardColor: '' },
@@ -195,6 +232,7 @@ export function runJobs(state, now = new Date()) {
   changed = autoCloseSignups(state, now) || changed;
   changed = autoMatchEvents(state, now) || changed;
   changed = warnSignupsClosing(state, now) || changed;
+  changed = remindWatchers(state, now) || changed;
   changed = remindGivers(state, now) || changed;
   changed = reportOverdue(state, now) || changed;
   changed = purgeDeactivated(state, now) || changed;

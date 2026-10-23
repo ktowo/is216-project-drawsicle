@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
 import { UserPlus, Mail, Lock, Loader2, Smile } from 'lucide-vue-next';
 import AuthLayout from '@/components/AuthLayout.vue';
@@ -9,6 +9,7 @@ import DiscordButton from '@/components/DiscordButton.vue';
 import OrDivider from '@/components/ui/OrDivider.vue';
 import PasswordStrength from '@/components/PasswordStrength.vue';
 import { register } from '@/stores/auth';
+import ConfirmEmailNotice from '@/components/ConfirmEmailNotice.vue';
 import { toast } from '@/stores/toast';
 import { api } from '@/api';
 import { safeRedirect } from '@/router';
@@ -18,6 +19,8 @@ const router = useRouter();
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const NAME_MAX = 60;
+const PASSWORD_MIN = 8;
+const PASSWORD_MAX = 128;
 
 const displayName = ref('');
 const email = ref('');
@@ -25,6 +28,13 @@ const password = ref('');
 const confirm = ref('');
 const loading = ref(false);
 const error = ref('');
+// Problems shown under each field. They appear after the first try and then update as you type.
+const fieldErrors = reactive({ displayName: '', email: '', password: '', confirm: '' });
+const tried = ref(false);
+// The email that already has an account, so the links can offer to log in with it
+const takenEmail = ref('');
+// Supabase sign-in: the address to confirm before the first log-in
+const confirmEmail = ref('');
 const providers = ref({ google: false, discord: false });
 
 const redirectTo = computed(() => safeRedirect(route.query.redirect));
@@ -43,28 +53,38 @@ onMounted(async () => {
   }
 });
 
+function checkFields() {
+  const name = displayName.value.trim();
+  const mail = email.value.trim();
+  fieldErrors.displayName = name.length > NAME_MAX ? `That's too long (max ${NAME_MAX} characters).` : '';
+  if (!mail) fieldErrors.email = 'Enter your email address.';
+  else if (!EMAIL_RE.test(mail)) fieldErrors.email = 'That doesn\'t look like an email address. Check for typos.';
+  else if (takenEmail.value && mail.toLowerCase() === takenEmail.value) {
+    fieldErrors.email = 'There is already an account with this email.';
+  } else fieldErrors.email = '';
+  if (password.value.length < PASSWORD_MIN) fieldErrors.password = `Use at least ${PASSWORD_MIN} characters.`;
+  else if (password.value.length > PASSWORD_MAX) fieldErrors.password = `That's too long (max ${PASSWORD_MAX} characters).`;
+  else fieldErrors.password = '';
+  fieldErrors.confirm =
+    !fieldErrors.password && password.value !== confirm.value ? "This doesn't match the password above." : '';
+  return !Object.values(fieldErrors).some(Boolean);
+}
+
+// After the first try, errors clear (or change) as soon as the field is fixed
+watch([displayName, email, password, confirm], () => {
+  if (tried.value) checkFields();
+});
+
+const takenLinks = computed(() => {
+  const query = { email: takenEmail.value };
+  if (route.query.redirect) query.redirect = redirectTo.value;
+  return { login: { name: 'login', query }, forgot: { path: '/forgot-password', query: { email: takenEmail.value } } };
+});
+
 async function submit() {
   error.value = '';
-  if (displayName.value.trim().length > NAME_MAX) {
-    error.value = `Display name is too long (max ${NAME_MAX}).`;
-    return;
-  }
-  if (!EMAIL_RE.test(email.value.trim())) {
-    error.value = 'Enter a valid email address.';
-    return;
-  }
-  if (password.value.length < 8) {
-    error.value = 'Password must be at least 8 characters.';
-    return;
-  }
-  if (password.value.length > 128) {
-    error.value = 'Password is too long (max 128 characters).';
-    return;
-  }
-  if (password.value !== confirm.value) {
-    error.value = "Passwords don't match.";
-    return;
-  }
+  tried.value = true;
+  if (!checkFields()) return;
 
   loading.value = true;
   try {
@@ -72,7 +92,14 @@ async function submit() {
     toast.success(`Welcome to Drawsicle, ${user.displayName}!`);
     router.replace(redirectTo.value);
   } catch (e) {
-    error.value = e.message;
+    if (e.code === 'EMAIL_TAKEN') {
+      takenEmail.value = email.value.trim().toLowerCase();
+      checkFields();
+    } else if (e.code === 'CHECK_EMAIL') {
+      confirmEmail.value = email.value.trim();
+    } else {
+      error.value = e.message;
+    }
   } finally {
     loading.value = false;
   }
@@ -97,6 +124,7 @@ async function submit() {
         placeholder="How other artists will see you"
         autocomplete="nickname"
         :maxlength="NAME_MAX"
+        :error="fieldErrors.displayName"
         hint="You can change this later. We'll use the start of your email if you leave it empty."
       />
       <TextField
@@ -106,16 +134,24 @@ async function submit() {
         :icon="Mail"
         placeholder="you@example.com"
         autocomplete="email"
+        :error="fieldErrors.email"
         required
       />
+      <p v-if="takenEmail && email.trim().toLowerCase() === takenEmail" class="taken" role="status">
+        Is it yours?
+        <RouterLink :to="takenLinks.login">Log in</RouterLink>
+        or
+        <RouterLink :to="takenLinks.forgot">reset your password</RouterLink>.
+      </p>
       <TextField
         v-model="password"
         label="Password"
         type="password"
         :icon="Lock"
-        placeholder="At least 8 characters"
+        :placeholder="`At least ${PASSWORD_MIN} characters`"
         autocomplete="new-password"
-        :maxlength="128"
+        :maxlength="PASSWORD_MAX"
+        :error="fieldErrors.password"
         required
       />
       <PasswordStrength :password="password" />
@@ -126,10 +162,12 @@ async function submit() {
         :icon="Lock"
         placeholder="Type it again"
         autocomplete="new-password"
-        :maxlength="128"
+        :maxlength="PASSWORD_MAX"
+        :error="fieldErrors.confirm"
         required
       />
 
+      <ConfirmEmailNotice v-if="confirmEmail" :email="confirmEmail" />
       <p v-if="error" class="alert alert-error" role="alert">{{ error }}</p>
 
       <p class="terms">
@@ -163,6 +201,14 @@ async function submit() {
 }
 .alert {
   margin: 20px 0 0;
+}
+.taken {
+  margin: 2px 0 16px;
+  font-size: 0.95rem;
+  color: var(--text-soft);
+}
+.taken a {
+  font-weight: 600;
 }
 .terms {
   margin: 24px 0 0;

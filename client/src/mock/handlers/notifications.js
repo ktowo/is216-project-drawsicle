@@ -1,6 +1,7 @@
 // /notifications (server/routes/notification-router.js)
 import { notify, notificationPublic } from '../model.js';
 import { httpError, invalid } from '../util.js';
+import { NOTIFICATION_GROUP_KEYS, isNotificationGroup, notificationGroup } from '@shared/notification-groups.mjs';
 
 const notFound = () => httpError(404, 'Notification not found.', 'NOT_FOUND');
 
@@ -18,19 +19,36 @@ function readBefore(value) {
   return date.getTime();
 }
 
+// ?group=matches keeps one filter group (shared/notification-groups.mjs)
+function readGroup(value) {
+  if (value === undefined || value === '') return '';
+  if (!isNotificationGroup(value)) throw invalid(`group must be one of: ${NOTIFICATION_GROUP_KEYS.join(', ')}.`);
+  return value;
+}
+
+const readFlag = (value) => value === '1' || value === 'true' || value === 1 || value === true;
+
 export function register(router) {
   router.get('/notifications', (ctx) => {
     const user = ctx.requireAuth();
     const limit = Math.min(Math.max(Number(ctx.query.limit) || 20, 1), 50);
     const before = readBefore(ctx.query.before);
+    const group = readGroup(ctx.query.group);
     const list = mine(ctx, user);
-    const older = before === null ? list : list.filter((n) => new Date(n.createdAt).getTime() < before);
+    const base = readFlag(ctx.query.unread) ? list.filter((n) => !n.readAt) : list;
+    const inGroup = group ? base.filter((n) => notificationGroup(n.type) === group) : base;
+    const older = before === null ? inGroup : inGroup.filter((n) => new Date(n.createdAt).getTime() < before);
     const sorted = [...older].sort(newestFirst);
-    return {
+    const body = {
       items: sorted.slice(0, limit).map(notificationPublic),
       unreadCount: unread(list),
       hasMore: sorted.length > limit,
     };
+    if (readFlag(ctx.query.counts)) {
+      body.counts = { all: base.length };
+      for (const key of NOTIFICATION_GROUP_KEYS) body.counts[key] = base.filter((n) => notificationGroup(n.type) === key).length;
+    }
+    return body;
   });
 
   router.get('/notifications/unread-count', (ctx) => {

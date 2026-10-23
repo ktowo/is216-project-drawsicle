@@ -108,6 +108,7 @@ test('an empty database does nothing', async () => {
     autoClosed: 0,
     autoMatched: 0,
     signupWarnings: 0,
+    watcherReminders: 0,
     submissionReminders: 0,
     overdueNotices: 0,
     purged: 0,
@@ -188,6 +189,43 @@ test('organisers get one heads-up 48 hours before sign-ups close', async () => {
   const second = await runReminders(at(2));
   assert.equal(second.signupWarnings, 0);
   assert.equal(await Notification.countDocuments({ type: 'deadline_reminder' }), 2);
+});
+
+test('people who tapped "Remind me" hear 48 hours before sign-ups close, unless they signed up', async () => {
+  const organizer = await makeUser('Organiser');
+  const soon = await makeEvent(organizer, { signupDeadline: at(30), maxParticipants: 10 });
+  const far = await makeEvent(organizer, { name: 'Far Swap', signupDeadline: at(5 * 24) });
+
+  const pip = await makeUser('Pip', { watchedEvents: [soon._id, far._id] });
+  const joined = await makeUser('Joined', { watchedEvents: [soon._id] });
+  await addAccepted(soon, joined);
+  await makeUser('Gone', { watchedEvents: [soon._id], status: 'deactivated', deactivatedAt: NOW });
+  await User.updateOne({ _id: organizer._id }, { $set: { watchedEvents: [soon._id] } });
+  await makeUser('Bystander');
+
+  const first = await runReminders(NOW);
+  assert.equal(first.watcherReminders, 1);
+
+  const notes = await Notification.find({ type: 'event_closing_soon' });
+  assert.equal(notes.length, 1);
+  assert.equal(String(notes[0].user), String(pip._id));
+  assert.equal(notes[0].title, 'Sign-ups for Lantern Swap close in 1 day');
+  assert.equal(notes[0].message, '9 spots are still open. Sign up before it closes.');
+  assert.equal(notes[0].link, `/events/${soon._id}`);
+
+  // Once per event
+  const second = await runReminders(at(2));
+  assert.equal(second.watcherReminders, 0);
+  assert.equal(await Notification.countDocuments({ type: 'event_closing_soon' }), 1);
+});
+
+test('an event nobody is watching yet still reminds whoever taps "Remind me" later', async () => {
+  const organizer = await makeUser('Organiser');
+  const soon = await makeEvent(organizer, { signupDeadline: at(30) });
+
+  assert.equal((await runReminders(NOW)).watcherReminders, 0);
+  await makeUser('Late', { watchedEvents: [soon._id] });
+  assert.equal((await runReminders(at(1))).watcherReminders, 1);
 });
 
 test('givers without a gift are reminded 72 h and 24 h before the deadline', async () => {
@@ -308,6 +346,7 @@ test('accounts deactivated past the grace period are anonymised in place', async
     avatarUrl: '/uploads/avatars/gone.png',
     googleId: 'google-123',
     discordId: 'discord-123',
+    supabaseId: 'supabase-123',
     passwordHash: 'not-a-real-hash',
     bio: 'I draw moths',
     socials: { discord: 'gone', twitter: 'gone_art' },
@@ -332,6 +371,7 @@ test('accounts deactivated past the grace period are anonymised in place', async
   assert.equal(purged.avatarUrl, undefined);
   assert.equal(purged.googleId, undefined);
   assert.equal(purged.discordId, undefined);
+  assert.equal(purged.supabaseId, undefined); // the old Supabase sign-in can't reach it any more
   assert.equal(purged.passwordHash, undefined);
   assert.equal(purged.bio, '');
   assert.deepEqual(purged.toPublic().socials, Object.fromEntries(User.SOCIAL_KEYS.map((k) => [k, ''])));

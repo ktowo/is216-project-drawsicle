@@ -731,7 +731,7 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
 .people {
   flex: 1 1 320px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: auto auto 1fr;
   align-items: center;
   gap: 10px;
   min-width: 0;
