@@ -22,19 +22,39 @@ function getTransporter() {
   return transporter;
 }
 
-// With no SMTP settings, emails are printed to the server terminal instead,
-// so you can still click reset links while developing.
+async function sendWithResend({ to, subject, text, html, headers }) {
+  const apiKey = (process.env.RESEND_API_KEY || '').trim();
+  if (!apiKey) return false;
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: process.env.RESEND_FROM || process.env.MAIL_FROM || 'Drawsicle <no-reply@drawsicle.app>',
+      to: [to],
+      subject,
+      text,
+      html,
+      ...(headers ? { headers } : {}),
+    }),
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Resend rejected the email (${response.status}): ${detail.slice(0, 300)}`);
+  }
+  return true;
+}
+
+// In tests emails stay in outbox. In development, configure SMTP or Resend
+// to deliver them; missing configuration is reported explicitly.
 // headers: extra email headers, e.g. List-Unsubscribe
 async function sendMail({ to, subject, text, html, headers }) {
   if (process.env.NODE_ENV === 'test') {
     outbox.push({ to, subject, text, html, headers });
     return;
   }
+  if (await sendWithResend({ to, subject, text, html, headers })) return;
   const t = getTransporter();
-  if (!t) {
-    console.log(`\n📧 Email (SMTP not set up, so printing instead)\nTo: ${to}\nSubject: ${subject}\n\n${text}\n`);
-    return;
-  }
+  if (!t) throw new Error('Email is not configured. Set RESEND_API_KEY and RESEND_FROM, or SMTP_HOST and MAIL_FROM.');
   await t.sendMail({
     from: process.env.MAIL_FROM || 'Drawsicle <no-reply@drawsicle.app>',
     to,
