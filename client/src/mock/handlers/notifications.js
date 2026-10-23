@@ -80,8 +80,19 @@ export function register(router) {
       message: 'If you can see this, notifications work.',
       link: '/profile',
     });
+    const email = {
+      id: `${n.id}-email`,
+      to: user.email,
+      subject: n.title,
+      preheader: n.message,
+      theme: 'drawsicle',
+      simulated: true,
+      createdAt: ctx.now.toISOString(),
+    };
+    if (!Array.isArray(ctx.state.mockEmails)) ctx.state.mockEmails = [];
+    ctx.state.mockEmails.push(email);
     ctx.status = 201;
-    return { notification: notificationPublic(n) };
+    return { notification: notificationPublic(n), email: { ...email, note: 'GitHub Pages simulates delivery; SMTP requires the server deployment.' } };
   });
 
   router.delete('/notifications/:id', (ctx) => {

@@ -65,6 +65,17 @@ describe('demo data', () => {
     expect((await ok('/notifications/unread-count')).unreadCount).toBe(0);
   });
 
+  it('simulates a branded email for the notification test on GitHub Pages', async () => {
+    await loginAs('mika');
+    const result = await ok('/notifications/test', { method: 'POST' });
+    expect(result.email).toMatchObject({
+      to: 'mika@demo.test',
+      subject: 'Test notification',
+      theme: 'drawsicle',
+      simulated: true,
+    });
+  });
+
   it('lists public events with filters, search, sorting and pages', async () => {
     const all = await ok('/events');
     const names = all.events.map((e) => e.name);
