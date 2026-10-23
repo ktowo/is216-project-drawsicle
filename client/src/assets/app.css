@@ -16,20 +16,20 @@
 
 /* Brand tokens as Tailwind colours: bg-brand, text-cocoa, border-line, etc. */
 @theme {
-  --color-brand: #ec6a93;
-  --color-brand-dark: #d9527d;
+  --color-brand: #c9416f;
+  --color-brand-dark: #b83a64;
   --color-brand-soft: #fde6ee;
   --color-cream: #faf7f0;
   --color-paper: #fffdfa;
   --color-line: #efe5d3;
   --color-ink: #2f2d2b;
-  --color-cocoa: #8a6e4e;
+  --color-cocoa: #7d6243;
   --color-sky: #63b3f5;
   --color-danger: #c2414b;
   --color-danger-soft: #fdecee;
-  --color-success: #3f8f5b;
+  --color-success: #2f7a4a;
   --color-success-soft: #e8f5ec;
-  --color-warning: #b7791f;
+  --color-warning: #8f5d0e;
   --color-warning-soft: #fdf3e1;
   --color-info: #2f6f9f;
   --color-info-soft: #e6f2fc;
