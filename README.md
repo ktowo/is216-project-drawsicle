@@ -200,7 +200,6 @@ The server reads `server/.env` (see `server/.env.example`):
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | | Optional "Continue with Google" |
 | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | | Optional "Continue with Discord" |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | | Real emails through SMTP |
-| `RESEND_API_KEY`, `RESEND_FROM` | | Recommended Vercel email delivery through Resend; verify the sender domain first |
 | `UPLOAD_STORAGE` | *(automatic)* | Where uploaded images go: `azure` when it's configured, `mongodb` (GridFS, served from `/api/files`) when a connection string is set, otherwise `local` (`server/uploads`) |
 | `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGE_CONTAINER` | | Store uploads in Azure Blob Storage |
 
