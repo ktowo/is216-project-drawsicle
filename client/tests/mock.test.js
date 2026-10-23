@@ -436,6 +436,7 @@ describe('accounts', () => {
       method: 'POST',
       body: { email: 'New.Artist@Example.com', password: 'longenough', displayName: 'New Artist' },
     });
+
     expect(reg.status).toBe(201);
     expect(reg.data.user).toMatchObject({ email: 'new.artist@example.com', username: 'new_artist' });
     expect((await fails('/auth/register', { method: 'POST', body: { email: 'new.artist@example.com', password: 'longenough' } })).code).toBe(
@@ -467,6 +468,25 @@ describe('accounts', () => {
   it('answers unknown routes with a JSON 404', async () => {
     const res = await mockRequest('/nothing/here');
     expect(res).toEqual({ status: 404, data: { error: 'Not found.', code: 'NOT_FOUND' } });
+  });
+});
+
+describe('admin invites', () => {
+  it('lists and manages invite codes for an admin', async () => {
+    await loginAs('ada');
+    const initial = await ok('/admin/invites');
+    expect(initial.invites.some((invite) => invite.code === 'DRAWSCICLE-DEMO')).toBe(true);
+
+    const created = await ok('/admin/invites', {
+      method: 'POST',
+      body: { code: 'TEST-ADMIN', capacity: 2 },
+    });
+    expect(created.invite).toMatchObject({ code: 'TEST-ADMIN', capacity: 2, used: 0 });
+    const updated = await ok(`/admin/invites/${created.invite.id}`, {
+      method: 'PATCH',
+      body: { capacity: 3 },
+    });
+    expect(updated.invite).toMatchObject({ code: 'TEST-ADMIN', capacity: 3 });
   });
 });
 

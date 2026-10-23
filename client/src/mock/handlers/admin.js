@@ -221,10 +221,19 @@ function demoVisionReport(state, now) {
 // ---------- Routes ----------
 
 export function register(router) {
+  const invitesOf = (state) => {
+    if (!Array.isArray(state.inviteCodes)) state.inviteCodes = [];
+    for (const invite of state.inviteCodes) {
+      if (!Array.isArray(invite.signups)) invite.signups = [];
+    }
+    return state.inviteCodes;
+  };
+
   // Overview
   router.get('/admin/stats', (ctx) => {
     allowed(ctx, 'stats.view');
     const { state, now } = ctx;
+    const inviteCodes = invitesOf(state);
     const users = Object.fromEntries(USER_STATUSES.map((s) => [s, 0]));
     for (const u of state.users) users[u.status || 'active'] = (users[u.status || 'active'] || 0) + 1;
     const byStatus = Object.fromEntries(ALL_EVENT_STATUSES.map((s) => [s, 0]));
@@ -242,9 +251,9 @@ export function register(router) {
       submissions: state.submissions.length,
       openReports: state.reports.filter((r) => r.status === 'open').length,
       invites: {
-        codes: state.inviteCodes.length,
-        capacity: state.inviteCodes.reduce((sum, invite) => sum + invite.capacity, 0),
-        used: state.inviteCodes.reduce((sum, invite) => sum + invite.signups.length, 0),
+        codes: inviteCodes.length,
+        capacity: inviteCodes.reduce((sum, invite) => sum + invite.capacity, 0),
+        used: inviteCodes.reduce((sum, invite) => sum + invite.signups.length, 0),
       },
       recent: {
         users: [...state.users].sort(byNewest).slice(0, 5).map((u) => adminUser(u, now)),
@@ -255,8 +264,10 @@ export function register(router) {
 
   router.get('/admin/invites', (ctx) => {
     allowed(ctx, 'invites.manage');
+    const { state } = ctx;
+    const inviteCodes = invitesOf(ctx.state);
     return {
-      invites: [...state.inviteCodes].sort(byNewest).map((invite) => ({
+      invites: [...inviteCodes].sort(byNewest).map((invite) => ({
         ...invite,
         used: invite.signups.length,
         signups: invite.signups.map((signup) => ({ ...signup, user: userMini(findUser(state, signup.user)) })),
@@ -266,20 +277,21 @@ export function register(router) {
 
   router.post('/admin/invites', (ctx) => {
     const actor = allowed(ctx, 'invites.manage');
+    const inviteCodes = invitesOf(ctx.state);
     const code = str(ctx.body?.code).toUpperCase();
     const capacity = Number(ctx.body?.capacity);
     if (!/^[A-Z0-9_-]{3,40}$/.test(code)) throw httpError(400, 'Use 3-40 letters, numbers, hyphens or underscores.', 'VALIDATION');
     if (!Number.isInteger(capacity) || capacity < 1 || capacity > 10000) throw httpError(400, 'Capacity must be a whole number from 1 to 10,000.', 'VALIDATION');
-    if (state.inviteCodes.some((invite) => invite.code === code)) throw httpError(409, 'That invite code already exists.', 'INVITE_TAKEN');
+    if (inviteCodes.some((invite) => invite.code === code)) throw httpError(409, 'That invite code already exists.', 'INVITE_TAKEN');
     const invite = { id: newId(), code, capacity, signups: [], createdAt: ctx.now.toISOString(), updatedAt: ctx.now.toISOString() };
-    state.inviteCodes.push(invite);
+    inviteCodes.push(invite);
     audit(ctx, actor, 'invite.create', 'invite', invite.id, code, `Capacity: ${capacity}`);
     return { invite: { ...invite, used: 0 } };
   });
 
   router.patch('/admin/invites/:inviteId', (ctx) => {
     allowed(ctx, 'invites.manage');
-    const invite = state.inviteCodes.find((row) => row.id === ctx.params.inviteId);
+    const invite = invitesOf(ctx.state).find((row) => row.id === ctx.params.inviteId);
     if (!invite) throw httpError(404, 'Invite code not found.', 'NOT_FOUND');
     const capacity = Number(ctx.body?.capacity);
     if (!Number.isInteger(capacity) || capacity < invite.signups.length || capacity > 10000) throw httpError(400, `Capacity must be a whole number from ${invite.signups.length} to 10,000.`, 'VALIDATION');
