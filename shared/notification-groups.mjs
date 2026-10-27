@@ -28,6 +28,7 @@ export const NOTIFICATION_TYPE_GROUPS = {
   event_closing_soon: 'reminders',
 
   announcement: 'events',
+  organiser_rated: 'events',
   event_invite: 'events',
   report_received: 'events',
   report_handled: 'events',
