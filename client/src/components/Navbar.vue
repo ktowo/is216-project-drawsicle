@@ -244,7 +244,6 @@ watch(
               @keydown="onUserButtonKeydown"
             >
               <UserAvatar :user="auth.user" :size="38" />
-              <span class="user-name">{{ auth.user.displayName }}</span>
               <span class="sr-only">Account menu</span>
               <ChevronDown :size="16" class="chev" :class="{ flipped: userMenuOpen }" aria-hidden="true" />
             </button>
