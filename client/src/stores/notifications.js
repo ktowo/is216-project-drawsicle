@@ -20,6 +20,7 @@ import {
   UserPlus,
   MessageCircleQuestion,
   BellRing,
+  Star,
 } from 'lucide-vue-next';
 import { api, qs } from '../api';
 import { notificationGroup } from '@shared/notification-groups.mjs';
@@ -59,6 +60,7 @@ const KINDS = {
   submission_received: { icon: ImageUp, tone: 'info' },
   gift_revealed: { icon: PartyPopper, tone: 'pink' },
   gift_thanked: { icon: Heart, tone: 'pink' },
+  organiser_rated: { icon: Star, tone: 'pink' },
   backup_needed: { icon: LifeBuoy, tone: 'warning' },
   backup_assigned: { icon: Gift, tone: 'pink' },
   waitlist_promoted: { icon: CircleCheck, tone: 'success' },
