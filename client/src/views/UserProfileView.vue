@@ -16,6 +16,7 @@ import {
 import ProfileHeader from '@/components/profile/ProfileHeader.vue';
 import ProfileStats from '@/components/profile/ProfileStats.vue';
 import ProfileBadges from '@/components/profile/ProfileBadges.vue';
+import OrganiserRating from '@/components/profile/OrganiserRating.vue';
 import EventCard from '@/components/events/EventCard.vue';
 import SubmissionGallery from '@/components/events/SubmissionGallery.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
@@ -42,6 +43,7 @@ const giftsLoading = ref(false);
 const giftsError = ref('');
 const stats = ref({ eventsOrganized: 0 });
 const badges = ref([]);
+const organiserRating = ref({ average: null, count: 0, recent: [] });
 // What the logged-in viewer has set about this person (just "blocked" for now)
 const viewerFlags = ref(null);
 const blocking = ref(false);
@@ -99,6 +101,7 @@ async function load() {
     exchanges.value = data.exchanges || [];
     stats.value = { eventsOrganized: 0, ...(data.stats || {}) };
     badges.value = data.badges || [];
+    organiserRating.value = data.organiserRating || { average: null, count: 0, recent: [] };
     viewerFlags.value = data.viewer || null;
     gifts.value = [];
     giftsHasMore.value = false;
@@ -315,6 +318,8 @@ function goToLookup() {
             See all in the event list <ArrowRight :size="16" aria-hidden="true" />
           </RouterLink>
         </header>
+
+        <OrganiserRating :rating="organiserRating" />
 
         <ul v-if="organizing.length" class="event-grid">
           <li v-for="event in organizing" :key="event.id">
