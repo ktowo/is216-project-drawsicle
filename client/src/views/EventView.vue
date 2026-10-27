@@ -55,6 +55,7 @@ import { eventCalendarEntries, downloadIcs } from '@/utils/calendar';
 import AnnouncementsPanel from '@/components/events/AnnouncementsPanel.vue';
 import QuestionsForMe from '@/components/events/QuestionsForMe.vue';
 import ReportButton from '@/components/ReportButton.vue';
+import StarDisplay from '@/components/ui/StarDisplay.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -70,6 +71,18 @@ const sharing = ref(false);
 
 const invite = computed(() => inviteFrom(route));
 
+// How artists rated the person who created this event (they have run others before). Nice to have:
+// if it can't load, the line just doesn't show.
+const hostRating = ref(null); // { organiser, summary }
+async function loadHostRating(eventId, id) {
+  try {
+    const data = await api(`/events/${eventId}/rating${qs({ invite: invite.value })}`);
+    if (id === requestId) hostRating.value = data.summary?.count ? { organiser: data.organiser, summary: data.summary } : null;
+  } catch {
+    if (id === requestId) hostRating.value = null;
+  }
+}
+
 let requestId = 0;
 async function load({ quiet = false } = {}) {
   const id = ++requestId;
@@ -81,6 +94,7 @@ async function load({ quiet = false } = {}) {
     if (id !== requestId) return;
     event.value = data.event;
     document.title = `${data.event.name} · Drawsicle`;
+    loadHostRating(data.event.id, id);
   } catch (e) {
     if (id !== requestId) return;
     if (e.status === 404 || e.code === 'INVALID_ID') notFound.value = true;
@@ -362,6 +376,10 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
                 <PersonLink :user="o" :size="44" show-handle />
               </li>
             </ul>
+            <p v-if="hostRating" class="host-rating">
+              <span class="muted small">{{ hostRating.organiser?.displayName || 'The organiser' }}'s rating from artists</span>
+              <StarDisplay :value="hostRating.summary.average" :count="hostRating.summary.count" :size="16" />
+            </p>
             <p class="muted small org-hint">
               Questions about this exchange? Ask the organisers in {{ communityName }}.
             </p>
@@ -732,6 +750,13 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
 }
 .org-hint {
   margin-top: 16px;
+}
+.host-rating {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 14px 0 0;
 }
 .action-panel {
   display: flex;
