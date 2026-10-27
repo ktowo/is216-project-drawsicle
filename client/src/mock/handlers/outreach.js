@@ -1,8 +1,8 @@
-// /events/:eventId/announcements and /invite-from (server/routes/outreach-router.js).
+// /events/:eventId/announcements, /invite-from and /invites (server/routes/outreach-router.js).
 // Discord posts don't exist in the demo: there's no server to send them.
 import { LIMITS } from '@shared/constants.mjs';
 import { newId } from '../db.js';
-import { canViewEvent, findUser, miniOf, notifyMany, viewerContext } from '../model.js';
+import { canViewEvent, findUser, miniOf, notify, notifyMany, viewerContext } from '../model.js';
 import { formatDay, httpError, invalid } from '../util.js';
 import { loadEvent, roleEvent } from './common.js';
 
@@ -132,5 +132,69 @@ export function register(router) {
     });
     event.invitedFrom.push(source.id);
     return { sent: people.length };
+  });
+
+  // ---------- Inviting one artist ----------
+
+  const inviteLink = (event) => `/events/${event.id}${event.publicity === 'private' ? `?invite=${event.inviteCode}` : ''}`;
+  const inviteJson = (state, row) => {
+    const joined = state.applications.some((a) => a.event === row.event && a.user === row.artist && a.status !== 'withdrawn');
+    return { id: row.id, artist: miniOf(state, row.artist), message: row.message, at: row.createdAt, joined };
+  };
+
+  router.get('/events/:eventId/invites', (ctx) => {
+    const { event } = roleEvent(ctx, 'organizer');
+    const rows = ctx.state.invites
+      .filter((i) => i.event === event.id)
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || b.id.localeCompare(a.id));
+    return { invites: rows.map((r) => inviteJson(ctx.state, r)) };
+  });
+
+  router.post('/events/:eventId/invites', (ctx) => {
+    const { user, event } = roleEvent(ctx, 'organizer');
+    const { state } = ctx;
+    const body = ctx.body || {};
+    const notFound = () => httpError(404, "We couldn't find that artist.", 'NOT_FOUND');
+    if (typeof body.artistId !== 'string') throw notFound();
+    if (body.artistId === user.id) throw invalid("You can't invite yourself.");
+    const message = typeof body.message === 'string' ? body.message.trim() : '';
+    if (message.length > LIMITS.inviteMessage) throw invalid(`Keep your message to ${LIMITS.inviteMessage} characters or fewer.`);
+    if (event.status !== 'open' || new Date(event.signupDeadline) <= ctx.now) {
+      throw httpError(409, 'You can invite artists while sign-ups are open.', 'WRONG_STATUS');
+    }
+
+    const artist = findUser(state, body.artistId);
+    const blocked = artist && (artist.blockedUsers || []).includes(user.id);
+    if (!artist || (artist.status || 'active') !== 'active' || artist.profilePrivacy?.listInDiscover === false || blocked) {
+      throw notFound();
+    }
+    const isOrganiser = state.members.some((m) => m.event === event.id && m.user === artist.id && m.roles.includes('organizer'));
+    const applied = state.applications.some((a) => a.event === event.id && a.user === artist.id && a.status !== 'withdrawn');
+    if (isOrganiser || applied) throw httpError(409, `${artist.displayName} is already part of this event.`, 'ALREADY_JOINED');
+    if (state.invites.some((i) => i.event === event.id && i.artist === artist.id)) {
+      throw httpError(409, `You've already invited ${artist.displayName}.`, 'ALREADY_INVITED');
+    }
+    if (state.invites.filter((i) => i.event === event.id).length >= LIMITS.invitesPerEvent) {
+      throw httpError(409, `You can invite up to ${LIMITS.invitesPerEvent} artists to one event.`, 'LIMIT');
+    }
+
+    const row = { id: newId(), event: event.id, artist: artist.id, invitedBy: user.id, message, createdAt: ctx.now.toISOString() };
+    state.invites.push(row);
+    notify(state, artist.id, {
+      type: 'event_invite',
+      title: `${user.displayName} invited you to ${event.name}`,
+      message: message || `They found you on Discover. Sign-ups close ${formatDay(event.signupDeadline)}.`,
+      link: inviteLink(event),
+    });
+    ctx.status = 201;
+    return { invite: inviteJson(state, row) };
+  });
+
+  router.delete('/events/:eventId/invites/:inviteId', (ctx) => {
+    const { event } = roleEvent(ctx, 'organizer');
+    const index = ctx.state.invites.findIndex((i) => i.id === ctx.params.inviteId && i.event === event.id);
+    if (index === -1) throw httpError(404, 'That invite is already gone.', 'NOT_FOUND');
+    ctx.state.invites.splice(index, 1);
+    return { ok: true };
   });
 }

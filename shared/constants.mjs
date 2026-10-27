@@ -194,6 +194,8 @@ export const LIMITS = {
   imageDescription: 300,
   thanksMessage: 500,
   ratingComment: 500,
+  inviteMessage: 300,
+  invitesPerEvent: 100,
   announcement: 1000,
   announcementsShown: 20,
   blockedUsers: 50,

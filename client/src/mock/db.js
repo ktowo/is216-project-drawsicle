@@ -364,11 +364,12 @@ export function buildState(now = new Date()) {
     catPets: [],
     favourites: [],
     ratings,
+    invites: [],
   };
 }
 
 // Collections added after the first release; older saved demos get them empty
-const LATER_COLLECTIONS = ['announcements', 'reports', 'audit', 'inviteCodes', 'mockEmails', 'follows', 'presence', 'chats', 'guestbook', 'catPets', 'favourites', 'ratings'];
+const LATER_COLLECTIONS = ['announcements', 'reports', 'audit', 'inviteCodes', 'mockEmails', 'follows', 'presence', 'chats', 'guestbook', 'catPets', 'favourites', 'ratings', 'invites'];
 
 // ---------- Loading and saving ----------
 
