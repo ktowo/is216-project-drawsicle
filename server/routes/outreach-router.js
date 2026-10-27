@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const Announcement = require('../models/Announcement.js');
 const Application = require('../models/Application.js');
 const Event = require('../models/Event.js');
+const EventInvite = require('../models/EventInvite.js');
 const EventMember = require('../models/EventMember.js');
 const Match = require('../models/Match.js');
 const Submission = require('../models/Submission.js');
@@ -199,6 +200,86 @@ router.post('/invite-from', ...organizerOnly, asyncHandler(async (req, res) => {
   event.invitedFrom.push(source._id);
   await event.save();
   res.json({ sent: active.length });
+}));
+
+// ---------- Inviting one artist ----------
+
+const artistLink = (event) => `/events/${event.id}${event.publicity === 'private' ? `?invite=${event.inviteCode}` : ''}`;
+
+// Who this organiser has invited to the event, and whether they have signed up since
+router.get('/invites', ...organizerOnly, asyncHandler(async (req, res) => {
+  const { event } = req;
+  const rows = await EventInvite.find({ event: event._id })
+    .sort({ createdAt: -1, _id: -1 })
+    .populate('artist', 'displayName username avatarUrl email');
+  const joined = new Set(
+    (await Application.find({ event: event._id, status: { $ne: 'withdrawn' } }).distinct('user')).map(String)
+  );
+  res.json({
+    invites: rows.map((r) => ({
+      id: r._id.toString(),
+      artist: r.artist && r.artist._id ? userMini(r.artist) : null,
+      message: r.message,
+      at: r.createdAt,
+      joined: Boolean(r.artist && joined.has(String(r.artist._id))),
+    })),
+  });
+}));
+
+// Invite an artist you found on Discover. They get a notification with a link to the event.
+router.post('/invites', ...organizerOnly, asyncHandler(async (req, res) => {
+  const { event, user } = req;
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const notFound = () => httpError(404, "We couldn't find that artist.", 'NOT_FOUND');
+  if (!mongoose.isValidObjectId(body.artistId)) throw notFound();
+  if (String(body.artistId) === String(user._id)) throw invalid("You can't invite yourself.");
+
+  const message = typeof body.message === 'string' ? body.message.trim() : '';
+  if (message.length > LIMITS.inviteMessage) throw invalid(`Keep your message to ${LIMITS.inviteMessage} characters or fewer.`);
+
+  if (event.status !== 'open' || event.signupDeadline <= new Date()) {
+    throw httpError(409, 'You can invite artists while sign-ups are open.', 'WRONG_STATUS');
+  }
+
+  // Only artists who show up on Discover can be invited, and never someone who blocked you
+  const artist = await User.findById(body.artistId);
+  const blocked = artist && (artist.blockedUsers || []).some((id) => id.equals(user._id));
+  if (!artist || artist.status !== 'active' || artist.profilePrivacy?.listInDiscover === false || blocked) throw notFound();
+
+  const [isOrganiser, applied, already, count] = await Promise.all([
+    EventMember.exists({ event: event._id, user: artist._id, roles: 'organizer' }),
+    Application.exists({ event: event._id, user: artist._id, status: { $ne: 'withdrawn' } }),
+    EventInvite.exists({ event: event._id, artist: artist._id }),
+    EventInvite.countDocuments({ event: event._id }),
+  ]);
+  if (isOrganiser || applied) throw httpError(409, `${artist.displayName} is already part of this event.`, 'ALREADY_JOINED');
+  if (already) throw httpError(409, `You've already invited ${artist.displayName}.`, 'ALREADY_INVITED');
+  if (count >= LIMITS.invitesPerEvent) {
+    throw httpError(409, `You can invite up to ${LIMITS.invitesPerEvent} artists to one event.`, 'LIMIT');
+  }
+
+  const invite = await EventInvite.create({ event: event._id, artist: artist._id, invitedBy: user._id, message });
+
+  const closes = event.signupDeadline.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
+  await quietly(
+    notifyMany([artist._id], {
+      type: 'event_invite',
+      title: `${user.displayName} invited you to ${event.name}`,
+      message: message || `They found you on Discover. Sign-ups close ${closes}.`,
+      link: artistLink(event),
+      email: 'eventUpdates',
+    })
+  );
+  res.status(201).json({ invite: { id: invite._id.toString(), artist: userMini(artist), message, at: invite.createdAt, joined: false } });
+}));
+
+// Take an invite back (the notification they already got stays)
+router.delete('/invites/:inviteId', ...organizerOnly, asyncHandler(async (req, res) => {
+  const { inviteId } = req.params;
+  if (!mongoose.isValidObjectId(inviteId)) throw httpError(404, 'That invite is already gone.', 'NOT_FOUND');
+  const { deletedCount } = await EventInvite.deleteOne({ _id: inviteId, event: req.event._id });
+  if (!deletedCount) throw httpError(404, 'That invite is already gone.', 'NOT_FOUND');
+  res.json({ ok: true });
 }));
 
 router.use(apiErrorHandler);
