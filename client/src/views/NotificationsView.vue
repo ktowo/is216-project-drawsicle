@@ -791,6 +791,11 @@ function onModeKey(e, legacyKey) {
   gap: 20px;
   padding: 16px 0;
   border-top: 1px solid var(--border);
+
+  @media (max-width: 480px) {
+    flex-direction: column;
+    align-items: end;
+  }
 }
 .pref-text {
   display: flex;
