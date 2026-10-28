@@ -71,8 +71,8 @@ onMounted(load);
     <ErrorBlock v-if="error" :message="error" @retry="load" />
     <LoadingBlock v-else-if="!data" label="Loading invite codes…" />
     <EmptyState v-else-if="!data.invites.length" :icon="Ticket" title="No invite codes yet" message="Create one above to open registration." />
-    <ul v-else class="grid gap-4">
-      <li v-for="invite in data.invites" :key="invite.id" class="card p-5">
+    <ul v-else class="grid gap-4 p-0">
+      <li v-for="invite in data.invites" :key="invite.id" class="card p-5 list-none">
         <div class="flex flex-wrap items-center gap-3">
           <Ticket :size="20" class="text-brand" />
           <code class="font-semibold">{{ invite.code }}</code>
