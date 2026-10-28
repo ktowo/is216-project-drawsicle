@@ -112,8 +112,8 @@ async function submit() {
   <AuthLayout :icon="UserPlus" title="Create your account" subtitle="Join art exchanges in a few clicks">
     <template v-if="showProviders">
       <div class="providers">
-        <GoogleButton v-if="providers.google" :redirect="route.query.redirect ? redirectTo : ''" />
-        <DiscordButton v-if="providers.discord" :redirect="route.query.redirect ? redirectTo : ''" />
+        <GoogleButton v-if="providers.google" :redirect="route.query.redirect ? redirectTo : ''" :invite-code="inviteCode" />
+        <DiscordButton v-if="providers.discord" :redirect="route.query.redirect ? redirectTo : ''" :invite-code="inviteCode" />
       </div>
       <OrDivider />
     </template>

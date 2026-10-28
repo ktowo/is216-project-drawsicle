@@ -2,11 +2,14 @@
 import { computed, ref, onMounted } from 'vue';
 import { usingSupabase, startProviderSignIn } from '@/auth/supabaseSignIn';
 import { toast } from '@/stores/toast';
+import { keepInvite } from '@/utils/pendingInvite';
 
 // Full page navigation: the server redirects to Discord and back (same as GoogleButton).
 const props = defineProps({
   label: { type: String, default: 'Continue with Discord' },
   redirect: { type: String, default: '' },
+  // From the sign-up page: kept for the round trip, for new accounts (utils/pendingInvite.js)
+  inviteCode: { type: String, default: '' },
 });
 
 const href = computed(() => {
@@ -24,6 +27,7 @@ async function onClick(e) {
   if (!viaSupabase.value) return;
   e.preventDefault();
   const safe = props.redirect.startsWith('/') && !props.redirect.startsWith('//');
+  keepInvite(props.inviteCode);
   try {
     await startProviderSignIn('discord', safe ? props.redirect : '');
   } catch (err) {
