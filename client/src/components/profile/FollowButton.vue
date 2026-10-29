@@ -25,7 +25,8 @@ const label = computed(() => {
   return v?.followsYou ? 'Follow back' : 'Follow';
 });
 
-async function toggle() {
+async function toggle(e) {
+  e.preventDefault(); // The follow button can be clicked, even if it's on top of an ArtistCard, which can be clicked.
   busy.value = true;
   try {
     const following = Boolean(props.viewer?.following);
