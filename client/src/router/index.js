@@ -21,6 +21,9 @@ const routes = [
   { path: '/forgot-password', name: 'forgot-password', component: () => import('../views/ForgotPasswordView.vue'), meta: { guestOnly: true, hideChrome: true, title: 'Forgot password' } },
   { path: '/reset-password', name: 'reset-password', component: () => import('../views/ResetPasswordView.vue'), meta: { hideChrome: true, title: 'Reset password' } },
 
+  // Onboarding page for new user (users who haven't finished the style quiz)
+  { path: '/onboarding', name: 'onboarding', component: () => import('@/views/Onboarding.vue'), meta: { hideChrome: true, title: 'Welcome to Drawsicle!', requiresAuth: true } },
+
   // Events (browsing and event pages are public; the rest need an account)
   { path: '/events', name: 'events', component: () => import('../views/EventsView.vue'), meta: { title: 'Browse events' } },
   { path: '/events/new', name: 'event-new', component: () => import('../views/EventFormView.vue'), meta: { requiresAuth: true, title: 'New event' } },
@@ -104,6 +107,9 @@ router.beforeEach(async (to) => {
   if (to.meta.permission && !can(auth.user, to.meta.permission)) {
     return { name: 'forbidden' };
   }
+  // if (true) {
+  //   return { name: 'onboarding' };
+  // }
   if (to.meta.guestOnly && auth.user) {
     return { name: 'dashboard' };
   }

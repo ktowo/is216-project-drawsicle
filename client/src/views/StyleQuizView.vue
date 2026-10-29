@@ -328,9 +328,6 @@ watch(() => auth.user?.id, savePendingIfReady);
 .quiz-page {
   max-width: 1040px;
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
 }
 .quiz-head {
   margin-bottom: 18px;
