@@ -25,6 +25,7 @@ import EventBanner from '@/components/events/EventBanner.vue';
 import SubmissionDetails from '@/components/events/SubmissionDetails.vue';
 import SubmissionGallery from '@/components/events/SubmissionGallery.vue';
 import ThanksBox from '@/components/events/ThanksBox.vue';
+import RatingBox from '@/components/events/RatingBox.vue';
 import ReportButton from '@/components/ReportButton.vue';
 import WrappedPresent from '@/components/events/WrappedPresent.vue';
 import { loadUnwrapped, saveUnwrapped } from '@/utils/unwrapped';
@@ -331,6 +332,9 @@ const confetti = Array.from({ length: 30 }, (_, i) => ({
           <SubmissionDetails :submission="b.submission" :caption="`From you to ${nameOf(b.recipient)}`" />
           <ThanksBox v-if="b.submission.thanks" :event-id="event.id" :submission="b.submission" :name="nameOf(b.recipient)" />
         </section>
+
+        <!-- Artists rate how the organiser ran it (hidden for organisers and for people who didn't take part) -->
+        <RatingBox :event-id="event.id" />
       </div>
 
       <section class="gallery-section" aria-labelledby="gallery-heading">

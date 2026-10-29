@@ -11,6 +11,7 @@ const { renderEmail } = require('../services/email-layout.js');
 const { asyncHandler, apiErrorHandler, applyAdminList, clientUrl, httpError } = require('../utils/helpers.js');
 const { authProvider } = require('../utils/auth-provider.js');
 const { verifyIdentity } = require('../services/supabase-identity.js');
+const { oauthProviders } = require('../services/supabase-settings.js');
 
 const router = Router();
 
@@ -259,15 +260,15 @@ router.get('/me', requireAuth, (req, res) => {
 });
 
 // Which "Continue with ..." buttons the login page should show
-router.get('/providers', (req, res) => {
+router.get('/providers', asyncHandler(async (req, res) => {
   if (authProvider() === 'supabase') {
     // Sign-in happens in the browser with Supabase: it needs the project's address and public key
-    // (both meant to be public). SUPABASE_OAUTH_PROVIDERS lists the buttons switched on in Supabase.
-    const oauth = (process.env.SUPABASE_OAUTH_PROVIDERS ?? 'google,discord').split(',').map((p) => p.trim().toLowerCase());
+    // (both meant to be public). Only the buttons Supabase has switched on are offered.
+    const oauth = await oauthProviders();
     return res.json({
       provider: 'supabase',
-      google: oauth.includes('google'),
-      discord: oauth.includes('discord'),
+      google: oauth.google,
+      discord: oauth.discord,
       supabaseUrl: (process.env.SUPABASE_URL || '').trim(),
       supabaseAnonKey: (process.env.SUPABASE_ANON_KEY || '').trim(),
     });
@@ -277,7 +278,7 @@ router.get('/providers', (req, res) => {
     google: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
     discord: Boolean(process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET),
   });
-});
+}));
 
 // ---------- Password reset / change ----------
 

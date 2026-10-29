@@ -19,6 +19,7 @@ const Application = require('../models/Application.js');
 const Match = require('../models/Match.js');
 const Submission = require('../models/Submission.js');
 const Notification = require('../models/Notification.js');
+const Rating = require('../models/Rating.js');
 const { LOCAL_UPLOAD_DIR, saveFile, storageMode, removeStoredFolder } = require('../services/storage.js');
 const { EVENT_STATUSES, SITE_ROLES } = require('../../shared/constants.mjs');
 
@@ -50,7 +51,7 @@ function seedError(message, code) {
 
 async function clearDemoTables(artDir) {
   await Promise.all(
-    [User, Character, Event, EventMember, Application, Match, Submission, Notification].map((M) => M.deleteMany({}))
+    [User, Character, Event, EventMember, Application, Match, Submission, Notification, Rating].map((M) => M.deleteMany({}))
   );
   await fsp.rm(artDir, { recursive: true, force: true });
   await removeStoredFolder('demo');
@@ -350,6 +351,21 @@ async function seed({ reset = false, now = new Date(), artDir = DEMO_UPLOAD_DIR 
   });
   await Notification.insertMany(notifications);
 
+  // Organiser ratings left after finished exchanges
+  const ratings = (data.ratings || []).map((r) => {
+    const at = new Date(now.getTime() - (r.days || 0) * DAY);
+    return {
+      event: lookup(eventIds, r.event, 'event'),
+      organiser: lookup(userIds, lookup(eventsByKey, r.event, 'event').createdBy, 'user'),
+      rater: lookup(userIds, r.rater, 'user'),
+      stars: r.stars,
+      comment: r.comment || '',
+      createdAt: at,
+      updatedAt: at,
+    };
+  });
+  await Rating.insertMany(ratings);
+
   return {
     users: data.users.length,
     characters: characters.length,
@@ -358,6 +374,7 @@ async function seed({ reset = false, now = new Date(), artDir = DEMO_UPLOAD_DIR 
     matches: matches.length,
     submissions: submissions.length,
     notifications: notifications.length,
+    ratings: ratings.length,
     login: { email: demo.loginEmail || data.users[0]?.email, password: demo.password },
   };
 }
