@@ -18,6 +18,7 @@ import * as events from './handlers/events.js';
 import * as applications from './handlers/applications.js';
 import * as matches from './handlers/matches.js';
 import * as submissions from './handlers/submissions.js';
+import * as ratings from './handlers/ratings.js';
 import * as dashboard from './handlers/dashboard.js';
 import * as outreach from './handlers/outreach.js';
 import * as reports from './handlers/reports.js';
@@ -38,6 +39,7 @@ for (const feature of [
   applications,
   matches,
   submissions,
+  ratings,
   outreach,
   reports,
   museumRooms,

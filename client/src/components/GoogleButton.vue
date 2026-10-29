@@ -2,6 +2,7 @@
 import { computed, ref, onMounted } from 'vue';
 import { usingSupabase, startProviderSignIn } from '@/auth/supabaseSignIn';
 import { toast } from '@/stores/toast';
+import { keepInvite } from '@/utils/pendingInvite';
 
 // Full page navigation: the server redirects to Google and back.
 // The "OR" divider lives in the login/register views (OrDivider) so it only shows when a button does.
@@ -9,6 +10,8 @@ const props = defineProps({
   label: { type: String, default: 'Continue with Google' },
   // Where to land after signing in (only same-site paths are passed on)
   redirect: { type: String, default: '' },
+  // From the sign-up page: kept for the round trip, for new accounts (utils/pendingInvite.js)
+  inviteCode: { type: String, default: '' },
 });
 
 const href = computed(() => {
@@ -26,6 +29,7 @@ async function onClick(e) {
   if (!viaSupabase.value) return;
   e.preventDefault();
   const safe = props.redirect.startsWith('/') && !props.redirect.startsWith('//');
+  keepInvite(props.inviteCode);
   try {
     await startProviderSignIn('google', safe ? props.redirect : '');
   } catch (err) {

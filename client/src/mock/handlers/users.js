@@ -5,6 +5,7 @@ import { httpError } from '../util.js';
 import { earnedBadges } from '@shared/badges.mjs';
 import { LIMITS } from '@shared/constants.mjs';
 import { followCounts, friendList, relation } from '../social.js';
+import { organiserSummary, recentComments } from './ratings.js';
 
 const USERNAME_RE = /^[a-z0-9_]{3,30}$/;
 const PROFILE_EVENTS_MAX = 12;
@@ -187,6 +188,8 @@ export function register(router) {
     const body = {
       profile: { ...userProfile(user), createdAt: user.createdAt },
       organizing: newestFirst.slice(0, PROFILE_EVENTS_MAX).map((event) => serializeEvent(state, event, viewer)),
+      // How artists rated them as an organiser (the comments are anonymous)
+      organiserRating: { ...organiserSummary(state, user.id), recent: recentComments(state, user.id) },
       stats: { eventsOrganized: listed.length, ...followCounts(state, user.id) },
       badges: earnedBadges({
         eventsRun: listed.filter(isFinished).length,
