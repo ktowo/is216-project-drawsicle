@@ -60,7 +60,6 @@ const adminLabel = computed(() => (auth.user?.role === 'admin' ? 'Site admin' : 
 // The public page only exists once someone has a username
 const accountLinks = computed(() => [
   ...(can(auth.user, 'admin.access') ? [{ to: '/admin', label: adminLabel.value, icon: ShieldCheck }] : []),
-  { to: '/profile', label: 'Your profile', icon: UserRound },
   { to: '/friends', label: 'Friends', icon: Users },
   { to: '/saved', label: 'Saved art', icon: Heart },
   { to: '/avatar', label: 'Museum avatar', icon: Shirt },
@@ -254,11 +253,12 @@ watch(
               ref="userMenuPanel"
               class="menu card"
               @keydown="onMenuKeydown"
+              @click="closeMenus"
             >
-              <div class="menu-user">
+              <RouterLink to="/profile" class="menu-user">
                 <span class="menu-user-name">{{ auth.user.displayName }}</span>
                 <span v-if="auth.user.username" class="menu-user-handle">@{{ auth.user.username }}</span>
-              </div>
+              </RouterLink>
               <ul class="menu-list">
                 <li v-for="item in accountLinks" :key="item.to">
                   <RouterLink :to="item.to" class="menu-item" @click="userMenuOpen = false">
@@ -303,14 +303,14 @@ watch(
     </div>
 
     <Transition name="drop">
-      <nav v-if="mobileOpen" id="mobile-menu" ref="mobilePanel" class="mobile-panel" aria-label="Menu">
-        <div v-if="auth.user" class="mobile-user">
+      <nav v-if="mobileOpen" id="mobile-menu" ref="mobilePanel" class="mobile-panel" aria-label="Menu" @click="closeMenus">
+        <RouterLink to="/profile" v-if="auth.user" class="mobile-user">
           <UserAvatar :user="auth.user" :size="44" />
           <div class="mobile-user-text">
             <span class="menu-user-name">{{ auth.user.displayName }}</span>
             <span class="menu-user-handle">{{ auth.user.username ? `@${auth.user.username}` : auth.user.email }}</span>
           </div>
-        </div>
+        </RouterLink>
 
         <ul class="mobile-list">
           <li>
@@ -514,6 +514,7 @@ watch(
 .menu-user-name {
   font-weight: 700;
   overflow-wrap: anywhere;
+  color: var(--text);
 }
 .menu-user-handle {
   color: var(--muted);
@@ -627,6 +628,10 @@ watch(
 
 .mobile-only {
   display: none;
+}
+.menu-user:hover, 
+.mobile-user:hover {
+  background: var(--hover);
 }
 
 @media (max-width: 1260px) {
