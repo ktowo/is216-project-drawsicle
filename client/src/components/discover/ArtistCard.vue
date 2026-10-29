@@ -37,50 +37,52 @@ function onFollow(res) {
 </script>
 
 <template>
-  <article class="card artist-card" :class="{ colored: color }" :style="style">
-    <div class="band" aria-hidden="true" />
-    <div class="body">
-      <div class="who">
-        <UserAvatar :user="avatarUser" :size="56" class="avatar" />
-        <div class="names">
-          <component :is="headingTag" class="name">
-            <RouterLink v-if="link" :to="link" class="name-link">{{ user.displayName || user.username }}</RouterLink>
-            <span v-else>{{ user.displayName }}</span>
-          </component>
-          <p v-if="user.username" class="handle">@{{ user.username }}</p>
+  <RouterLink :to="link">
+    <article class="card artist-card" :class="{ colored: color }" :style="style">
+      <div class="band" aria-hidden="true" />
+      <div class="body">
+        <div class="who">
+          <UserAvatar :user="avatarUser" :size="56" class="avatar" />
+          <div class="names">
+            <component :is="headingTag" class="name">
+              <span v-if="link" class="name-link">{{ user.displayName || user.username }}</span>
+              <span v-else>{{ user.displayName }}</span>
+            </component>
+            <p v-if="user.username" class="handle">@{{ user.username }}</p>
+          </div>
+        </div>
+  
+        <ul v-if="reasons.length" class="reasons" aria-label="Why we suggest them">
+          <li v-for="r in reasons" :key="r">{{ r }}</li>
+        </ul>
+  
+        <ArtistTagChips :tags="card.artistTags" :compact="!allTags" />
+  
+        <ul v-if="gifts.length" class="gifts" :aria-label="`Gifts ${user.displayName} made`">
+          <li v-for="g in gifts" :key="g.id" :class="{ warned: g.contentWarnings?.length }">
+            <img :src="assetUrl(g.image)" :alt="g.alt || g.title || 'A gift they made'" loading="lazy" />
+          </li>
+        </ul>
+  
+        <div class="meta">
+          <span v-if="card.exchangesCompleted" class="stat">
+            <Gift :size="14" aria-hidden="true" />
+            {{ card.exchangesCompleted }} {{ card.exchangesCompleted === 1 ? 'exchange' : 'exchanges' }}
+          </span>
+          <span v-for="b in badges" :key="b.key" class="badge-chip" :title="b.description">{{ b.label }}</span>
+        </div>
+  
+        <div v-if="!noFollow && user.username" class="actions">
+          <FollowButton
+            :username="user.username"
+            :name="user.displayName"
+            :viewer="{ following: Boolean(card.following) }"
+            @changed="onFollow"
+          />
         </div>
       </div>
-
-      <ul v-if="reasons.length" class="reasons" aria-label="Why we suggest them">
-        <li v-for="r in reasons" :key="r">{{ r }}</li>
-      </ul>
-
-      <ArtistTagChips :tags="card.artistTags" :compact="!allTags" />
-
-      <ul v-if="gifts.length" class="gifts" :aria-label="`Gifts ${user.displayName} made`">
-        <li v-for="g in gifts" :key="g.id" :class="{ warned: g.contentWarnings?.length }">
-          <img :src="assetUrl(g.image)" :alt="g.alt || g.title || 'A gift they made'" loading="lazy" />
-        </li>
-      </ul>
-
-      <div class="meta">
-        <span v-if="card.exchangesCompleted" class="stat">
-          <Gift :size="14" aria-hidden="true" />
-          {{ card.exchangesCompleted }} {{ card.exchangesCompleted === 1 ? 'exchange' : 'exchanges' }}
-        </span>
-        <span v-for="b in badges" :key="b.key" class="badge-chip" :title="b.description">{{ b.label }}</span>
-      </div>
-
-      <div v-if="!noFollow && user.username" class="actions">
-        <FollowButton
-          :username="user.username"
-          :name="user.displayName"
-          :viewer="{ following: Boolean(card.following) }"
-          @changed="onFollow"
-        />
-      </div>
-    </div>
-  </article>
+    </article>
+  </RouterLink>
 </template>
 
 <style scoped>
@@ -136,7 +138,7 @@ function onFollow(res) {
 .name-link {
   color: var(--text);
 }
-.name-link:hover {
+.artist-card:hover .name-link {
   color: var(--pink-dark);
 }
 .handle {
