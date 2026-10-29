@@ -8,6 +8,7 @@ import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { RouterLink } from 'vue-router';
 import { Check, Copy, Clock, Upload, Gift, Sparkles, Users, Link2 } from 'lucide-vue-next';
 import ProgressBar from '../ProgressBar.vue';
+import ProgressBar from '../ProgressBar.vue';
 
 const TRACKS = {
   organisers: {
