@@ -1045,6 +1045,15 @@ export function buildDemoData(now = new Date()) {
       'Remy applied and is waiting for your review.', 'moth', '/manage?tab=participants', false, ago(1, 4)),
   ];
 
+  // How artists rated the organiser of a finished exchange. Kit hasn't rated Juniper yet,
+  // so the demo can show the rating box being filled in.
+  const ratings = [
+    { event: 'spring', rater: 'mika', stars: 5, comment: 'Clear updates the whole way through and a really warm reveal day.', days: 9 },
+    { event: 'spring', rater: 'sol', stars: 4, comment: '', days: 8 },
+    { event: 'spring', rater: 'remy', stars: 5, comment: 'Great communication. I always knew what to do next.', days: 8 },
+    { event: 'spring', rater: 'noor', stars: 5, comment: '', days: 7 },
+  ];
+
   return {
     users,
     characters,
@@ -1053,5 +1062,6 @@ export function buildDemoData(now = new Date()) {
     matches,
     submissions,
     notifications,
+    ratings,
   };
 }

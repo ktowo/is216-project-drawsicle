@@ -324,6 +324,21 @@ export function buildState(now = new Date()) {
     createdAt: iso(n.createdAt),
   }));
 
+  const ratings = (demo.ratings || []).map((r) => {
+    const at = iso(nowMs - (r.days || 0) * DAY);
+    const event = eventById.get(idFor('event', r.event));
+    return {
+      id: newId(),
+      event: event.id,
+      organiser: event.createdBy,
+      rater: idFor('user', r.rater),
+      stars: r.stars,
+      comment: r.comment || '',
+      createdAt: at,
+      updatedAt: at,
+    };
+  });
+
   return {
     version: STATE_VERSION,
     seededAt: iso(now),
@@ -348,11 +363,13 @@ export function buildState(now = new Date()) {
     guestbook: [],
     catPets: [],
     favourites: [],
+    ratings,
+    invites: [],
   };
 }
 
 // Collections added after the first release; older saved demos get them empty
-const LATER_COLLECTIONS = ['announcements', 'reports', 'audit', 'inviteCodes', 'mockEmails', 'follows', 'presence', 'chats', 'guestbook', 'catPets', 'favourites'];
+const LATER_COLLECTIONS = ['announcements', 'reports', 'audit', 'inviteCodes', 'mockEmails', 'follows', 'presence', 'chats', 'guestbook', 'catPets', 'favourites', 'ratings', 'invites'];
 
 // ---------- Loading and saving ----------
 
