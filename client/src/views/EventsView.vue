@@ -14,9 +14,6 @@ import { pluralize } from '@/utils/format';
 import SearchBar from '@/components/search/SearchBar.vue';
 import ResultHeader from '@/components/search/ResultHeader.vue';
 import FilterButton from '@/components/search/FilterButton.vue';
-import SearchBar from '@/components/search/SearchBar.vue';
-import ResultHeader from '@/components/search/ResultHeader.vue';
-import FilterButton from '@/components/search/FilterButton.vue';
 
 const STATUS_FILTERS = [
   { value: 'open', label: 'Open for sign-ups' },

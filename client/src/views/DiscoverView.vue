@@ -7,6 +7,7 @@ import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingBlock from '@/components/ui/LoadingBlock.vue';
 import ErrorBlock from '@/components/ui/ErrorBlock.vue';
 import ArtistCard from '@/components/discover/ArtistCard.vue';
+import InviteArtistDialog from '@/components/discover/InviteArtistDialog.vue';
 import ChoiceChips from '@/components/ui/ChoiceChips.vue';
 import { api, qs } from '@/api';
 import { auth } from '@/stores/auth';
@@ -157,6 +158,46 @@ watch(
   { immediate: true }
 );
 
+// ---------- Inviting artists to my events ----------
+// Organisers with sign-ups open get an Invite button on every card.
+const openEvents = ref([]); // my events that are open for sign-ups
+const invitedPairs = ref(new Set()); // "eventId:artistId" for everyone I have invited
+const inviting = ref(null); // the card whose invite window is open
+
+async function loadOpenEvents() {
+  openEvents.value = [];
+  invitedPairs.value = new Set();
+  if (!auth.user) return;
+  try {
+    const { organizing = [] } = await api('/events/mine');
+    const now = Date.now();
+    openEvents.value = organizing.filter(
+      (e) => e.status === 'open' && !e.cancelledAt && new Date(e.signupDeadline).getTime() > now
+    );
+    const pairs = new Set();
+    await Promise.all(
+      openEvents.value.map(async (event) => {
+        try {
+          const { invites = [] } = await api(`/events/${event.id}/invites`);
+          for (const i of invites) if (i.artist?.id) pairs.add(`${event.id}:${i.artist.id}`);
+        } catch {
+          // The window checks again before sending
+        }
+      })
+    );
+    invitedPairs.value = pairs;
+  } catch {
+    openEvents.value = [];
+  }
+}
+watch(() => auth.user?.id, loadOpenEvents, { immediate: true });
+
+const canInvite = computed(() => openEvents.value.length > 0);
+const invitedToAll = (card) => openEvents.value.every((e) => invitedPairs.value.has(`${e.id}:${card.user.id}`));
+function onInvited({ eventId, artistId }) {
+  invitedPairs.value = new Set([...invitedPairs.value, `${eventId}:${artistId}`]);
+}
+
 function onFollowChanged({ username, following }) {
   const card = items.value.find((c) => c.user.username === username);
   if (card) card.following = following;
@@ -180,6 +221,14 @@ function onFollowChanged({ username, following }) {
         <Sparkles :size="15" aria-hidden="true" /> Show artists recommended for you
       </button>
       · <RouterLink to="/find-your-style">Retake the quiz</RouterLink>
+    </p>
+
+    <p v-if="canInvite" class="card invite-tip">
+      <MailPlus :size="20" aria-hidden="true" class="quiz-icon" />
+      <span>
+        <strong>Looking for artists for {{ openEvents.length === 1 ? openEvents[0].name : 'your events' }}?</strong>
+        Filter by what they make, then press <em>Invite</em> on a card.
+      </span>
     </p>
 
     <div class="toolbar card">
@@ -250,7 +299,15 @@ function onFollowChanged({ username, following }) {
     <template v-else>
       <ul class="artist-grid" :class="{ dim: loading }" :aria-busy="loading ? 'true' : 'false'">
         <li v-for="card in items" :key="card.user.id">
-          <ArtistCard :card="card" :reasons="card.reasons || []" class="h-full" @follow-changed="onFollowChanged" />
+          <ArtistCard
+            :card="card"
+            :reasons="card.reasons || []"
+            :invitable="canInvite"
+            :invited="canInvite && invitedToAll(card)"
+            class="h-full"
+            @follow-changed="onFollowChanged"
+            @invite="inviting = $event"
+          />
         </li>
       </ul>
       <div v-if="nextCursor" class="more">
@@ -260,6 +317,15 @@ function onFollowChanged({ username, following }) {
         </button>
       </div>
     </template>
+
+    <InviteArtistDialog
+      :open="Boolean(inviting)"
+      :artist="inviting?.user || null"
+      :events="openEvents"
+      :invited-pairs="invitedPairs"
+      @close="inviting = null"
+      @invited="onInvited"
+    />
   </main>
 </template>
 
@@ -282,6 +348,14 @@ function onFollowChanged({ username, following }) {
 .quiz-icon {
   flex-shrink: 0;
   color: var(--pink-dark);
+}
+.invite-tip {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  margin: 8px 0 0;
+  background: linear-gradient(120deg, var(--pink-soft), var(--surface));
 }
 .taste-note {
   display: flex;
