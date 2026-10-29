@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
-import { Search, UsersRound, LoaderCircle, SlidersHorizontal, X, Sparkles, ArrowRight } from 'lucide-vue-next';
+import { UsersRound, LoaderCircle, Sparkles, ArrowRight } from 'lucide-vue-next';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingBlock from '@/components/ui/LoadingBlock.vue';
@@ -13,6 +13,10 @@ import { auth } from '@/stores/auth';
 import { CREATION_TYPES } from '@shared/constants.mjs';
 import { THEMES, artistTagsOf } from '@shared/taste.mjs';
 import { loadQuiz, hasAnswers, tasteQuery } from '@/utils/styleQuiz';
+import SearchBar from '@/components/search/SearchBar.vue';
+import ResultHeader from '@/components/search/ResultHeader.vue';
+import { pluralize } from '@/utils/format';
+import FilterButton from '@/components/search/FilterButton.vue';
 
 // Discover artists. The URL holds the search, filters and sort, so a link (or the back button)
 // brings back the same list.
@@ -42,6 +46,12 @@ const loading = ref(true);
 const loadingMore = ref(false);
 const loadedOnce = ref(false);
 const error = ref('');
+
+const summary = computed (() => 
+  `${ pluralize(total.value, 'artist') }${ q.value ? ` matching "${q.value}"` : '' }${
+    activeFilters.value ? ` with ${pluralize(activeFilters.value, 'filter')}` : ''
+  }`
+)
 
 const q = computed(() => (typeof route.query.q === 'string' ? route.query.q.slice(0, 60) : ''));
 const search = ref(q.value);
@@ -173,39 +183,27 @@ function onFollowChanged({ username, following }) {
     </p>
 
     <div class="toolbar card">
-      <div class="input-wrap search">
-        <Search :size="18" class="input-icon" aria-hidden="true" />
-        <label for="artist-search" class="sr-only">Search artists by name or username</label>
-        <input
-          id="artist-search"
-          v-model="search"
-          class="input"
-          type="search"
-          autocomplete="off"
-          placeholder="Search artists by name or @username"
-        />
-      </div>
+      <SearchBar 
+        id="artist-search"
+        v-model="search"
+        sr-label="Search artists by name or username"
+        placeholder="Search artists by name or @username"
+      />
 
       <div class="toolbar-row">
-        <button
-          type="button"
-          class="btn btn-outline btn-sm filters-toggle"
-          :aria-expanded="filtersOpen ? 'true' : 'false'"
-          aria-controls="discover-filters"
-          @click="filtersOpen = !filtersOpen"
-        >
-          <SlidersHorizontal :size="16" aria-hidden="true" /> Filters
-          <span v-if="activeFilters" class="filter-count">{{ activeFilters }}</span>
-        </button>
+        <FilterButton 
+        :aria-expanded="filtersOpen ? 'true' : 'false'"
+        aria-controls="discover-filters"
+        @click="filtersOpen = !filtersOpen" 
+        :filterCount="activeFilters"
+        />
+        
         <label class="sort">
           <span class="label-inline">Sort by</span>
           <select class="select" :value="sort" @change="setQuery({ sort: $event.target.value })">
             <option v-for="s in SORTS" :key="s.value" :value="s.value">{{ s.label }}</option>
           </select>
         </label>
-        <button v-if="activeFilters || q" type="button" class="btn btn-ghost btn-sm" @click="clearFilters">
-          <X :size="16" aria-hidden="true" /> Clear
-        </button>
       </div>
 
       <div id="discover-filters" class="filters" :class="{ open: filtersOpen }">
@@ -224,11 +222,14 @@ function onFollowChanged({ username, following }) {
       </div>
     </div>
 
-    <p v-if="loadedOnce && !error" class="hint count" aria-live="polite">
-      {{ total }} {{ total === 1 ? 'artist' : 'artists' }}{{ q ? ` matching "${q}"` : '' }}{{
-        activeFilters ? ` with ${activeFilters} ${activeFilters === 1 ? 'filter' : 'filters'}` : ''
-      }}
-    </p>
+    <ResultHeader
+      :summary="summary" 
+      :loaded-once="loadedOnce" 
+      :loading="loading" 
+      :error="error" 
+      :has-filters="activeFilters" 
+      @clear-filters="clearFilters"
+    />
 
     <LoadingBlock v-if="loading && !loadedOnce" label="Loading artists…" />
     <ErrorBlock v-else-if="error && !items.length" :message="error" @retry="load" />
@@ -304,24 +305,12 @@ function onFollowChanged({ username, following }) {
   padding: 16px;
   margin-top: 8px;
 }
-.search {
-  width: 100%;
-}
 .toolbar-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   margin-top: 12px;
-}
-.filter-count {
-  min-width: 20px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--pink);
-  color: #fff;
-  font-size: 0.78rem;
-  font-weight: 700;
 }
 .sort {
   display: inline-flex;
@@ -342,20 +331,13 @@ function onFollowChanged({ username, following }) {
 .filter-group .label {
   margin: 0 0 6px;
 }
-/* Desktop always shows the filters; phones fold them behind the Filters button */
-.filters-toggle {
+.filters {
   display: none;
 }
+.filters.open {
+  display: flex;
+}
 @media (max-width: 720px) {
-  .filters-toggle {
-    display: inline-flex;
-  }
-  .filters {
-    display: none;
-  }
-  .filters.open {
-    display: flex;
-  }
   .sort {
     margin-left: 0;
   }
