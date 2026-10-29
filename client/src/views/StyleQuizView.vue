@@ -229,8 +229,8 @@ watch(() => auth.user?.id, savePendingIfReady);
             <ArrowLeft :size="18" aria-hidden="true" /> Back
           </button>
           <span class="spacer" />
-          <button type="button" class="btn btn-ghost" @click="next">Skip</button>
-          <button type="button" class="btn btn-primary" @click="next">
+          <button v-if="answers[current.key].length == 0" type="button" class="btn btn-ghost" @click="next">Skip</button>
+          <button v-else type="button" class="btn btn-primary" @click="next">
             {{ step === QUIZ_STEPS - 1 ? 'See my card' : 'Next' }}
             <ArrowRight :size="18" aria-hidden="true" />
           </button>
@@ -327,6 +327,10 @@ watch(() => auth.user?.id, savePendingIfReady);
 <style scoped>
 .quiz-page {
   max-width: 1040px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 .quiz-head {
   margin-bottom: 18px;
