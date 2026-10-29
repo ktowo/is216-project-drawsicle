@@ -13,6 +13,7 @@ const { LIMITS } = require('../../shared/constants.mjs');
 const { serializeEvents } = require('../services/events.js');
 const { asyncHandler, apiErrorHandler, httpError } = require('../utils/helpers.js');
 const { earnedBadges } = require('../../shared/badges.mjs');
+const { organiserSummary, recentComments } = require('../services/ratings.js');
 const { FINISHED, visibleProfileUser, publicGiftsFilter, badgeGifts, artistCard } = require('../services/artists.js');
 
 // Public artist profiles: /api/users/:username
@@ -49,6 +50,8 @@ router.get('/:username', optionalAuth, asyncHandler(async (req, res) => {
   const body = {
     profile: { ...user.toPublicProfile(), createdAt: user.createdAt },
     organizing: await serializeEvents(events, req.user),
+    // How artists rated them as an organiser (the comments are anonymous)
+    organiserRating: { ...(await organiserSummary(user._id)), recent: await recentComments(user._id) },
     stats: { eventsOrganized, ...(await followCounts(user._id)) },
     badges: earnedBadges({ eventsRun, gifts: madeGifts }),
   };

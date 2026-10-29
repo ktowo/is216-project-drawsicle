@@ -44,7 +44,14 @@ How it signs in, with `AUTH_PROVIDER=supabase`:
 2. Google and Discord come back to `/auth/callback`, which swaps the one-time code for a Supabase session.
 3. Either way, the browser sends the Supabase access token to `POST /api/auth/supabase` and gets the app's normal session. Logging out ends both.
 
-Supabase dashboard setup (team project): **Authentication → Providers**, switch on Google and Discord with the OAuth app keys; **Authentication → URL Configuration**, add `<site>/auth/callback` and `http://localhost:5173/auth/callback` to the redirect URLs. `SUPABASE_OAUTH_PROVIDERS` (default `google,discord`) says which buttons the app shows. For **Account → Ways to sign in** (connect or disconnect Google / Discord), switch on **Allow manual linking** under **Authentication → Sign In / Providers**.
+Supabase dashboard setup (team project): **Authentication → Providers**, switch on Google and Discord with the OAuth app keys; **Authentication → URL Configuration**, add `<site>/auth/callback` and `http://localhost:5173/auth/callback` to the redirect URLs. The app shows a Google / Discord button only when Supabase has that provider switched on (it reads Supabase's public settings, remembered for 5 minutes); `SUPABASE_OAUTH_PROVIDERS` (default `google,discord`) is only the fallback when Supabase can't be reached.
+
+**Switching on Google** (the button stays hidden until this is done):
+1. Google Cloud Console → APIs & Services → Credentials → *Create OAuth client ID* (Web application). Under **Authorised redirect URIs** add `https://<project-ref>.supabase.co/auth/v1/callback` (the Supabase project's address, not the site's).
+2. Supabase → Authentication → Sign In / Providers → **Google**: switch it on and paste the client ID and secret.
+3. Supabase → Authentication → URL Configuration: the site's `/auth/callback` must be in the redirect URLs.
+
+New accounts need an invite code. One typed on the sign-up page goes along with the Google round trip; otherwise the callback page asks for it before the account is made. For **Account → Ways to sign in** (connect or disconnect Google / Discord), switch on **Allow manual linking** under **Authentication → Sign In / Providers**.
 
 **Email links** (Supabase dashboard → **Authentication → Emails → Templates**). Change the links in two templates so they carry a one-time `token_hash`. Supabase's default link only works in the browser that asked for it; these work anywhere, for example requested on a laptop and opened on a phone:
 

@@ -6,6 +6,7 @@ const eventRouter = require('./event-router.js');
 const applicationRouter = require('./application-router.js');
 const matchRouter = require('./match-router.js');
 const submissionRouter = require('./submission-router.js');
+const ratingRouter = require('./rating-router.js');
 const outreachRouter = require('./outreach-router.js');
 const dashboardRouter = require('./dashboard-router.js');
 const userRouter = require('./user-router.js');
@@ -36,6 +37,7 @@ router.use(
   applicationRouter,
   matchRouter,
   submissionRouter,
+  ratingRouter,
   outreachRouter,
 );
 router.use("/dashboard", dashboardRouter);

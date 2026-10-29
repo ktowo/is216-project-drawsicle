@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const h = require('./helpers.js');
 const User = require('../models/User.js');
 const { setIdentityVerifier } = require('../services/supabase-identity.js');
+const { setSettingsFetcher } = require('../services/supabase-settings.js');
 
 before(h.startTestDb);
 after(h.stopTestDb);
@@ -132,6 +133,10 @@ test('the providers list tells the browser how to sign in, with only public Supa
   process.env.SUPABASE_ANON_KEY = 'public-anon-key';
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'very-secret';
   process.env.SUPABASE_OAUTH_PROVIDERS = 'google';
+  // Supabase can't be reached here: the setting is the fallback
+  setSettingsFetcher(async () => {
+    throw new Error('offline');
+  });
   try {
     const app = h.makeApp();
     const body = (await h.request(app).get('/api/auth/providers').expect(200)).body;
@@ -148,6 +153,28 @@ test('the providers list tells the browser how to sign in, with only public Supa
     assert.equal((await h.request(app).get('/api/auth/providers').expect(200)).body.provider, undefined);
   } finally {
     for (const k of ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_OAUTH_PROVIDERS']) delete process.env[k];
+    setSettingsFetcher();
+  }
+});
+
+test('only offers the sign-in buttons Supabase actually has switched on', async () => {
+  process.env.SUPABASE_URL = 'https://abc.supabase.co';
+  process.env.SUPABASE_ANON_KEY = 'public-anon-key';
+  let asked = 0;
+  setSettingsFetcher(async () => {
+    asked++;
+    return { external: { google: false, discord: true, email: true } };
+  });
+  try {
+    const app = h.makeApp();
+    const body = (await h.request(app).get('/api/auth/providers').expect(200)).body;
+    assert.equal(body.google, false); // the button would only lead to "provider is not enabled"
+    assert.equal(body.discord, true);
+    await h.request(app).get('/api/auth/providers').expect(200);
+    assert.equal(asked, 1); // remembered for a few minutes
+  } finally {
+    for (const k of ['SUPABASE_URL', 'SUPABASE_ANON_KEY']) delete process.env[k];
+    setSettingsFetcher();
   }
 });
 
