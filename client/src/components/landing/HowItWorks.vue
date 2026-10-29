@@ -7,6 +7,7 @@ import { sitePath } from '@/utils/sitePath';
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import { RouterLink } from 'vue-router';
 import { Check, Copy, Clock, Upload, Gift, Sparkles, Users, Link2 } from 'lucide-vue-next';
+import ProgressBar from '../ProgressBar.vue';
 
 const TRACKS = {
   organisers: {
@@ -99,7 +100,7 @@ watch(track, async () => {
       </div>
     </header>
 
-    <div class="bar" aria-hidden="true"><span :style="{ width: `${progress}%` }" /></div>
+    <ProgressBar class="bar" :progress="progress"/>
 
     <div id="how-panel" class="panel" role="tabpanel" :aria-labelledby="`how-tab-${track}`">
       <h3 class="sr-only">{{ current.title }}</h3>
@@ -198,8 +199,7 @@ watch(track, async () => {
 .toggle { display: inline-flex; padding: 4px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); }
 .toggle button { border: 0; background: none; padding: 9px 18px; border-radius: 999px; font-weight: 700; color: var(--muted); cursor: pointer; }
 .toggle button.on { background: var(--pink); color: #fff; }
-.bar { margin: 32px 0 28px; height: 6px; border-radius: 999px; background: var(--border); overflow: hidden; }
-.bar span { display: block; height: 100%; background: var(--pink); border-radius: inherit; transition: width .4s ease; }
+.bar {margin: 32px 0 28px; height: 6px;}
 .panel { border-radius: 28px; border: 1px solid color-mix(in srgb, var(--pink) 25%, var(--border)); background: radial-gradient(600px 300px at 15% 0%, color-mix(in srgb, var(--pink-soft) 70%, transparent), transparent 70%), var(--surface); padding: 12px 40px 36px; }
 .steps { list-style: none; margin: 0; padding: 0; }
 .step { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; min-height: 360px; padding: 36px 0; border-bottom: 1px dashed var(--border); opacity: .35; transition: opacity .35s; }

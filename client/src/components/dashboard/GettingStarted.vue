@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router';
 import { CircleCheck, Circle, ArrowRight, Rocket } from 'lucide-vue-next';
 import { auth } from '@/stores/auth';
 import { api } from '@/api';
+import ProgressBar from '../ProgressBar.vue';
 
 // "Getting started" for new accounts: three steps that make the first exchange go smoothly.
 // It disappears for good once all three are done.
@@ -62,16 +63,15 @@ const nextKey = computed(() => steps.value.find((s) => !s.done)?.key);
         <h2 id="start-title" class="title">Getting started</h2>
         <p class="sub">{{ doneCount }} of {{ steps.length }} done. This goes away once you've finished.</p>
       </div>
-      <span
+      <ProgressBar 
         class="progress"
         role="progressbar"
+        :progress="(doneCount / steps.length) * 100"
         :aria-valuenow="doneCount"
         aria-valuemin="0"
         :aria-valuemax="steps.length"
         :aria-label="`${doneCount} of ${steps.length} steps done`"
-      >
-        <span :style="{ width: `${(doneCount / steps.length) * 100}%` }" />
-      </span>
+      />
     </div>
     <ol class="steps">
       <li v-for="step in steps" :key="step.key" class="step" :class="{ done: step.done, next: step.key === nextKey }">
@@ -133,16 +133,6 @@ const nextKey = computed(() => steps.value.find((s) => !s.done)?.key);
 .progress {
   width: 160px;
   height: 8px;
-  border-radius: 999px;
-  background: var(--border);
-  overflow: hidden;
-}
-.progress span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--pink);
-  transition: width 0.3s;
 }
 .steps {
   list-style: none;
