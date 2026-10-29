@@ -11,6 +11,9 @@ import { api, qs } from '@/api';
 import { auth } from '@/stores/auth';
 import { SEASONS, LIMITS } from '@shared/constants.mjs';
 import { pluralize } from '@/utils/format';
+import SearchBar from '@/components/search/SearchBar.vue';
+import ResultHeader from '@/components/search/ResultHeader.vue';
+import FilterButton from '@/components/search/FilterButton.vue';
 
 const STATUS_FILTERS = [
   { value: 'open', label: 'Open for sign-ups' },
@@ -48,6 +51,13 @@ const maxEl = ref(null);
 const resultsTop = ref(null);
 
 const filters = reactive({ ...DEFAULTS });
+const filtersOpen = ref(false);
+const filterCount = computed(() => 
+  Object.entries(filters)
+  .filter(filter => !['page', 'q', 'sort'].includes(filter[0]))
+  .filter(filter => filter[1] !== DEFAULTS[filter[0]])
+  .length
+)
 
 function wholeNumber(value) {
   if (value === undefined || value === null || value === '') return '';
@@ -161,7 +171,7 @@ watch(
   (query) => {
     if (route.name !== 'events') return; // leaving the page
     Object.assign(filters, readQuery(query));
-    // Don't overwrite what someone is in the middle of typing
+    // Don't overwrite when someone is in the middle of typing
     const active = document.activeElement;
     if (active !== searchInput.value) search.value = filters.q;
     if (active !== minEl.value) minInput.value = filters.minParticipants === '' ? '' : String(filters.minParticipants);
@@ -208,115 +218,116 @@ const summary = computed(() => {
       </template>
     </PageHeader>
 
-    <section class="card filters" aria-label="Filter events">
-      <div class="input-wrap search">
-        <Search :size="18" class="input-icon" aria-hidden="true" />
-        <label for="event-search" class="sr-only">Search events or organisers</label>
-        <input
-          id="event-search"
-          ref="searchInput"
-          v-model="search"
-          class="input"
-          type="search"
-          placeholder="Search events or organisers"
-          maxlength="100"
-          autocomplete="off"
-          @input="scheduleUpdate"
-          @keydown.enter.prevent="scheduleUpdate"
+    <section class="card toolbar" aria-label="Filter events">
+      <SearchBar
+        id="event-search"
+        ref="searchInput"
+        v-model="search"
+        sr-label="Search events or organisers"
+        placeholder="Search events or organisers"
+        :maxlength="100"
+        @input="scheduleUpdate"
+        @keydown.enter.prevent="scheduleUpdate"
+      />
+
+      <div class="toolbar-row">
+        <FilterButton
+        :aria-expanded="filtersOpen ? 'true' : 'false'"
+        aria-controls="discover-filters"
+        @click="filtersOpen = !filtersOpen" 
+        :filterCount="filterCount"
         />
-        <button v-if="search" type="button" class="clear-search" aria-label="Clear search" @click="search = ''; scheduleUpdate()">
-          <X :size="16" />
-        </button>
+
+        <label class="sort">
+          <span class="label-inline">Sort by</span>
+          <select class="select" :value="filters.sort" @change="updateQuery({ sort: $event.target.value })">
+            <option v-for="s in SORTS" :key="s.value" :value="s.value">{{ s.label }}</option>
+          </select>
+        </label>
       </div>
 
-      <div class="chips" role="group" aria-label="Event status">
-        <button
-          v-for="s in STATUS_FILTERS"
-          :key="s.value"
-          type="button"
-          class="chip"
-          :class="{ on: filters.status === s.value }"
-          :aria-pressed="filters.status === s.value"
-          @click="updateQuery({ status: s.value })"
-        >
-          {{ s.label }}
-        </button>
-      </div>
-
-      <div class="row">
-        <div class="field small">
-          <label for="filter-season" class="label">Season</label>
-          <div class="input-wrap">
-            <select
-              id="filter-season"
-              class="input"
-              :value="filters.season"
-              @change="updateQuery({ season: $event.target.value })"
-            >
-              <option value="">Any season</option>
-              <option v-for="s in SEASONS" :key="s.value" :value="s.value">{{ s.label }}</option>
-            </select>
-          </div>
+      <div id="discover-filters" class="filters" :class="{ open: filtersOpen }">
+        <div class="chips" role="group" aria-label="Event status">
+          <button
+            v-for="s in STATUS_FILTERS"
+            :key="s.value"
+            type="button"
+            class="chip"
+            :class="{ on: filters.status === s.value }"
+            :aria-pressed="filters.status === s.value"
+            @click="updateQuery({ status: s.value })"
+          >
+            {{ s.label }}
+          </button>
         </div>
-        <div class="field small">
-          <label for="filter-min" class="label">Min. participants</label>
-          <div class="input-wrap">
-            <input
-              id="filter-min"
-              ref="minEl"
-              v-model="minInput"
-              class="input"
-              type="number"
-              inputmode="numeric"
-              min="0"
-              :max="LIMITS.maxParticipantsCeiling"
-              placeholder="Any"
-              :aria-invalid="Boolean(rangeError)"
-              aria-describedby="range-error"
-              @input="scheduleUpdate"
-            />
+        
+        <div class="row">
+          <div class="field small">
+            <label for="filter-season" class="label">Season</label>
+            <div class="input-wrap">
+              <select
+                id="filter-season"
+                class="input"
+                :value="filters.season"
+                @change="updateQuery({ season: $event.target.value })"
+              >
+                <option value="">Any season</option>
+                <option v-for="s in SEASONS" :key="s.value" :value="s.value">{{ s.label }}</option>
+              </select>
+            </div>
           </div>
-        </div>
-        <div class="field small">
-          <label for="filter-max" class="label">Max. participants</label>
-          <div class="input-wrap">
-            <input
-              id="filter-max"
-              ref="maxEl"
-              v-model="maxInput"
-              class="input"
-              type="number"
-              inputmode="numeric"
-              min="0"
-              :max="LIMITS.maxParticipantsCeiling"
-              placeholder="Any"
-              :aria-invalid="Boolean(rangeError)"
-              aria-describedby="range-error"
-              @input="scheduleUpdate"
-            />
+          <div class="field small">
+            <label for="filter-min" class="label">Min. participants</label>
+            <div class="input-wrap">
+              <input
+                id="filter-min"
+                ref="minEl"
+                v-model="minInput"
+                class="input"
+                type="number"
+                inputmode="numeric"
+                min="0"
+                :max="LIMITS.maxParticipantsCeiling"
+                placeholder="Any"
+                :aria-invalid="Boolean(rangeError)"
+                aria-describedby="range-error"
+                @input="scheduleUpdate"
+              />
+            </div>
           </div>
-        </div>
-        <div class="field small">
-          <label for="filter-sort" class="label">Sort by</label>
-          <div class="input-wrap">
-            <select id="filter-sort" class="input" :value="filters.sort" @change="updateQuery({ sort: $event.target.value })">
-              <option v-for="s in SORTS" :key="s.value" :value="s.value">{{ s.label }}</option>
-            </select>
+          <div class="field small">
+            <label for="filter-max" class="label">Max. participants</label>
+            <div class="input-wrap">
+              <input
+                id="filter-max"
+                ref="maxEl"
+                v-model="maxInput"
+                class="input"
+                type="number"
+                inputmode="numeric"
+                min="0"
+                :max="LIMITS.maxParticipantsCeiling"
+                placeholder="Any"
+                :aria-invalid="Boolean(rangeError)"
+                aria-describedby="range-error"
+                @input="scheduleUpdate"
+              />
+            </div>
           </div>
         </div>
       </div>
       <p id="range-error" class="range-error" :class="{ shown: rangeError }" role="status">{{ rangeError }}</p>
     </section>
 
-    <div ref="resultsTop" class="results-head">
-      <p class="summary" aria-live="polite">
-        <template v-if="loadedOnce && !error">{{ summary }}</template>
-        <LoaderCircle v-if="loading && loadedOnce" :size="16" class="spin" aria-label="Updating" />
-      </p>
-      <button v-if="hasFilters" type="button" class="btn btn-ghost" @click="clearFilters">
-        <X :size="16" aria-hidden="true" /> Clear filters
-      </button>
-    </div>
+    <ResultHeader 
+      ref="resultsTop" 
+      :summary="summary" 
+      :loaded-once="loadedOnce" 
+      :loading="loading" 
+      :error="error" 
+      :has-filters="hasFilters" 
+      @clear-filters="clearFilters"
+    />
 
     <LoadingBlock v-if="loading && !loadedOnce" label="Loading events…" />
     <ErrorBlock v-else-if="error" :message="error" @retry="load" />
@@ -383,7 +394,7 @@ const summary = computed(() => {
 </template>
 
 <style scoped>
-.filters {
+.toolbar {
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -467,15 +478,6 @@ select.input {
   font-size: 0.88rem;
   font-weight: 500;
 }
-.results-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 26px 0 14px;
-  min-height: 38px;
-  scroll-margin-top: 90px;
-}
 .summary {
   margin: 0;
   display: inline-flex;
@@ -519,13 +521,33 @@ select.input {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
 }
-@media (max-width: 860px) {
-  .row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.label-inline {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.filters {
+  display: none;
+}
+.filters.open {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
 }
 @media (max-width: 640px) {
-  .filters {
+  .toolbar {
     padding: 16px 16px 4px;
     margin-top: 20px;
   }
