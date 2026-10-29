@@ -24,6 +24,7 @@ import {
   sameTags,
   tasteQuery,
 } from '@/utils/styleQuiz';
+import ProgressBar from '@/components/ProgressBar.vue';
 
 // Find your style: five quick questions, with your artist card building up beside them.
 // No account needed; answers stay in this browser until you save them to your profile.
@@ -176,9 +177,7 @@ watch(() => auth.user?.id, savePendingIfReady);
     <header class="quiz-head">
       <p class="eyebrow"><Sparkles :size="16" aria-hidden="true" /> Find your style</p>
       <p v-if="!onResult" class="progress-text" aria-live="polite">Question {{ step + 1 }} of {{ QUIZ_STEPS }}</p>
-      <div v-if="!onResult" class="progress" aria-hidden="true">
-        <span :style="{ width: `${((step + 1) / QUIZ_STEPS) * 100}%` }" />
-      </div>
+      <ProgressBar v-if="!onResult" class="progress" aria-hidden="true" :progress="((step + 1) / QUIZ_STEPS) * 100" />
     </header>
 
     <div class="quiz-layout">
@@ -229,8 +228,8 @@ watch(() => auth.user?.id, savePendingIfReady);
             <ArrowLeft :size="18" aria-hidden="true" /> Back
           </button>
           <span class="spacer" />
-          <button type="button" class="btn btn-ghost" @click="next">Skip</button>
-          <button type="button" class="btn btn-primary" @click="next">
+          <button v-if="answers[current.key].length == 0" type="button" class="btn btn-ghost" @click="next">Skip</button>
+          <button v-else type="button" class="btn btn-primary" @click="next">
             {{ step === QUIZ_STEPS - 1 ? 'See my card' : 'Next' }}
             <ArrowRight :size="18" aria-hidden="true" />
           </button>
@@ -349,15 +348,6 @@ watch(() => auth.user?.id, savePendingIfReady);
 }
 .progress {
   height: 6px;
-  border-radius: 999px;
-  background: var(--border);
-  overflow: hidden;
-}
-.progress span {
-  display: block;
-  height: 100%;
-  background: var(--pink);
-  transition: width 0.25s;
 }
 .quiz-layout {
   display: grid;
