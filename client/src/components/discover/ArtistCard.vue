@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { RouterLink } from 'vue-router';
-import { Gift } from 'lucide-vue-next';
+import { Gift, MailPlus, Check } from 'lucide-vue-next';
 import UserAvatar from '@/components/UserAvatar.vue';
 import ArtistTagChips from '@/components/profile/ArtistTagChips.vue';
 import FollowButton from '@/components/profile/FollowButton.vue';
@@ -20,8 +20,12 @@ const props = defineProps({
   headingTag: { type: String, default: 'h3' },
   // Every tag (the quiz preview); cards on Discover show a shorter list
   allTags: { type: Boolean, default: false },
+  // Organisers with an open event get an Invite button (the page opens the invite window)
+  invitable: { type: Boolean, default: false },
+  // Already invited to every open event of yours
+  invited: { type: Boolean, default: false },
 });
-const emit = defineEmits(['follow-changed']);
+const emit = defineEmits(['follow-changed', 'invite']);
 
 const user = computed(() => props.card.user || {});
 const link = computed(() => userProfileLink(user.value));
@@ -211,6 +215,9 @@ function onFollow(res) {
   font-weight: 600;
 }
 .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: auto;
   padding-top: 4px;
 }
