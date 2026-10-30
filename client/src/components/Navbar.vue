@@ -196,7 +196,7 @@ watch(
     <div class="bar">
       <RouterLink :to="homeLink" class="brand" aria-label="Drawsicle home">
         <img :src="logoUrl" alt="" class="brand-logo" width="46" height="46" />
-        <span class="brand-name">Drawsicle</span>
+        <span class="brand-name max-[360px]:hidden">Drawsicle</span>
       </RouterLink>
 
       <nav class="desktop-nav" aria-label="Main">
