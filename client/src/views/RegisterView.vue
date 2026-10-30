@@ -68,7 +68,7 @@ function checkFields() {
   else fieldErrors.password = '';
   fieldErrors.confirm =
     !fieldErrors.password && password.value !== confirm.value ? "This doesn't match the password above." : '';
-  fieldErrors.inviteCode = inviteCode.value.trim() ? '' : 'Enter the invite code you were given.';
+  // fieldErrors.inviteCode = inviteCode.value.trim() ? '' : 'Enter the invite code you were given.';
   return !Object.values(fieldErrors).some(Boolean);
 }
 
