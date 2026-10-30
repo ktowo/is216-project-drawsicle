@@ -11,13 +11,21 @@ function clientUrl() {
   return 'http://localhost:5173';
 }
 
-// ADMIN_EMAILS=a@x.com,b@y.com in .env makes those accounts site admins.
+/**if the user is in admin list, user.role is set to admin, and then returns true
+ * otherwise, do nothing and return false
+ * 
+ * ADMIN_EMAILS=a@x.com,b@y.com in .env makes those accounts site admins.
+ *  */ 
 function applyAdminList(user) {
   const admins = (process.env.ADMIN_EMAILS || '')
     .split(',')
     .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-  if (admins.includes(user.email) && user.role !== 'admin') user.role = 'admin';
+    .filter(Boolean); // keeps truthy emails.
+  if (admins.includes(user.email) && user.role !== 'admin') {
+    user.role = 'admin';
+    return true;
+  }
+  return false;
 }
 
 // Used when an error doesn't carry its own code, so the client can always switch on `code`.

@@ -117,18 +117,23 @@ router.post('/register', authLimiter, asyncHandler(async (req, res) => {
   const taken = () =>
     res
       .status(409)
-      .json({ error: 'An account with this email already exists. Try logging in.', code: 'EMAIL_TAKEN' });
-
+      .json({ error: 'An account with this email already exists. Try logging in.', code: 'EMAIL_TAKEN' }
+  );
   if (await User.exists({ email })) return taken();
-
-  const invite = await reserveInvite(normInvite(req.body.inviteCode), email);
 
   const user = new User({
     email,
     passwordHash: await bcrypt.hash(password, 12),
     displayName,
   });
-  applyAdminList(user);
+  const isAdmin = applyAdminList(user);
+
+  let invite = null;
+  if (!isAdmin) {
+    // reserveInvite will throw httpError when a new user (not admin) tries to
+    // register without the invite code.
+    invite = await reserveInvite(normInvite(req.body.inviteCode), email);
+  }
 
   try {
     if (invite) {
