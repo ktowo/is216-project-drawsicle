@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
-import { UsersRound, LoaderCircle, Sparkles, ArrowRight } from 'lucide-vue-next';
+import { UsersRound, LoaderCircle, Sparkles, ArrowRight, MailPlus } from 'lucide-vue-next';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingBlock from '@/components/ui/LoadingBlock.vue';
@@ -18,6 +18,10 @@ import SearchBar from '@/components/search/SearchBar.vue';
 import ResultHeader from '@/components/search/ResultHeader.vue';
 import { pluralize } from '@/utils/format';
 import FilterButton from '@/components/search/FilterButton.vue';
+import ToolbarCard from '@/components/search/ToolbarCard.vue';
+import FiltersContainer from '@/components/search/FiltersContainer.vue';
+import FilterGroup from '@/components/search/FilterGroup.vue';
+import ToolbarRow from '@/components/search/ToolbarRow.vue';
 
 // Discover artists. The URL holds the search, filters and sort, so a link (or the back button)
 // brings back the same list.
@@ -230,8 +234,8 @@ function onFollowChanged({ username, following }) {
         Filter by what they make, then press <em>Invite</em> on a card.
       </span>
     </p>
-
-    <div class="toolbar card">
+    
+    <ToolbarCard aria-label="Filter artists">
       <SearchBar 
         id="artist-search"
         v-model="search"
@@ -239,11 +243,10 @@ function onFollowChanged({ username, following }) {
         placeholder="Search artists by name or @username"
       />
 
-      <div class="toolbar-row">
+      <ToolbarRow>
         <FilterButton 
-        :aria-expanded="filtersOpen ? 'true' : 'false'"
+        v-model="filtersOpen"
         aria-controls="discover-filters"
-        @click="filtersOpen = !filtersOpen" 
         :filterCount="activeFilters"
         />
         
@@ -253,30 +256,27 @@ function onFollowChanged({ username, following }) {
             <option v-for="s in SORTS" :key="s.value" :value="s.value">{{ s.label }}</option>
           </select>
         </label>
-      </div>
-
-      <div id="discover-filters" class="filters" :class="{ open: filtersOpen }">
-        <div class="filter-group">
-          <p id="filter-makes" class="label">Makes</p>
+      </ToolbarRow>
+      
+      <FiltersContainer id="discover-filters" :filters-open="filtersOpen">
+        <FilterGroup label-id="filter-makes" title="Makes">
           <ChoiceChips :model-value="makes" :options="CREATION_TYPES" aria-labelledby="filter-makes" @update:model-value="setQuery({ makes: $event })" />
-        </div>
-        <div class="filter-group">
-          <p id="filter-themes" class="label">Loves</p>
+        </FilterGroup>
+        <FilterGroup label-id="filter-themes" title="Loves">
           <ChoiceChips :model-value="themes" :options="THEME_OPTIONS" aria-labelledby="filter-themes" @update:model-value="setQuery({ themes: $event })" />
-        </div>
-        <div class="filter-group">
-          <p id="filter-more" class="label">Only show</p>
+        </FilterGroup>
+        <FilterGroup label-id="filter-more" title="Only Show">
           <ChoiceChips :model-value="extras" :options="extraOptions" aria-labelledby="filter-more" @update:model-value="setExtras" />
-        </div>
-      </div>
-    </div>
+        </FilterGroup>
+      </FiltersContainer>
+    </ToolbarCard>
 
     <ResultHeader
       :summary="summary" 
       :loaded-once="loadedOnce" 
       :loading="loading" 
       :error="error" 
-      :has-filters="activeFilters" 
+      :has-filters="activeFilters != 0" 
       @clear-filters="clearFilters"
     />
 
@@ -375,13 +375,9 @@ function onFollowChanged({ username, following }) {
   font-weight: 700;
   cursor: pointer;
 }
-.toolbar {
-  padding: 16px;
-  margin-top: 8px;
-}
 .toolbar-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 10px;
   margin-top: 12px;
@@ -395,26 +391,6 @@ function onFollowChanged({ username, following }) {
 .label-inline {
   font-weight: 600;
   font-size: 0.9rem;
-}
-.filters {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-top: 14px;
-}
-.filter-group .label {
-  margin: 0 0 6px;
-}
-.filters {
-  display: none;
-}
-.filters.open {
-  display: flex;
-}
-@media (max-width: 720px) {
-  .sort {
-    margin-left: 0;
-  }
 }
 .count {
   margin: 16px 0 12px;

@@ -1,11 +1,11 @@
 <script setup>
 import { SlidersHorizontal } from 'lucide-vue-next';
 
+const filtersOpen = defineModel({type: Boolean, required: true});
 const props = defineProps({
+    ariaControls: String,
     filterCount: Number
 })
-
-const emit = defineEmits(['click'])
     
 </script>
 
@@ -14,17 +14,18 @@ const emit = defineEmits(['click'])
         type="button"
         class="btn btn-outline btn-sm filters-toggle"
         :aria-expanded="filtersOpen ? 'true' : 'false'"
-        aria-controls="discover-filters"
-        @click="$emit('click')"
+        :aria-controls="ariaControls"
+        @click="filtersOpen = !filtersOpen" 
     >
-        <SlidersHorizontal :size="16" aria-hidden="true" /> Filters
+        <SlidersHorizontal :size="16" aria-hidden="true" /> <span class="max-sm:hidden">Filters</span>
         <span v-if="filterCount" class="filter-count">{{ filterCount }}</span>
     </button>
 </template>
 
 <style scoped>
-    .filters-toggle {
+.filters-toggle {
   display: inline-flex;
+  position: relative;
 }
 .filters {
   display: none;
@@ -33,6 +34,9 @@ const emit = defineEmits(['click'])
   display: flex;
 }
 .filter-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
   min-width: 20px;
   padding: 0 6px;
   border-radius: 999px;

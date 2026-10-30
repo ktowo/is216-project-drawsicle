@@ -14,6 +14,11 @@ import { pluralize } from '@/utils/format';
 import SearchBar from '@/components/search/SearchBar.vue';
 import ResultHeader from '@/components/search/ResultHeader.vue';
 import FilterButton from '@/components/search/FilterButton.vue';
+import ToolbarCard from '@/components/search/ToolbarCard.vue';
+import FiltersContainer from '@/components/search/FiltersContainer.vue';
+import FilterGroup from '@/components/search/FilterGroup.vue';
+import ChoiceChips from '@/components/ui/ChoiceChips.vue';
+import ToolbarRow from '@/components/search/ToolbarRow.vue';
 
 const STATUS_FILTERS = [
   { value: 'open', label: 'Open for sign-ups' },
@@ -217,8 +222,8 @@ const summary = computed(() => {
         </RouterLink>
       </template>
     </PageHeader>
-
-    <section class="card toolbar" aria-label="Filter events">
+    
+    <ToolbarCard aria-label="Filter events">
       <SearchBar
         id="event-search"
         ref="searchInput"
@@ -230,24 +235,23 @@ const summary = computed(() => {
         @keydown.enter.prevent="scheduleUpdate"
       />
 
-      <div class="toolbar-row">
-        <FilterButton
-        :aria-expanded="filtersOpen ? 'true' : 'false'"
-        aria-controls="discover-filters"
-        @click="filtersOpen = !filtersOpen" 
+      <ToolbarRow>
+        <FilterButton 
+        v-model="filtersOpen"
+        aria-controls="events-filters"
         :filterCount="filterCount"
         />
-
+  
         <label class="sort">
           <span class="label-inline">Sort by</span>
           <select class="select" :value="filters.sort" @change="updateQuery({ sort: $event.target.value })">
             <option v-for="s in SORTS" :key="s.value" :value="s.value">{{ s.label }}</option>
           </select>
         </label>
-      </div>
-
-      <div id="discover-filters" class="filters" :class="{ open: filtersOpen }">
-        <div class="chips" role="group" aria-label="Event status">
+      </ToolbarRow>
+      
+      <FiltersContainer id="discover-filters" :filters-open="filtersOpen">
+        <FilterGroup label-id="filter-status" title="Status">
           <button
             v-for="s in STATUS_FILTERS"
             :key="s.value"
@@ -259,7 +263,7 @@ const summary = computed(() => {
           >
             {{ s.label }}
           </button>
-        </div>
+        </FilterGroup>
         
         <div class="row">
           <div class="field small">
@@ -315,9 +319,9 @@ const summary = computed(() => {
             </div>
           </div>
         </div>
-      </div>
-      <p id="range-error" class="range-error" :class="{ shown: rangeError }" role="status">{{ rangeError }}</p>
-    </section>
+      </FiltersContainer>
+      <p id="range-error" class="range-error" :class="{ hidden: rangeError.length == 0 }" role="status">{{ rangeError }}</p>
+    </ToolbarCard>
 
     <ResultHeader 
       ref="resultsTop" 
@@ -394,13 +398,6 @@ const summary = computed(() => {
 </template>
 
 <style scoped>
-.toolbar {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  padding: 22px 24px 8px;
-  margin-top: 28px;
-}
 .clear-search {
   border: 0;
   background: none;
@@ -510,13 +507,6 @@ select.input {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
 }
-.toolbar-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin-top: 12px;
-}
 .sort {
   display: inline-flex;
   align-items: center;
@@ -526,14 +516,6 @@ select.input {
 .label-inline {
   font-weight: 600;
   font-size: 0.9rem;
-}
-.filters {
-  display: none;
-}
-.filters.open {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
 }
 @media (max-width: 640px) {
   .toolbar {
