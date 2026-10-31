@@ -13,6 +13,7 @@ import ConfirmEmailNotice from '@/components/ConfirmEmailNotice.vue';
 import { toast } from '@/stores/toast';
 import { api } from '@/api';
 import { safeRedirect } from '@/router';
+import { rejectInvite, inviteFieldError } from '@/utils/inviteProblem';
 
 const route = useRoute();
 const router = useRouter();
@@ -34,6 +35,9 @@ const fieldErrors = reactive({ displayName: '', email: '', password: '', confirm
 const tried = ref(false);
 // The email that already has an account, so the links can offer to log in with it
 const takenEmail = ref('');
+// The invite code the server turned down and why, so the error stays under the field until the code is changed.
+// The server decides whether a code is needed (admins don't need one), so nothing is checked here before sending.
+const rejectedInvite = ref(null);
 // Supabase sign-in: the address to confirm before the first log-in
 const confirmEmail = ref('');
 const providers = ref({ google: false, discord: false });
@@ -68,11 +72,16 @@ function checkFields() {
   else fieldErrors.password = '';
   fieldErrors.confirm =
     !fieldErrors.password && password.value !== confirm.value ? "This doesn't match the password above." : '';
-  // fieldErrors.inviteCode = inviteCode.value.trim() ? '' : 'Enter the invite code you were given.';
   return !Object.values(fieldErrors).some(Boolean);
 }
 
+// Only the server's answer goes under the invite field, and it clears once the code is edited
+function checkInvite() {
+  fieldErrors.inviteCode = inviteFieldError(rejectedInvite.value, inviteCode.value);
+}
+
 // After the first try, errors clear (or change) as soon as the field is fixed
+watch(inviteCode, checkInvite);
 watch([displayName, email, password, confirm], () => {
   if (tried.value) checkFields();
 });
@@ -86,6 +95,7 @@ const takenLinks = computed(() => {
 async function submit() {
   error.value = '';
   tried.value = true;
+  // Also stops here while a turned-down invite code is still unchanged, since sending it again can't work
   if (!checkFields()) return;
 
   loading.value = true;
@@ -94,9 +104,13 @@ async function submit() {
     toast.success(`Welcome to Drawsicle, ${user.displayName}!`);
     router.replace(redirectTo.value);
   } catch (e) {
+    const badInvite = rejectInvite(e.code, inviteCode.value);
     if (e.code === 'EMAIL_TAKEN') {
       takenEmail.value = email.value.trim().toLowerCase();
       checkFields();
+    } else if (badInvite) {
+      rejectedInvite.value = badInvite;
+      checkInvite();
     } else if (e.code === 'CHECK_EMAIL') {
       confirmEmail.value = email.value.trim();
     } else {
