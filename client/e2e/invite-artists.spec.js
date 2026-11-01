@@ -8,8 +8,10 @@ test('an organiser invites an artist from Discover', async ({ page }) => {
   await page.goto('/#/discover?q=pip');
   await expect(page.getByText(/Looking for artists for/)).toBeVisible();
 
+  // Each card is a link to the profile; the Invite button inside it opens the invite window instead
   const card = page.getByRole('link').filter({ hasText: '@pip' });
-  await card.click();
+  await card.getByRole('button', { name: /Invite Pip to an event/ }).click();
+  await expect(page).toHaveURL(/#\/discover/);
 
   const dialog = page.getByRole('dialog', { name: /Invite Pip/ });
   await expect(dialog).toBeVisible();

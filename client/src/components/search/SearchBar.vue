@@ -22,7 +22,7 @@ const emit = defineEmits(['input', 'keydown.enter.prevent'])
         <Search :size="18" class="input-icon" aria-hidden="true" />
         <label :for="id" class="sr-only">{{ srLabel }}</label>
         <input :id="id" v-model="search" class="input" type="search" autocomplete="off" :placeholder="placeholder"
-            :maxlength="maxlength" @input="$emit('input')" , @keydown.enter.prevent="$emit('keydown.enter.prevent')" />
+            :maxlength="maxlength" @input="$emit('input')" @keydown.enter.prevent="$emit('keydown.enter.prevent')" />
     </div>
 </template>
 
