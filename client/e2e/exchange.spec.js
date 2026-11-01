@@ -29,7 +29,7 @@ test('from sign-up to the reveal', async ({ page }) => {
   await confirm(page, 'Close sign-ups');
   await page.getByRole('button', { name: /Go to matching/ }).click();
   await page.getByRole('button', { name: /^Generate matches$/ }).click();
-  await expect(page.getByText(/Gift loops/)).toBeVisible();
+  await expect(page.getByText('Loops', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: /Publish matches/ }).click();
   await confirm(page, 'Publish & start event');
   await expect(page.getByText('Published matches')).toBeVisible();
