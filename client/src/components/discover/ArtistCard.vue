@@ -83,6 +83,19 @@ function onFollow(res) {
             :viewer="{ following: Boolean(card.following) }"
             @changed="onFollow"
           />
+          <!-- The whole card is a link, so these buttons stop the click from opening the profile -->
+          <button v-if="invitable && invited" type="button" class="btn btn-ghost btn-sm" disabled>
+            <Check :size="16" aria-hidden="true" /> Invited
+          </button>
+          <button
+            v-else-if="invitable"
+            type="button"
+            class="btn btn-outline btn-sm"
+            :aria-label="`Invite ${user.displayName || user.username} to an event`"
+            @click.prevent.stop="emit('invite', card)"
+          >
+            <MailPlus :size="16" aria-hidden="true" /> Invite
+          </button>
         </div>
       </div>
     </article>
