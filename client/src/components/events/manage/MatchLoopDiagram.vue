@@ -215,7 +215,7 @@ const summary = computed(() => {
           >
             <title>{{ personName(p.user) }}</title>
             <!-- <text :x="p.x" :y="p.y + 4" class="initials">{{ initials(p.user) }}</text> -->
-            <foreignObject class="node rounded-full" :x="p.x - NODE_R" :y="p.y - NODE_R", :width="2 * NODE_R" :height="2 * NODE_R">
+            <foreignObject class="node rounded-full" :x="p.x - NODE_R" :y="p.y - NODE_R" :width="2 * NODE_R" :height="2 * NODE_R">
               <body xmlns="http://www.w3.org/1999/xhtml">
                 <UserAvatar :user="p.user" :size="2 * NODE_R - 2" class="avatar" />
               </body>
