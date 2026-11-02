@@ -7,14 +7,18 @@ import LoadingBlock from '@/components/ui/LoadingBlock.vue';
 import ErrorBlock from '@/components/ui/ErrorBlock.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import { formatDate, formatDateTime } from '@/utils/format';
+import { copyText } from '@/utils/events';
 
 const data = ref(null);
 const error = ref('');
 const form = ref({ code: '', capacity: 25 });
 const working = ref(false);
 const editing = ref(null);
+// The number being typed, kept apart so the code's real capacity only changes once it's saved
+const newCapacity = ref(0);
 
 async function load() {
+  error.value = '';
   try {
     data.value = await api('/admin/invites');
   } catch (e) {
@@ -35,12 +39,16 @@ async function create() {
   }
 }
 async function copy(code) {
-  await navigator.clipboard?.writeText(code);
-  toast.success('Invite code copied.');
+  if (await copyText(code)) toast.success('Invite code copied.');
+  else toast.error("Couldn't copy the invite code. Select it and copy it yourself.");
+}
+function toggleEditing(invite) {
+  newCapacity.value = invite.capacity;
+  editing.value = editing.value === invite.id ? null : invite.id;
 }
 async function saveCapacity(invite) {
   try {
-    await api(`/admin/invites/${invite.id}`, { method: 'PATCH', body: { capacity: invite.capacity } });
+    await api(`/admin/invites/${invite.id}`, { method: 'PATCH', body: { capacity: newCapacity.value } });
     toast.success('Capacity updated.');
     editing.value = null;
     await load();
@@ -78,10 +86,10 @@ onMounted(load);
           <code class="font-semibold">{{ invite.code }}</code>
           <button class="btn btn-outline btn-sm" @click="copy(invite.code)"><Copy :size="15" /> Copy</button>
           <span class="ml-auto badge"><Users :size="14" /> {{ invite.used }} / {{ invite.capacity }}</span>
-          <button class="btn btn-outline btn-sm" @click="editing = editing === invite.id ? null : invite.id">Set capacity</button>
+          <button class="btn btn-outline btn-sm" @click="toggleEditing(invite)">Set capacity</button>
         </div>
         <form v-if="editing === invite.id" class="mt-3 flex items-end gap-2" @submit.prevent="saveCapacity(invite)">
-          <label class="grid gap-1 w-32"><span class="hint">New capacity</span><input v-model.number="invite.capacity" class="input" type="number" :min="invite.used || 1" max="10000" /></label>
+          <label class="grid gap-1 w-32"><span class="hint">New capacity</span><input v-model.number="newCapacity" class="input" type="number" :min="invite.used || 1" max="10000" /></label>
           <button class="btn btn-primary btn-sm">Save</button>
         </form>
         <div class="mt-3 h-2 rounded bg-soft"><div class="h-2 rounded bg-brand" :style="{ width: `${Math.min(100, invite.used / invite.capacity * 100)}%` }" /></div>
