@@ -26,5 +26,5 @@ export function takeInvite(storage = tabStorage()) {
 
 // The exchange refused a new account because of its invite code (missing, wrong or full)
 export function isInviteProblem(error) {
-  return ['INVITE_REQUIRED', 'INVITE_INVALID', 'INVITE_FULL'].includes(error?.code);
+  return ['INVITE_REQUIRED', 'INVITE_INVALID', 'INVITE_FULL', 'INVITE_DISABLED'].includes(error?.code);
 }
