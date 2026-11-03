@@ -13,6 +13,8 @@ const inviteCodeSchema = new mongoose.Schema(
   {
     code: { type: String, required: true, unique: true, trim: true, uppercase: true, maxlength: 40 },
     capacity: { type: Number, required: true, min: 1, max: 10000 },
+    // Turned off by an admin: the code stays in the list but nobody can sign up with it
+    disabled: { type: Boolean, default: false },
     signups: { type: [signupSchema], default: [] },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   },

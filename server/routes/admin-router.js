@@ -148,6 +148,7 @@ router.get('/invites', may('invites.manage'), asyncHandler(async (req, res) => {
       id: invite._id.toString(),
       code: invite.code,
       capacity: invite.capacity,
+      disabled: Boolean(invite.disabled),
       used: invite.signups.length,
       createdAt: invite.createdAt,
       signups: invite.signups.map((signup) => ({
@@ -167,7 +168,7 @@ router.post('/invites', may('invites.manage'), asyncHandler(async (req, res) => 
   try {
     const invite = await InviteCode.create({ code, capacity, createdBy: req.user._id });
     await audit(req, 'invite.create', 'invite', invite._id, invite.code, `Capacity: ${capacity}`);
-    res.status(201).json({ invite: { id: invite._id.toString(), code: invite.code, capacity: invite.capacity, used: 0, signups: [], createdAt: invite.createdAt } });
+    res.status(201).json({ invite: { id: invite._id.toString(), code: invite.code, capacity: invite.capacity, disabled: false, used: 0, signups: [], createdAt: invite.createdAt } });
   } catch (err) {
     if (isDuplicate(err, 'code')) throw httpError(409, 'That invite code already exists.', 'INVITE_TAKEN');
     throw err;
@@ -175,14 +176,23 @@ router.post('/invites', may('invites.manage'), asyncHandler(async (req, res) => 
 }));
 
 router.patch('/invites/:inviteId', may('invites.manage'), asyncHandler(async (req, res) => {
-  const capacity = Number(req.body?.capacity);
-  if (!Number.isInteger(capacity) || capacity < 1 || capacity > 10000) throw httpError(400, 'Capacity must be a whole number from 1 to 10,000.', 'VALIDATION');
+  const hasCapacity = req.body?.capacity !== undefined;
+  const hasDisabled = req.body?.disabled !== undefined;
+  if (!hasCapacity && !hasDisabled) throw httpError(400, 'Send a capacity or turn the code on or off.', 'VALIDATION');
+  if (hasDisabled && typeof req.body.disabled !== 'boolean') throw httpError(400, 'disabled must be true or false.', 'VALIDATION');
   const invite = await InviteCode.findById(req.params.inviteId);
   if (!invite) throw httpError(404, 'Invite code not found.', 'NOT_FOUND');
-  if (capacity < invite.signups.length) throw httpError(400, `Capacity cannot be below the ${invite.signups.length} existing sign-ups.`, 'VALIDATION');
-  invite.capacity = capacity;
+  if (hasCapacity) {
+    const capacity = Number(req.body.capacity);
+    if (!Number.isInteger(capacity) || capacity < 1 || capacity > 10000) throw httpError(400, 'Capacity must be a whole number from 1 to 10,000.', 'VALIDATION');
+    if (capacity < invite.signups.length) throw httpError(400, `Capacity cannot be below the ${invite.signups.length} existing sign-ups.`, 'VALIDATION');
+    invite.capacity = capacity;
+  }
+  const switched = hasDisabled && invite.disabled !== req.body.disabled;
+  if (hasDisabled) invite.disabled = req.body.disabled;
   await invite.save();
-  res.json({ invite: { id: invite._id.toString(), code: invite.code, capacity: invite.capacity, used: invite.signups.length, signups: invite.signups, createdAt: invite.createdAt } });
+  if (switched) await audit(req, invite.disabled ? 'invite.disable' : 'invite.enable', 'invite', invite._id, invite.code, invite.disabled ? 'Turned off' : 'Turned on');
+  res.json({ invite: { id: invite._id.toString(), code: invite.code, capacity: invite.capacity, disabled: Boolean(invite.disabled), used: invite.signups.length, signups: invite.signups, createdAt: invite.createdAt } });
 }));
 
 // ---------- Users ----------
@@ -635,7 +645,7 @@ router.post('/vision/test', may('stats.view'), asyncHandler(async (req, res) => 
 router.get('/audit', may('audit.view'), asyncHandler(async (req, res) => {
   const { page, limit, skip } = paging(req);
   const filter = {};
-  if (['user', 'event', 'report', 'chat'].includes(req.query.targetType)) filter.targetType = req.query.targetType;
+  if (['user', 'event', 'report', 'chat', 'invite'].includes(req.query.targetType)) filter.targetType = req.query.targetType;
   const [entries, total] = await Promise.all([
     AuditLog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).populate('actor', 'displayName username avatarUrl email'),
     AuditLog.countDocuments(filter),
