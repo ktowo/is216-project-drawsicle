@@ -68,7 +68,7 @@ export async function register(email, password, displayName, inviteCode) {
     ({ user } = await exchangeForSession(token, { inviteCode }));
   } else {
     ({ user } = await api('/auth/register', { method: 'POST', body }));
-  }
+  // }
   resetNotifications();
   auth.user = user;
   auth.checked = true;
@@ -77,7 +77,7 @@ export async function register(email, password, displayName, inviteCode) {
 
 // "Forgot password": Supabase sends the email when it's on, otherwise the server does
 export async function requestPasswordReset(email) {
-  if (await usingSupabase()) return sendPasswordReset(email);
+  // if (await usingSupabase()) return sendPasswordReset(email);
   return api('/auth/forgot-password', { method: 'POST', body: { email } });
 }
 
