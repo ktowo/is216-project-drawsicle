@@ -152,6 +152,18 @@ router.post('/register', authLimiter, asyncHandler(async (req, res) => {
   res.status(201).json({ user: user.toPublic() });
 }));
 
+// Checks an invite code without using up a place, so the "enter your invite code" page can say
+// right away whether it works. Slowed down like the other sign-in routes so codes can't be guessed.
+router.post('/invite-check', authLimiter, asyncHandler(async (req, res) => {
+  const code = normInvite(req.body?.inviteCode);
+  if (!code) throw httpError(400, 'Enter an invite code.', 'INVITE_REQUIRED');
+  const invite = await InviteCode.findOne({ code }).select('code disabled capacity signups');
+  if (!invite) throw httpError(409, 'That invite code is not valid.', 'INVITE_INVALID');
+  if (invite.disabled) throw httpError(409, 'This invite code has been turned off.', 'INVITE_DISABLED');
+  if (invite.signups.length >= invite.capacity) throw httpError(409, 'This invite code has reached its capacity.', 'INVITE_FULL');
+  res.json({ valid: true, inviteCode: invite.code });
+}));
+
 router.post('/login', loginLimiter, asyncHandler(async (req, res) => {
   const email = normEmail(req.body.email);
   const { password } = req.body;

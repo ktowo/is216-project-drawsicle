@@ -197,6 +197,9 @@ async function submit() {
       <RouterLink :to="route.query.redirect ? { name: 'register', query: { redirect: redirectTo } } : '/register'">
         Create one
       </RouterLink>
+      <br />
+      Have an invite code?
+      <RouterLink to="/invite">Enter it here</RouterLink>
     </template>
   </AuthLayout>
 </template>

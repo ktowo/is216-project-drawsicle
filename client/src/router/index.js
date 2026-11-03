@@ -17,6 +17,7 @@ const routes = [
   { path: '/unsubscribe', name: 'unsubscribe', component: () => import('../views/UnsubscribeView.vue'), meta: { title: 'Unsubscribe' } },
   // Supabase sign-in comes back here (AUTH_PROVIDER=supabase)
   { path: '/auth/callback', name: 'auth-callback', component: () => import('../views/AuthCallbackView.vue'), meta: { hideChrome: true, title: 'Signing in' } },
+  { path: '/invite', name: 'invite', component: () => import('../views/InviteCodeView.vue'), meta: { guestOnly: true, hideChrome: true, title: 'Enter your invite code' } },
   { path: '/register', name: 'register', component: () => import('../views/RegisterView.vue'), meta: { guestOnly: true, hideChrome: true, title: 'Create an account' } },
   { path: '/forgot-password', name: 'forgot-password', component: () => import('../views/ForgotPasswordView.vue'), meta: { guestOnly: true, hideChrome: true, title: 'Forgot password' } },
   { path: '/reset-password', name: 'reset-password', component: () => import('../views/ResetPasswordView.vue'), meta: { hideChrome: true, title: 'Reset password' } },
