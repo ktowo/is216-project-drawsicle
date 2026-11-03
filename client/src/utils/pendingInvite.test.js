@@ -24,7 +24,7 @@ describe('an invite code kept across the Google round trip', () => {
   });
 
   it('knows which sign-in errors are about the invite code', () => {
-    expect(['INVITE_REQUIRED', 'INVITE_INVALID', 'INVITE_FULL'].every((code) => isInviteProblem({ code }))).toBe(true);
+    expect(['INVITE_REQUIRED', 'INVITE_INVALID', 'INVITE_FULL', 'INVITE_DISABLED'].every((code) => isInviteProblem({ code }))).toBe(true);
     expect(isInviteProblem({ code: 'ACCOUNT_BANNED' })).toBe(false);
     expect(isInviteProblem(null)).toBe(false);
   });

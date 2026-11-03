@@ -15,6 +15,9 @@ const ACTIONS = {
   'user.ban': 'banned',
   'user.unban': 'unbanned',
   'user.delete': 'deleted the account of',
+  'invite.create': 'created the invite code',
+  'invite.disable': 'turned off the invite code',
+  'invite.enable': 'turned on the invite code',
   'event.disable': 'disabled',
   'event.enable': 'turned back on',
   'event.cancel': 'cancelled',
@@ -57,6 +60,7 @@ onMounted(load);
         <option value="event">Event actions</option>
         <option value="report">Reports</option>
         <option value="chat">Chat</option>
+        <option value="invite">Invite codes</option>
       </select>
     </div>
 

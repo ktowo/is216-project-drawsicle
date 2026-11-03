@@ -499,6 +499,29 @@ describe('admin invites', () => {
     });
     expect(updated.invite).toMatchObject({ code: 'TEST-ADMIN', capacity: 3 });
   });
+
+  it('turns an invite code off and on, and sign-up refuses it while it is off', async () => {
+    await loginAs('ada');
+    const { invite } = await ok('/admin/invites', { method: 'POST', body: { code: 'SWITCH-ME', capacity: 2 } });
+    expect(invite.disabled).toBe(false);
+
+    const off = await ok(`/admin/invites/${invite.id}`, { method: 'PATCH', body: { disabled: true } });
+    expect(off.invite).toMatchObject({ disabled: true, capacity: 2 });
+    const body = { email: 'late@demo.test', password: 'password123', displayName: 'Late', inviteCode: 'SWITCH-ME' };
+    expect(await fails('/auth/register', { method: 'POST', body })).toEqual({ status: 409, code: 'INVITE_DISABLED' });
+
+    await ok(`/admin/invites/${invite.id}`, { method: 'PATCH', body: { disabled: false } });
+    await ok('/auth/register', { method: 'POST', body });
+
+    // Sends nothing useful, or the wrong kind of value: refused
+    await loginAs('ada');
+    expect((await fails(`/admin/invites/${invite.id}`, { method: 'PATCH', body: {} })).code).toBe('VALIDATION');
+    expect((await fails(`/admin/invites/${invite.id}`, { method: 'PATCH', body: { disabled: 'yes' } })).code).toBe('VALIDATION');
+
+    // The switch shows up in the audit log
+    const { entries } = await ok('/admin/audit?targetType=invite');
+    expect(entries.map((e) => e.action)).toEqual(expect.arrayContaining(['invite.create', 'invite.disable', 'invite.enable']));
+  });
 });
 
 describe('build-out additions', () => {
