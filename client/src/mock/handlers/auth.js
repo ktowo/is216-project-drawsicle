@@ -103,6 +103,18 @@ export function register(router) {
     return reactivated ? { user: userPublic(user), reactivated: true } : { user: userPublic(user) };
   });
 
+  // Checks an invite code without using it up (the "enter your invite code" page)
+  router.post('/auth/invite-check', (ctx) => {
+    const code = String(ctx.body?.inviteCode || '').trim().toUpperCase();
+    if (!code) throw httpError(400, 'Enter an invite code.', 'INVITE_REQUIRED');
+    const inviteCodes = Array.isArray(ctx.state.inviteCodes) ? ctx.state.inviteCodes : [];
+    const invite = inviteCodes.find((row) => row.code === code);
+    if (!invite) throw httpError(409, 'That invite code is not valid.', 'INVITE_INVALID');
+    if (invite.disabled) throw httpError(409, 'This invite code has been turned off.', 'INVITE_DISABLED');
+    if (invite.signups.length >= invite.capacity) throw httpError(409, 'This invite code has reached its capacity.', 'INVITE_FULL');
+    return { valid: true, inviteCode: invite.code };
+  });
+
   router.post('/auth/logout', (ctx) => {
     ctx.endSession();
     return { ok: true };

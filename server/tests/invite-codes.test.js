@@ -83,3 +83,27 @@ test('only admins can use the switch', async () => {
   await someone.agent.patch(`/api/admin/invites/${made.body.invite.id}`).send({ disabled: true }).expect(403);
   assert.equal(Boolean((await InviteCode.findById(made.body.invite.id)).disabled), false);
 });
+
+test('the invite code page can check a code without using it up', async () => {
+  const app = h.makeApp();
+  await InviteCode.create({ code: 'CHECK-OK', capacity: 1, signups: [], createdBy: new mongoose.Types.ObjectId() });
+  const ok = await h.request(app).post('/api/auth/invite-check').send({ inviteCode: ' check-ok ' }).expect(200);
+  assert.deepEqual(ok.body, { valid: true, inviteCode: 'CHECK-OK' });
+  // Checking twice still works: nothing was used up, so the one place is still free
+  await h.request(app).post('/api/auth/invite-check').send({ inviteCode: 'CHECK-OK' }).expect(200);
+  assert.equal((await InviteCode.findOne({ code: 'CHECK-OK' })).signups.length, 0);
+  await register(app, 'CHECK-OK', 'first@test.local').expect(201);
+});
+
+test('the invite code check says why a code does not work', async () => {
+  const app = h.makeApp();
+  const by = new mongoose.Types.ObjectId();
+  await InviteCode.create({ code: 'IS-OFF', capacity: 3, disabled: true, signups: [], createdBy: by });
+  await InviteCode.create({ code: 'IS-FULL', capacity: 1, signups: [{ email: 'x@test.local' }], createdBy: by });
+  const check = (inviteCode) => h.request(app).post('/api/auth/invite-check').send({ inviteCode });
+  assert.equal((await check('').expect(400)).body.code, 'INVITE_REQUIRED');
+  assert.equal((await check('NOPE-NOPE').expect(409)).body.code, 'INVITE_INVALID');
+  assert.equal((await check('IS-OFF').expect(409)).body.code, 'INVITE_DISABLED');
+  assert.equal((await check('IS-FULL').expect(409)).body.code, 'INVITE_FULL');
+  await h.request(app).post('/api/auth/invite-check').send({}).expect(400);
+});
