@@ -518,6 +518,16 @@ describe('admin invites', () => {
     expect((await fails(`/admin/invites/${invite.id}`, { method: 'PATCH', body: {} })).code).toBe('VALIDATION');
     expect((await fails(`/admin/invites/${invite.id}`, { method: 'PATCH', body: { disabled: 'yes' } })).code).toBe('VALIDATION');
 
+    // The invite code page checks codes the same way, without using one up
+    const check = (inviteCode) => ({ method: 'POST', body: { inviteCode } });
+    expect(await ok('/auth/invite-check', check(' switch-me '))).toEqual({ valid: true, inviteCode: 'SWITCH-ME' });
+    expect((await ok('/admin/invites')).invites.find((i) => i.code === 'SWITCH-ME').used).toBe(1);
+    expect(await fails('/auth/invite-check', check('NOPE-NOPE'))).toEqual({ status: 409, code: 'INVITE_INVALID' });
+    expect(await fails('/auth/invite-check', check(''))).toEqual({ status: 400, code: 'INVITE_REQUIRED' });
+    const { invite: second } = await ok('/admin/invites', { method: 'POST', body: { code: 'SWITCH-OFF', capacity: 1 } });
+    await ok(`/admin/invites/${second.id}`, { method: 'PATCH', body: { disabled: true } });
+    expect(await fails('/auth/invite-check', check('SWITCH-OFF'))).toEqual({ status: 409, code: 'INVITE_DISABLED' });
+
     // The switch shows up in the audit log
     const { entries } = await ok('/admin/audit?targetType=invite');
     expect(entries.map((e) => e.action)).toEqual(expect.arrayContaining(['invite.create', 'invite.disable', 'invite.enable']));

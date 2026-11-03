@@ -46,6 +46,8 @@ const termsHref = router.resolve('/terms').href;
 const guidelinesHref = router.resolve('/guidelines').href;
 
 onMounted(async () => {
+  // Coming from the "enter your invite code" page: the code is already filled in
+  if (typeof route.query.code === 'string') inviteCode.value = route.query.code.trim().toUpperCase().slice(0, 40);
   try {
     const data = await api('/auth/providers');
     providers.value = { google: Boolean(data.google), discord: Boolean(data.discord) };
@@ -200,6 +202,9 @@ async function submit() {
       <RouterLink :to="route.query.redirect ? { name: 'login', query: { redirect: redirectTo } } : '/login'">
         Log in
       </RouterLink>
+      <br />
+      Not sure your invite code works?
+      <RouterLink to="/invite">Check it first</RouterLink>
     </template>
   </AuthLayout>
 </template>
