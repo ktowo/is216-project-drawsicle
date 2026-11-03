@@ -54,6 +54,7 @@ export function register(router) {
     const inviteCodes = Array.isArray(state.inviteCodes) ? state.inviteCodes : (state.inviteCodes = []);
     const invite = inviteCodes.find((row) => row.code === inviteCode);
     if (!invite) throw httpError(409, 'That invite code is not valid.', 'INVITE_INVALID');
+    if (invite.disabled) throw httpError(409, 'This invite code has been turned off.', 'INVITE_DISABLED');
     if (invite.signups.length >= invite.capacity) throw httpError(409, 'This invite code has reached its capacity.', 'INVITE_FULL');
 
     const now = ctx.now.toISOString();

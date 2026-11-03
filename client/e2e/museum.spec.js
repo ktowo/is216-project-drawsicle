@@ -5,7 +5,8 @@ import { logIn } from './helpers.js';
 test('walk the museum, look at a gift, sit and chat', async ({ page }) => {
   await logIn(page, 'mika');
   await page.goto('/#/museum');
-  await page.getByRole('link', { name: /Spring Bloom Exchange/ }).click();
+  // The wing card, not the notification toast that can also name this exchange and links to its results
+  await page.locator('a[href*="#/museum/"]').filter({ hasText: 'Spring Bloom Exchange' }).click();
   await expect(page.getByRole('application', { name: /Museum room 1 of 1/ })).toBeVisible();
 
   // Clicking a picture walks up to it and opens a closer look

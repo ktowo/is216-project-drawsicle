@@ -28,13 +28,14 @@ async function reserveInvite(code, email) {
   if (!code && process.env.NODE_ENV === 'test') return null;
   if (!code) throw httpError(400, 'Enter an invite code.', 'INVITE_REQUIRED');
   const invite = await InviteCode.findOneAndUpdate(
-    { code, $expr: { $lt: [{ $size: '$signups' }, '$capacity'] } },
+    { code, disabled: { $ne: true }, $expr: { $lt: [{ $size: '$signups' }, '$capacity'] } },
     { $push: { signups: { email } } },
     { new: true }
   );
   if (!invite) {
-    const exists = await InviteCode.exists({ code });
-    throw httpError(409, exists ? 'This invite code has reached its capacity.' : 'That invite code is not valid.', exists ? 'INVITE_FULL' : 'INVITE_INVALID');
+    const found = await InviteCode.findOne({ code }).select('disabled');
+    if (found?.disabled) throw httpError(409, 'This invite code has been turned off.', 'INVITE_DISABLED');
+    throw httpError(409, found ? 'This invite code has reached its capacity.' : 'That invite code is not valid.', found ? 'INVITE_FULL' : 'INVITE_INVALID');
   }
   return invite;
 }
