@@ -283,19 +283,31 @@ export function register(router) {
     if (!/^[A-Z0-9_-]{3,40}$/.test(code)) throw httpError(400, 'Use 3-40 letters, numbers, hyphens or underscores.', 'VALIDATION');
     if (!Number.isInteger(capacity) || capacity < 1 || capacity > 10000) throw httpError(400, 'Capacity must be a whole number from 1 to 10,000.', 'VALIDATION');
     if (inviteCodes.some((invite) => invite.code === code)) throw httpError(409, 'That invite code already exists.', 'INVITE_TAKEN');
-    const invite = { id: newId(), code, capacity, signups: [], createdAt: ctx.now.toISOString(), updatedAt: ctx.now.toISOString() };
+    const invite = { id: newId(), code, capacity, disabled: false, signups: [], createdAt: ctx.now.toISOString(), updatedAt: ctx.now.toISOString() };
     inviteCodes.push(invite);
     audit(ctx, actor, 'invite.create', 'invite', invite.id, code, `Capacity: ${capacity}`);
     return { invite: { ...invite, used: 0 } };
   });
 
   router.patch('/admin/invites/:inviteId', (ctx) => {
-    allowed(ctx, 'invites.manage');
+    const actor = allowed(ctx, 'invites.manage');
     const invite = invitesOf(ctx.state).find((row) => row.id === ctx.params.inviteId);
     if (!invite) throw httpError(404, 'Invite code not found.', 'NOT_FOUND');
-    const capacity = Number(ctx.body?.capacity);
-    if (!Number.isInteger(capacity) || capacity < invite.signups.length || capacity > 10000) throw httpError(400, `Capacity must be a whole number from ${invite.signups.length} to 10,000.`, 'VALIDATION');
-    invite.capacity = capacity;
+    const hasCapacity = ctx.body?.capacity !== undefined;
+    const hasDisabled = ctx.body?.disabled !== undefined;
+    if (!hasCapacity && !hasDisabled) throw httpError(400, 'Send a capacity or turn the code on or off.', 'VALIDATION');
+    if (hasDisabled && typeof ctx.body.disabled !== 'boolean') throw httpError(400, 'disabled must be true or false.', 'VALIDATION');
+    if (hasCapacity) {
+      const capacity = Number(ctx.body.capacity);
+      if (!Number.isInteger(capacity) || capacity < invite.signups.length || capacity > 10000) throw httpError(400, `Capacity must be a whole number from ${invite.signups.length} to 10,000.`, 'VALIDATION');
+      invite.capacity = capacity;
+    }
+    if (hasDisabled) {
+      if (Boolean(invite.disabled) !== ctx.body.disabled) {
+        audit(ctx, actor, ctx.body.disabled ? 'invite.disable' : 'invite.enable', 'invite', invite.id, invite.code, ctx.body.disabled ? 'Turned off' : 'Turned on');
+      }
+      invite.disabled = ctx.body.disabled;
+    }
     invite.updatedAt = ctx.now.toISOString();
     return { invite: { ...invite, used: invite.signups.length } };
   });
@@ -647,7 +659,7 @@ export function register(router) {
     const { state, query } = ctx;
     let rows = [...state.audit];
     const targetType = queryParam(query, 'targetType');
-    if (['user', 'event', 'report', 'chat'].includes(targetType)) rows = rows.filter((e) => e.targetType === targetType);
+    if (['user', 'event', 'report', 'chat', 'invite'].includes(targetType)) rows = rows.filter((e) => e.targetType === targetType);
     rows.sort(byNewest);
     const { rows: page, ...meta } = pageOf(rows, paging(query));
     return {

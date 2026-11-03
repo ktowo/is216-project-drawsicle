@@ -39,3 +39,18 @@ test('says so when the code can not be copied', async ({ page }) => {
   await expect(page.getByText("Couldn't copy the invite code.")).toBeVisible();
   await expect(page.getByText('Invite code copied.')).toHaveCount(0);
 });
+
+test('an invite code can be turned off and on again', async ({ page }) => {
+  await openInvites(page);
+  await expect(page.getByText('Off', { exact: true })).toHaveCount(0);
+
+  await page.getByRole('button', { name: /Turn off/ }).click();
+  await expect(page.getByText('Off', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Turn on/ })).toBeVisible();
+  // Turning it off keeps the number of sign-ups and the capacity
+  await expect(page.getByText('0 / 25')).toBeVisible();
+
+  await page.getByRole('button', { name: /Turn on/ }).click();
+  await expect(page.getByText('Off', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Turn off/ })).toBeVisible();
+});
