@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue';
-import { Copy, Plus, Ticket, Users } from 'lucide-vue-next';
+import { Copy, Plus, Power, Ticket, Users } from 'lucide-vue-next';
 import { api } from '@/api';
 import { toast } from '@/stores/toast';
 import LoadingBlock from '@/components/ui/LoadingBlock.vue';
@@ -56,6 +56,15 @@ async function saveCapacity(invite) {
     toast.error(e.message);
   }
 }
+async function setDisabled(invite, disabled) {
+  try {
+    await api(`/admin/invites/${invite.id}`, { method: 'PATCH', body: { disabled } });
+    toast.success(disabled ? `${invite.code} is turned off.` : `${invite.code} is turned on.`);
+    await load();
+  } catch (e) {
+    toast.error(e.message);
+  }
+}
 onMounted(load);
 </script>
 
@@ -83,9 +92,13 @@ onMounted(load);
       <li v-for="invite in data.invites" :key="invite.id" class="card p-5 list-none">
         <div class="flex flex-wrap items-center gap-3">
           <Ticket :size="20" class="text-brand" />
-          <code class="font-semibold">{{ invite.code }}</code>
+          <code class="font-semibold" :class="{ 'line-through opacity-60': invite.disabled }">{{ invite.code }}</code>
+          <span v-if="invite.disabled" class="badge">Off</span>
           <button class="btn btn-outline btn-sm" @click="copy(invite.code)"><Copy :size="15" /> Copy</button>
           <span class="ml-auto badge"><Users :size="14" /> {{ invite.used }} / {{ invite.capacity }}</span>
+          <button class="btn btn-outline btn-sm" :aria-label="`${invite.disabled ? 'Turn on' : 'Turn off'} ${invite.code}`" @click="setDisabled(invite, !invite.disabled)">
+            <Power :size="15" /> {{ invite.disabled ? 'Turn on' : 'Turn off' }}
+          </button>
           <button class="btn btn-outline btn-sm" @click="toggleEditing(invite)">Set capacity</button>
         </div>
         <form v-if="editing === invite.id" class="mt-3 flex items-end gap-2" @submit.prevent="saveCapacity(invite)">
