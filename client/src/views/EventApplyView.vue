@@ -692,6 +692,7 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
                 id="apply-cannot-draw"
                 v-model="form.cannotDraw"
                 :max="LIMITS.tags"
+                :load-suggestion="true"
                 placeholder="Add a species or tag"
               />
             </FormField>
