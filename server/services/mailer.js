@@ -17,7 +17,7 @@ function getTransporter() {
       auth: process.env.SMTP_USER
         ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
         : undefined,
-      tls: { rejectUnauthorized: false }
+      tls: { rejectUnauthorized: process.env.NODE_ENV === 'production' }
     });
   }
   return transporter;
