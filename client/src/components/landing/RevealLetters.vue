@@ -246,7 +246,7 @@ const warned = (g) => (g.submission.contentWarnings || []).length > 0;
 @keyframes turn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } }
 @media (max-width: 700px) {
   .letter.side { display: none; }
-  .letters { min-height: 400px; }
+  .letters { min-height: 280px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .letter.side { transition: none; }
