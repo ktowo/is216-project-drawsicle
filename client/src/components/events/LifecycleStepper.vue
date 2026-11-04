@@ -33,6 +33,7 @@ function stateOf(index) {
         class="step"
         :class="stateOf(i)"
         :aria-current="i === current ? 'step' : undefined"
+        :title="`${step.label}: ${step.detail}`"
       >
         <span class="dot" aria-hidden="true">
           <Check v-if="stateOf(i) === 'done'" :size="14" :stroke-width="3" />

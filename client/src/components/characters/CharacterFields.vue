@@ -6,6 +6,7 @@ import FormField from '@/components/ui/FormField.vue';
 import TagInput from '@/components/ui/TagInput.vue';
 import ChoiceChips from '@/components/ui/ChoiceChips.vue';
 import ColourSwatches from './ColourSwatches.vue';
+import { TAG_SUGGESTIONS } from '@/utils/characters.js';
 
 // Every character input. v-model is the object from emptyCharacter() in ./character-form.js.
 // Each change emits a new object.
@@ -17,8 +18,6 @@ const props = defineProps({
   modelValue: { type: Object, required: true },
   errors: { type: Object, default: () => ({}) },
   idPrefix: { type: String, default: '' },
-  // Tags to suggest first, e.g. ones the person already uses on their other characters
-  tagSuggestions: { type: Array, default: () => [] },
   extended: { type: Boolean, default: false },
   // Folder names already in use, offered as the folder is typed
   folderSuggestions: { type: Array, default: () => [] },
@@ -28,26 +27,7 @@ const emit = defineEmits(['update:modelValue']);
 const prefix = props.idPrefix || `character-${useId()}`;
 const fid = (name) => `${prefix}-${name}`;
 
-const TAG_SUGGESTIONS = [
-  'humanoid',
-  'anthro',
-  'feral',
-  'furry',
-  'scalie',
-  'mecha',
-  'robot',
-  'monster',
-  'fantasy',
-  'sci-fi',
-  'wings',
-  'armour',
-  'complex markings',
-  'gore',
-];
-
 const PRONOUNS = ['she/her', 'he/him', 'they/them', 'she/they', 'he/they', 'it/its', 'any pronouns'];
-
-const suggestions = computed(() => [...new Set([...props.tagSuggestions, ...TAG_SUGGESTIONS])]);
 
 const form = computed(() => props.modelValue || {});
 const links = computed(() => form.value.referenceLinks || []);
@@ -197,7 +177,7 @@ const count = (value) => String(value || '').length;
           :id="fid('tags')"
           :model-value="form.tags || []"
           :max="LIMITS.tags"
-          :suggestions="suggestions"
+          :load-suggestion="true"
           placeholder="e.g. feral, wings (Enter to add)"
           :aria-describedby="describedby"
           @update:model-value="update('tags', $event)"
