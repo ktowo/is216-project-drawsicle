@@ -1,7 +1,8 @@
 <script setup>
-import { ref, computed, useId } from 'vue';
+import { ref, computed, useId, onMounted } from 'vue';
 import { X, Plus } from 'lucide-vue-next';
 import { normalizeTag } from '@shared/constants.mjs';
+import { TAG_SUGGESTIONS } from '@/utils/characters';
 
 // Chips input for short tags. Enter or comma adds, Backspace on an empty input removes the last one.
 // Tags are normalised (lowercase, trimmed) and de-duplicated.
@@ -9,7 +10,7 @@ const props = defineProps({
   modelValue: { type: Array, default: () => [] },
   placeholder: { type: String, default: 'Type and press Enter' },
   max: { type: Number, default: 20 },
-  suggestions: { type: Array, default: () => [] },
+  loadSuggestion: { type: Boolean, default: false },
   id: { type: String, default: '' },
   disabled: { type: Boolean, default: false },
 });
@@ -24,9 +25,24 @@ const input = ref(null);
 const tags = computed(() => (Array.isArray(props.modelValue) ? props.modelValue : []));
 const full = computed(() => tags.value.length >= props.max);
 
+// Tags to suggest first, e.g. ones the person already uses on their other characters
+const ownTags = ref([]);
+async function loadOwnTags() {
+  try {
+    const { characters = [] } = await api('/characters?archived=all');
+    const counts = new Map();
+    for (const c of characters) for (const tag of c.tags || []) counts.set(tag, (counts.get(tag) || 0) + 1);
+    ownTags.value = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([tag]) => tag);
+  } catch {
+    // Suggestions are a nicety; the built-in ones still show
+  }
+}
+
+const suggestions = ref([]);
+
 const visibleSuggestions = computed(() => {
   const typed = normalizeTag(text.value);
-  return props.suggestions
+  return suggestions.value
     .map((s) => normalizeTag(s))
     .filter((s, i, all) => s && all.indexOf(s) === i && !tags.value.includes(s))
     .filter((s) => !typed || s.includes(typed))
@@ -105,6 +121,14 @@ function pickSuggestion(tag) {
   text.value = '';
   input.value?.focus();
 }
+
+onMounted(() => {
+  if (props.loadSuggestion) {
+    suggestions.value = [...new Set([...ownTags.value, ...TAG_SUGGESTIONS])];
+    loadOwnTags();
+  }
+})
+
 </script>
 
 <template>

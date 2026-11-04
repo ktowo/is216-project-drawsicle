@@ -1,0 +1,16 @@
+export const TAG_SUGGESTIONS = [
+  'humanoid',
+  'anthro',
+  'feral',
+  'furry',
+  'scalie',
+  'mecha',
+  'robot',
+  'monster',
+  'fantasy',
+  'sci-fi',
+  'wings',
+  'armour',
+  'complex markings',
+  'gore',
+]

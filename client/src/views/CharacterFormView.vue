@@ -62,20 +62,6 @@ const preview = computed(() => ({
   archived: Boolean(character.value?.archived),
 }));
 
-// Tags from the rest of the library come first in the suggestions, so they stay consistent
-const ownTags = ref([]);
-async function loadOwnTags() {
-  try {
-    const { characters = [] } = await api('/characters?archived=all');
-    const counts = new Map();
-    for (const c of characters) for (const tag of c.tags || []) counts.set(tag, (counts.get(tag) || 0) + 1);
-    ownTags.value = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([tag]) => tag);
-  } catch {
-    // Suggestions are a nicety; the built-in ones still show
-  }
-}
-loadOwnTags();
-
 // Folder names to suggest, and how many other characters are out as pets (there's a limit)
 const folders = ref([]);
 const petsOut = ref([]);
@@ -326,7 +312,6 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
           v-model="form"
           :errors="errors"
           :id-prefix="ID_PREFIX"
-          :tag-suggestions="ownTags"
           :folder-suggestions="folders"
           extended
         />
