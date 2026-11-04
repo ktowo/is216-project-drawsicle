@@ -71,6 +71,15 @@ const sharing = ref(false);
 
 const invite = computed(() => inviteFrom(route));
 
+// -- Illustration --
+const ILLUSTRATION = {
+  draft: "/event-lifecycle/ds-draft.png",
+  open: "/event-lifecycle/ds-sign-up.png",
+  matching: "/event-lifecycle/ds-matching.png",
+  active: "/event-lifecycle/ds-making-gifts.png",
+  completed: "/event-lifecycle/ds-reveal.png"
+}
+
 // How artists rated the person who created this event (they have run others before). Nice to have:
 // if it can't load, the line just doesn't show.
 const hostRating = ref(null); // { organiser, summary }
@@ -336,6 +345,76 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
 
       <div class="layout">
         <div class="main-col">
+          
+          <div class="row-panels">
+            <section class="card panel dates-panel" aria-labelledby="dates-heading">
+              <h2 id="dates-heading" class="panel-title small-title">Key dates</h2>
+              <dl class="dates">
+                <div class="date-row">
+                  <dt>Sign-ups close</dt>
+                  <dd>
+                    <span class="date">{{ formatDateTime(event.signupDeadline) }}</span>
+                    <DeadlineChip v-if="['draft', 'open'].includes(event.status)" :at="event.signupDeadline" label="Sign-ups close" />
+                    <span v-if="timeInZone(event.signupDeadline, event.timeZone)" class="zone">
+                      That's {{ timeInZone(event.signupDeadline, event.timeZone) }} for the organisers.
+                    </span>
+                  </dd>
+                </div>
+                <div class="date-row">
+                  <dt>Gifts due</dt>
+                  <dd>
+                    <span class="date">{{ formatDateTime(event.submissionDeadline) }}</span>
+                    <DeadlineChip v-if="event.status !== 'completed'" :at="event.submissionDeadline" label="Submissions close" />
+                    <span v-if="timeInZone(event.submissionDeadline, event.timeZone)" class="zone">
+                      That's {{ timeInZone(event.submissionDeadline, event.timeZone) }} for the organisers.
+                    </span>
+                  </dd>
+                </div>
+                <div v-if="event.completedAt" class="date-row">
+                  <dt>Revealed</dt>
+                  <dd><span class="date">{{ formatDateTime(event.completedAt) }}</span></dd>
+                </div>
+              </dl>
+              <button
+                v-if="calendarEntries.length"
+                type="button"
+                class="btn btn-outline btn-sm btn-block calendar-btn"
+                @click="addToCalendar"
+              >
+                <CalendarPlus :size="16" aria-hidden="true" /> Add to calendar
+              </button>
+              <p v-else-if="event.status !== 'completed'" class="muted small calendar-note">
+                Both deadlines have passed, so there's nothing to add to your calendar.
+              </p>
+            </section>
+  
+            <section class="card panel" aria-labelledby="people-heading">
+              <h2 id="people-heading" class="panel-title small-title">Participants</h2>
+              <p class="capacity-line">
+                <Users :size="18" aria-hidden="true" />
+                <strong>{{ capacity.count }}</strong>
+                <span class="muted">/ {{ capacity.max }} spots taken</span>
+              </p>
+              <div
+                class="bar"
+                role="progressbar"
+                :aria-valuenow="capacity.count"
+                aria-valuemin="0"
+                :aria-valuemax="capacity.max"
+                :aria-valuetext="`${capacity.count} of ${capacity.max} spots taken`"
+                aria-label="Spots taken"
+              >
+                <span class="bar-fill" :style="{ width: `${capacity.percent}%` }" />
+              </div>
+              <p class="muted small">
+                <template v-if="event.status === 'open' && capacity.left">{{ pluralize(capacity.left, 'spot') }} left. </template>
+                <template v-else-if="event.status === 'open'">Every spot is taken. </template>
+                Needs at least {{ pluralize(event.minParticipants, 'participant') }} to run.
+                <template v-if="event.requireApproval"> Organisers review each sign-up.</template>
+              </p>
+            </section>
+          </div>
+
           <section class="card panel" aria-labelledby="about-heading">
             <h2 id="about-heading" class="panel-title">About this event</h2>
             <p v-if="event.description" class="prose">{{ event.description }}</p>
@@ -392,6 +471,8 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
               <span class="muted small">Your sign-up</span>
               <StatusBadge kind="application" :status="applicationStatus" />
             </div>
+
+            <img class="illustration" v-if="ILLUSTRATION[event.status]" :src="ILLUSTRATION[event.status]" />
 
             <div v-if="note" class="note" :class="`tone-${note.tone}`" role="status">
               <component :is="noteIcon" :size="20" class="note-icon" aria-hidden="true" />
@@ -460,73 +541,6 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
                 look="link"
               />
             </div>
-          </section>
-
-          <section class="card panel dates-panel" aria-labelledby="dates-heading">
-            <h2 id="dates-heading" class="panel-title small-title">Key dates</h2>
-            <dl class="dates">
-              <div class="date-row">
-                <dt>Sign-ups close</dt>
-                <dd>
-                  <span class="date">{{ formatDateTime(event.signupDeadline) }}</span>
-                  <DeadlineChip v-if="['draft', 'open'].includes(event.status)" :at="event.signupDeadline" label="Sign-ups close" />
-                  <span v-if="timeInZone(event.signupDeadline, event.timeZone)" class="zone">
-                    That's {{ timeInZone(event.signupDeadline, event.timeZone) }} for the organisers.
-                  </span>
-                </dd>
-              </div>
-              <div class="date-row">
-                <dt>Gifts due</dt>
-                <dd>
-                  <span class="date">{{ formatDateTime(event.submissionDeadline) }}</span>
-                  <DeadlineChip v-if="event.status !== 'completed'" :at="event.submissionDeadline" label="Submissions close" />
-                  <span v-if="timeInZone(event.submissionDeadline, event.timeZone)" class="zone">
-                    That's {{ timeInZone(event.submissionDeadline, event.timeZone) }} for the organisers.
-                  </span>
-                </dd>
-              </div>
-              <div v-if="event.completedAt" class="date-row">
-                <dt>Revealed</dt>
-                <dd><span class="date">{{ formatDateTime(event.completedAt) }}</span></dd>
-              </div>
-            </dl>
-            <button
-              v-if="calendarEntries.length"
-              type="button"
-              class="btn btn-outline btn-sm btn-block calendar-btn"
-              @click="addToCalendar"
-            >
-              <CalendarPlus :size="16" aria-hidden="true" /> Add to calendar
-            </button>
-            <p v-else-if="event.status !== 'completed'" class="muted small calendar-note">
-              Both deadlines have passed, so there's nothing to add to your calendar.
-            </p>
-          </section>
-
-          <section class="card panel" aria-labelledby="people-heading">
-            <h2 id="people-heading" class="panel-title small-title">Participants</h2>
-            <p class="capacity-line">
-              <Users :size="18" aria-hidden="true" />
-              <strong>{{ capacity.count }}</strong>
-              <span class="muted">/ {{ capacity.max }} spots taken</span>
-            </p>
-            <div
-              class="bar"
-              role="progressbar"
-              :aria-valuenow="capacity.count"
-              aria-valuemin="0"
-              :aria-valuemax="capacity.max"
-              :aria-valuetext="`${capacity.count} of ${capacity.max} spots taken`"
-              aria-label="Spots taken"
-            >
-              <span class="bar-fill" :style="{ width: `${capacity.percent}%` }" />
-            </div>
-            <p class="muted small">
-              <template v-if="event.status === 'open' && capacity.left">{{ pluralize(capacity.left, 'spot') }} left. </template>
-              <template v-else-if="event.status === 'open'">Every spot is taken. </template>
-              Needs at least {{ pluralize(event.minParticipants, 'participant') }} to run.
-              <template v-if="event.requireApproval"> Organisers review each sign-up.</template>
-            </p>
           </section>
 
           <section class="card panel" aria-labelledby="types-heading">
@@ -683,11 +697,17 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
   align-items: start;
 }
 .main-col,
-.side-col {
+.side-col,
+.row-panels {
   display: flex;
-  flex-direction: column;
   gap: 24px;
   min-width: 0;
+}
+.main-col, .side-col {
+  flex-direction: column;
+}
+.row-panels {
+  flex-direction: row;
 }
 .panel {
   padding: 26px 28px;
@@ -940,6 +960,10 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
 }
+.illustration {
+  max-width: 20rem;
+  filter: drop-shadow(0 0 1rem var(--pink-line));
+}
 /* One column on small screens, with the actions and dates first so nobody scrolls past the description to sign up */
 @media (max-width: 960px) {
   .layout {
@@ -951,9 +975,6 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
     display: contents;
   }
   .action-panel {
-    order: -2;
-  }
-  .dates-panel {
     order: -1;
   }
 }
@@ -966,8 +987,12 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
   }
   .layout,
   .main-col,
-  .side-col {
+  .side-col,
+  .row-panels {
     gap: 16px;
+  }
+  .row-panels {
+    flex-direction: column;
   }
   .layout {
     margin-top: 16px;
