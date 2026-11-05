@@ -22,7 +22,6 @@ import {
   BellRing,
 } from 'lucide-vue-next';
 import EventBanner from '@/components/events/EventBanner.vue';
-import LifecycleStepper from '@/components/events/LifecycleStepper.vue';
 import PersonLink from '@/components/events/PersonLink.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import DeadlineChip from '@/components/ui/DeadlineChip.vue';
@@ -50,6 +49,8 @@ import {
   absoluteEventUrl,
   hasActiveApplication,
   shareOrCopy,
+  isParticipant,
+  eventLink,
 } from '@/utils/events';
 import { eventCalendarEntries, downloadIcs } from '@/utils/calendar';
 import AnnouncementsPanel from '@/components/events/AnnouncementsPanel.vue';
@@ -134,6 +135,26 @@ const canWithdraw = computed(() => event.value && signupsOpen(event.value) && ha
 const applicationStatus = computed(() => event.value?.viewer?.applicationStatus || null);
 const isPrivate = computed(() => event.value?.publicity === 'private');
 const organizers = computed(() => event.value?.organizers || []);
+
+// Who you are in this event, said plainly (organisers can also take part)
+const myRole = computed(() => {
+  const ev = event.value;
+  if (!ev?.viewer) return null;
+  const organising = Boolean(ev.viewer.isOrganizer);
+  const taking = isParticipant(ev);
+  if (organising && taking) return { text: "You're organising this and taking part", manage: true };
+  if (organising) return { text: "You're organising this event", manage: true };
+  if (taking) return { text: "You're taking part as an artist", manage: false };
+  return null;
+});
+
+// The whole exchange from an artist's side, for people who've never been in one
+const HOW_IT_WORKS = [
+  { key: 'open', title: 'Sign up', text: 'Pick what you can make, offer a character, and say what you would love to get.' },
+  { key: 'matching', title: 'Get matched', text: 'When sign-ups close, everyone is paired with someone whose wishes they can make.' },
+  { key: 'active', title: 'Make a secret gift', text: 'You see who you are making a gift for. They don’t know it’s you.' },
+  { key: 'completed', title: 'Reveal day', text: 'Everyone opens their gift at once and finds out who made it.' },
+];
 
 const seasonQuery = computed(() =>
   event.value?.season && event.value.season !== 'other' ? { path: '/events', query: { season: event.value.season, status: 'all' } } : null
@@ -364,7 +385,7 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
                   <dt>Gifts due</dt>
                   <dd>
                     <span class="date">{{ formatDateTime(event.submissionDeadline) }}</span>
-                    <DeadlineChip v-if="event.status !== 'completed'" :at="event.submissionDeadline" label="Submissions close" />
+                    <DeadlineChip v-if="event.status !== 'completed'" :at="event.submissionDeadline" label="Gifts due" />
                     <span v-if="timeInZone(event.submissionDeadline, event.timeZone)" class="zone">
                       That's {{ timeInZone(event.submissionDeadline, event.timeZone) }} for the organisers.
                     </span>
@@ -424,6 +445,18 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
             </ul>
           </section>
 
+          <section class="card panel" aria-labelledby="how-heading">
+            <h2 id="how-heading" class="panel-title">How this exchange works</h2>
+            <ol class="how-list">
+              <li v-for="step in HOW_IT_WORKS" :key="step.key" :class="{ now: step.key === event.status }">
+                <span class="how-title">
+                  {{ step.title }}<span v-if="step.key === event.status" class="how-now">Now</span>
+                </span>
+                <span class="how-text">{{ step.text }}</span>
+              </li>
+            </ol>
+          </section>
+
           <section class="card panel" aria-labelledby="rules-heading">
             <h2 id="rules-heading" class="panel-title">
               <ScrollText :size="22" class="title-icon" aria-hidden="true" /> Rules
@@ -443,10 +476,6 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
             :event="event"
           />
 
-          <section class="card panel" aria-labelledby="progress-heading">
-            <h2 id="progress-heading" class="panel-title">Progress</h2>
-            <LifecycleStepper :status="event.status" />
-          </section>
 
           <section v-if="organizers.length" class="card panel" aria-labelledby="org-heading">
             <h2 id="org-heading" class="panel-title">{{ organizers.length === 1 ? 'Organiser' : 'Organisers' }}</h2>
@@ -467,6 +496,10 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
 
         <aside class="side-col">
           <section class="card panel action-panel" aria-label="Your place in this event">
+            <p v-if="myRole" class="my-role">
+              <span>{{ myRole.text }}</span>
+              <RouterLink v-if="myRole.manage" :to="eventLink(event, '/manage')" class="my-role-link">Manage</RouterLink>
+            </p>
             <div v-if="applicationStatus && applicationStatus !== 'withdrawn'" class="app-status">
               <span class="muted small">Your sign-up</span>
               <StatusBadge kind="application" :status="applicationStatus" />
@@ -604,6 +637,54 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
 </template>
 
 <style scoped>
+.how-list {
+  margin: 0;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.how-list li::marker {
+  font-weight: 700;
+  color: var(--muted);
+}
+.how-list li.now::marker {
+  color: var(--pink-dark);
+}
+.how-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+.how-now {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--pink-soft);
+  color: var(--pink-dark);
+  font-size: 0.75rem;
+}
+.how-text {
+  display: block;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+.my-role {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--hover);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.my-role-link {
+  font-weight: 700;
+  color: var(--pink-dark);
+}
 .back-link {
   display: inline-flex;
   align-items: center;
