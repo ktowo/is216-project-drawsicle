@@ -852,15 +852,15 @@ const openAfterSave = ref(false);
 // ---- Section nav ----
 const sectionList = computed(() => [
   { id: 'part-basics', label: 'Basics', fields: ['name', 'theme', 'season', 'description', 'rules', 'tags'] },
-  { id: 'part-community', label: 'Community', fields: ['platform', 'platformName', 'platformLink'] },
   { id: 'part-dates', label: 'Dates', fields: ['signupDeadline', 'submissionDeadline'] },
   {
     id: 'part-people',
     label: 'Participants',
     fields: ['minParticipants', 'maxParticipants', 'allowedTypes', 'requireApproval', 'adultOnly'],
   },
-  { id: 'part-matching', label: 'Matching', fields: ['autoMatch'] },
   { id: 'part-visibility', label: 'Visibility', fields: ['publicity'] },
+  { id: 'part-community', label: 'Community', fields: ['platform', 'platformName', 'platformLink'] },
+  { id: 'part-matching', label: 'Matching', fields: ['autoMatch'] },
   ...(isEdit.value && event.value ? [{ id: 'part-banner', label: 'Banner', fields: [] }] : []),
 ]);
 const sections = computed(() =>
@@ -1277,104 +1277,6 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
               </FormField>
             </section>
 
-            <!-- Community -->
-            <section v-show="!compact" id="part-community" class="card section" aria-labelledby="sec-community">
-              <h2 id="sec-community" class="section-title" tabindex="-1">Community</h2>
-              <p class="hint section-hint">Where your participants hang out, so they know where to find each other.</p>
-
-              <div class="pair">
-                <FormField label="Platform" for-id="ev-platform" :error="errors.platform">
-                  <template #default="{ describedby }">
-                    <div class="input-wrap">
-                      <select id="ev-platform" v-model="form.platform" class="select" :aria-describedby="describedby">
-                        <option v-for="p in PLATFORMS" :key="p.value" :value="p.value">{{ p.label }}</option>
-                      </select>
-                    </div>
-                  </template>
-                </FormField>
-
-                <FormField
-                  label="Community name"
-                  for-id="ev-platform-name"
-                  hint="Optional."
-                  :error="errors.platformName"
-                >
-                  <template #default="{ describedby, invalid }">
-                    <div class="input-wrap" :class="{ 'is-invalid': invalid }">
-                      <input
-                        id="ev-platform-name"
-                        v-model="form.platformName"
-                        class="input"
-                        type="text"
-                        autocomplete="off"
-                        :placeholder="platformNamePlaceholder"
-                        :maxlength="PLATFORM_TEXT_MAX + 20"
-                        :aria-invalid="invalid"
-                        :aria-describedby="describedby"
-                      />
-                    </div>
-                  </template>
-                </FormField>
-              </div>
-
-              <FormField
-                label="Community link"
-                for-id="ev-platform-link"
-                :hint="`Optional. An invite or page link for ${communityLabel}, starting with https://`"
-                :error="errors.platformLink"
-              >
-                <template #default="{ describedby, invalid }">
-                  <div class="input-wrap" :class="{ 'is-invalid': invalid }">
-                    <input
-                      id="ev-platform-link"
-                      v-model="form.platformLink"
-                      class="input"
-                      type="url"
-                      inputmode="url"
-                      autocomplete="off"
-                      placeholder="https://"
-                      :maxlength="PLATFORM_LINK_MAX + 20"
-                      :aria-invalid="invalid"
-                      :aria-describedby="describedby"
-                    />
-                  </div>
-                </template>
-              </FormField>
-
-              <FormField
-                label="Discord announcements"
-                for-id="ev-discord-webhook"
-                hint="Optional. Paste a channel webhook (Server settings, Integrations, Webhooks) and we'll post when sign-ups open and close, when matches are out and at the reveal. Only organisers see it."
-                :error="errors.discordWebhookUrl"
-              >
-                <template #default="{ describedby, invalid }">
-                  <div class="input-wrap" :class="{ 'is-invalid': invalid }">
-                    <input
-                      id="ev-discord-webhook"
-                      v-model="form.discordWebhookUrl"
-                      class="input"
-                      type="url"
-                      inputmode="url"
-                      autocomplete="off"
-                      placeholder="https://discord.com/api/webhooks/..."
-                      maxlength="300"
-                      :aria-invalid="invalid"
-                      :aria-describedby="describedby"
-                    />
-                  </div>
-                  <button
-                    v-if="canTestDiscord"
-                    type="button"
-                    class="btn btn-outline btn-xs discord-test"
-                    :disabled="testingDiscord"
-                    @click="testDiscord"
-                  >
-                    Send a test post
-                  </button>
-                </template>
-              </FormField>
-            </section>
-
             <!-- Dates -->
             <section id="part-dates" class="card section" aria-labelledby="sec-dates">
               <h2 id="sec-dates" class="section-title" tabindex="-1">Dates</h2>
@@ -1569,6 +1471,165 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
               </div>
             </section>
 
+            <!-- Visibility -->
+            <section id="part-visibility" class="card section" aria-labelledby="sec-visibility">
+              <h2 id="sec-visibility" class="section-title" tabindex="-1">Who can see it</h2>
+              <p class="hint section-hint">
+                {{ lockedHint || 'Who can find and join the event once sign-ups are open.' }}
+              </p>
+
+              <div class="publicity" role="radiogroup" aria-labelledby="sec-visibility">
+                <label class="choice" :class="{ on: form.publicity === 'public', locked: openOnlyLocked }">
+                  <input
+                    id="ev-publicity-public"
+                    v-model="form.publicity"
+                    type="radio"
+                    name="publicity"
+                    value="public"
+                    :disabled="openOnlyLocked"
+                  />
+                  <span class="choice-icon" aria-hidden="true"><Globe :size="20" /></span>
+                  <span class="choice-text">
+                    <span class="choice-title">Public</span>
+                    <span class="choice-sub">Listed on Browse events. Anyone with an account can sign up.</span>
+                  </span>
+                </label>
+                <label class="choice" :class="{ on: form.publicity === 'private', locked: openOnlyLocked }">
+                  <input
+                    id="ev-publicity-private"
+                    v-model="form.publicity"
+                    type="radio"
+                    name="publicity"
+                    value="private"
+                    :disabled="openOnlyLocked"
+                  />
+                  <span class="choice-icon" aria-hidden="true"><Lock :size="20" /></span>
+                  <span class="choice-text">
+                    <span class="choice-title">Private, invite only</span>
+                    <span class="choice-sub">
+                      Hidden from listings. Only people with your invite link can see it and sign up.
+                    </span>
+                  </span>
+                </label>
+              </div>
+              <p v-if="errors.publicity" class="field-error m-0 mt-2" role="alert">{{ errors.publicity }}</p>
+            </section>
+
+            <button id="more-options" aria-labelledby="sec-more-option"
+              v-if="!isEdit"
+              type="button"
+              class="card more-options"
+              :aria-expanded="showMore ? 'true' : 'false'"
+              @click="showMore = !showMore; jumpTo({id: 'part-visibility'})"
+            >
+              <span class="min-w-0 flex-1 text-left">
+                <h2 id="sec-more-option" class="section-title" tabindex="-1">{{ showMore ? 'Fewer options' : 'More options' }}</h2>
+                <span class="block text-sm text-cocoa">
+                  Community links, Discord announcements and how matching works. The defaults are fine for most
+                  exchanges: matches are made when sign-ups close, and you check them before anyone is told.
+                </span>
+              </span>
+              <ChevronDown :size="18" :class="{ 'rotate-180': showMore }" aria-hidden="true" />
+            </button>
+            
+            <!-- Community -->
+            <section v-show="!compact" id="part-community" class="card section" aria-labelledby="sec-community">
+              <h2 id="sec-community" class="section-title" tabindex="-1">Community</h2>
+              <p class="hint section-hint">Where your participants hang out, so they know where to find each other.</p>
+  
+              <div class="pair">
+                <FormField label="Platform" for-id="ev-platform" :error="errors.platform">
+                  <template #default="{ describedby }">
+                    <div class="input-wrap">
+                      <select id="ev-platform" v-model="form.platform" class="select" :aria-describedby="describedby">
+                        <option v-for="p in PLATFORMS" :key="p.value" :value="p.value">{{ p.label }}</option>
+                      </select>
+                    </div>
+                  </template>
+                </FormField>
+  
+                <FormField
+                  label="Community name"
+                  for-id="ev-platform-name"
+                  hint="Optional."
+                  :error="errors.platformName"
+                >
+                  <template #default="{ describedby, invalid }">
+                    <div class="input-wrap" :class="{ 'is-invalid': invalid }">
+                      <input
+                        id="ev-platform-name"
+                        v-model="form.platformName"
+                        class="input"
+                        type="text"
+                        autocomplete="off"
+                        :placeholder="platformNamePlaceholder"
+                        :maxlength="PLATFORM_TEXT_MAX + 20"
+                        :aria-invalid="invalid"
+                        :aria-describedby="describedby"
+                      />
+                    </div>
+                  </template>
+                </FormField>
+              </div>
+  
+              <FormField
+                label="Community link"
+                for-id="ev-platform-link"
+                :hint="`Optional. An invite or page link for ${communityLabel}, starting with https://`"
+                :error="errors.platformLink"
+              >
+                <template #default="{ describedby, invalid }">
+                  <div class="input-wrap" :class="{ 'is-invalid': invalid }">
+                    <input
+                      id="ev-platform-link"
+                      v-model="form.platformLink"
+                      class="input"
+                      type="url"
+                      inputmode="url"
+                      autocomplete="off"
+                      placeholder="https://"
+                      :maxlength="PLATFORM_LINK_MAX + 20"
+                      :aria-invalid="invalid"
+                      :aria-describedby="describedby"
+                    />
+                  </div>
+                </template>
+              </FormField>
+  
+              <FormField
+                label="Discord announcements"
+                for-id="ev-discord-webhook"
+                hint="Optional. Paste a channel webhook (Server settings, Integrations, Webhooks) and we'll post when sign-ups open and close, when matches are out and at the reveal. Only organisers see it."
+                :error="errors.discordWebhookUrl"
+              >
+                <template #default="{ describedby, invalid }">
+                  <div class="input-wrap" :class="{ 'is-invalid': invalid }">
+                    <input
+                      id="ev-discord-webhook"
+                      v-model="form.discordWebhookUrl"
+                      class="input"
+                      type="url"
+                      inputmode="url"
+                      autocomplete="off"
+                      placeholder="https://discord.com/api/webhooks/..."
+                      maxlength="300"
+                      :aria-invalid="invalid"
+                      :aria-describedby="describedby"
+                    />
+                  </div>
+                  <button
+                    v-if="canTestDiscord"
+                    type="button"
+                    class="btn btn-outline btn-xs discord-test"
+                    :disabled="testingDiscord"
+                    @click="testDiscord"
+                  >
+                    Send a test post
+                  </button>
+                </template>
+              </FormField>
+            </section>
+  
             <!-- Matching -->
             <section v-show="!compact" id="part-matching" class="card section" aria-labelledby="sec-matching">
               <h2 id="sec-matching" class="section-title" tabindex="-1">Matching</h2>
@@ -1620,66 +1681,6 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
               </template>
             </section>
 
-            <!-- Visibility -->
-            <section id="part-visibility" class="card section" aria-labelledby="sec-visibility">
-              <h2 id="sec-visibility" class="section-title" tabindex="-1">Who can see it</h2>
-              <p class="hint section-hint">
-                {{ lockedHint || 'Who can find and join the event once sign-ups are open.' }}
-              </p>
-
-              <div class="publicity" role="radiogroup" aria-labelledby="sec-visibility">
-                <label class="choice" :class="{ on: form.publicity === 'public', locked: openOnlyLocked }">
-                  <input
-                    id="ev-publicity-public"
-                    v-model="form.publicity"
-                    type="radio"
-                    name="publicity"
-                    value="public"
-                    :disabled="openOnlyLocked"
-                  />
-                  <span class="choice-icon" aria-hidden="true"><Globe :size="20" /></span>
-                  <span class="choice-text">
-                    <span class="choice-title">Public</span>
-                    <span class="choice-sub">Listed on Browse events. Anyone with an account can sign up.</span>
-                  </span>
-                </label>
-                <label class="choice" :class="{ on: form.publicity === 'private', locked: openOnlyLocked }">
-                  <input
-                    id="ev-publicity-private"
-                    v-model="form.publicity"
-                    type="radio"
-                    name="publicity"
-                    value="private"
-                    :disabled="openOnlyLocked"
-                  />
-                  <span class="choice-icon" aria-hidden="true"><Lock :size="20" /></span>
-                  <span class="choice-text">
-                    <span class="choice-title">Private, invite only</span>
-                    <span class="choice-sub">
-                      Hidden from listings. Only people with your invite link can see it and sign up.
-                    </span>
-                  </span>
-                </label>
-              </div>
-              <p v-if="errors.publicity" class="field-error m-0 mt-2" role="alert">{{ errors.publicity }}</p>
-            </section>
-
-            <button
-              v-if="!isEdit"
-              type="button"
-              class="card more-options"
-              :aria-expanded="showMore ? 'true' : 'false'"
-              @click="showMore = !showMore"
-            >
-              <span class="min-w-0 flex-1 text-left">
-                <span class="block font-bold">{{ showMore ? 'Fewer options' : 'More options' }}</span>
-                <span class="block text-sm text-cocoa">
-                  Community links, Discord announcements and how matching works. The defaults are fine for most
-                  exchanges: matches are made when sign-ups close, and you check them before anyone is told.
-                </span>
-              </span>
-              <ChevronDown :size="18" :class="{ 'rotate-180': showMore }" aria-hidden="true" />
-            </button>
           </fieldset>
 
           <EventPreview class="preview block lg:hidden" :preview-event="previewEvent" :preview-facts="previewFacts" :form="form"/>
