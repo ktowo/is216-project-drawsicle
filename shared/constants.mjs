@@ -9,10 +9,10 @@ export const EVENT_STATUSES = ['draft', 'open', 'matching', 'active', 'completed
 
 export const EVENT_STATUS_LABELS = {
   draft: 'Draft',
-  open: 'Open for sign-ups',
+  open: 'Sign-ups open',
   matching: 'Matching',
-  active: 'Active',
-  completed: 'Completed',
+  active: 'Making gifts',
+  completed: 'Revealed',
   cancelled: 'Cancelled',
 };
 

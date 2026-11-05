@@ -225,8 +225,8 @@ async function sendTestNotification() {
 
     <template v-else-if="data">
       <div class="tiles">
-        <StatTile label="Organising" :value="counts.organizing" :icon="ClipboardList" sub="Events you run" />
-        <StatTile label="Participating" :value="counts.participating" :icon="Users" sub="Events you signed up for" />
+        <StatTile label="Organising now" :value="counts.organizing" :icon="ClipboardList" sub="Not finished yet" />
+        <StatTile label="Taking part now" :value="counts.participating" :icon="Users" sub="Not finished yet" />
         <StatTile label="Unread notifications" :value="unread" :icon="Bell" :tone="unread ? 'brand' : 'default'">
           <RouterLink to="/notifications" class="tile-link">
             {{ unread ? 'Read them' : 'See all' }} <ArrowRight :size="14" aria-hidden="true" />
