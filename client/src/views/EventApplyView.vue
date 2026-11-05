@@ -651,9 +651,9 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
 
             <FormField :error="errors.readAboutRules">
               <label class="check">
-                <input v-model="readAboutRules" type="checkbox" />
+                <input aria-labelledby="read-declaration" v-model="readAboutRules" type="checkbox" />
                 <span>
-                  <strong>I have read about the event and its rules.</strong>
+                  <strong id="read-declaration">I have read about the event and its rules.</strong>
                 </span>
               </label>
             </FormField>
