@@ -1,5 +1,7 @@
 <script setup>
 import { ref, computed, watch, useId } from 'vue';
+import { useRoute } from 'vue-router';
+import { auth } from '@/stores/auth';
 import {
   ArrowRight,
   Eye,
@@ -41,7 +43,9 @@ const rows = ref([]);
 const counts = ref({ total: 0, submitted: 0, missing: 0, late: 0, verified: 0 });
 const loading = ref(false);
 const error = ref('');
-const filter = ref('all');
+// The Overview's "find backups" button opens this tab on the missing gifts
+const route = useRoute();
+const filter = ref(['missing', 'submitted', 'unverified', 'late'].includes(route.query.filter) ? route.query.filter : 'all');
 const savingId = ref(null);
 const viewing = ref(null);
 const reminderOpen = ref(false);
@@ -82,6 +86,25 @@ function progressText(match) {
 // Who is making the gift now: the backup artist if one took over
 function makerName(match) {
   return personName(match?.backupGiver || match?.giver);
+}
+
+// An organiser who also takes part shouldn't see the gift made for them before the reveal.
+// A co-organiser can check that one.
+function isOwnGift(row) {
+  return status.value === 'active' && Boolean(auth.user?.id) && row?.match?.recipient?.id === auth.user.id;
+}
+
+// ---- Checking gifts from the viewer: "Looks good, next gift" walks through the unchecked ones ----
+const toCheck = computed(() => sorted.value.filter((r) => r.submission && !r.submission.verified && !isOwnGift(r)));
+const nextToCheck = computed(() => toCheck.value.find((r) => r.submission.id !== viewing.value?.submission?.id) || null);
+
+async function verifyFromViewer({ verified, next }) {
+  const row = viewing.value;
+  if (!row) return;
+  const ok = await setVerified(row, verified);
+  if (!ok) return;
+  if (verified) toast.success('Gift verified.');
+  if (next) viewing.value = nextToCheck.value;
 }
 
 const overdueCount = computed(() => rows.value.filter((r) => !r.submission && r.overdue).length);
@@ -149,7 +172,7 @@ async function setVerified(row, verified, { quiet = false } = {}) {
 
 // ---- Verify every gift shown at once ----
 const verifying = ref(false);
-const toVerify = computed(() => visible.value.filter((r) => r.submission && !r.submission.verified));
+const toVerify = computed(() => visible.value.filter((r) => r.submission && !r.submission.verified && !isOwnGift(r)));
 
 async function verifyShown() {
   const list = [...toVerify.value];
@@ -216,7 +239,7 @@ function exportCsv() {
         <p class="section-sub text-sm flex flex-wrap items-center gap-2">
           <template v-if="started">
             <span>Gifts are due {{ formatDateTime(event.submissionDeadline) }}.</span>
-            <DeadlineChip v-if="status === 'active'" :at="event.submissionDeadline" label="Submissions close" />
+            <DeadlineChip v-if="status === 'active'" :at="event.submissionDeadline" label="Gifts due" />
           </template>
           <template v-else>Gifts show up here once matches are published.</template>
         </p>
@@ -282,16 +305,19 @@ function exportCsv() {
             </button>
           </div>
           <div class="toolbar-actions">
+            <button v-if="toCheck.length" type="button" class="btn btn-primary btn-xs" @click="viewing = toCheck[0]">
+              <Eye :size="15" aria-hidden="true" /> Check {{ toCheck.length === 1 ? 'the new gift' : `${toCheck.length} new gifts` }}
+            </button>
             <button
               v-if="toVerify.length"
               type="button"
-              class="btn btn-outline btn-xs"
+              class="btn btn-ghost btn-xs"
               :disabled="verifying"
               @click="verifyShown"
             >
               <Loader2 v-if="verifying" :size="15" class="spin" aria-hidden="true" />
               <CheckCheck v-else :size="15" aria-hidden="true" />
-              Verify {{ toVerify.length === 1 ? 'this gift' : `all ${toVerify.length} shown` }}
+              Mark {{ toVerify.length === 1 ? 'it' : `all ${toVerify.length}` }} as verified
             </button>
             <button type="button" class="btn btn-outline btn-xs" @click="exportCsv">
               <Download :size="15" aria-hidden="true" /> Export CSV
@@ -303,8 +329,11 @@ function exportCsv() {
 
         <ul v-else-if="view === 'gallery'" class="gift-grid" aria-label="Gifts">
           <li v-for="r in visible" :key="r.match.id" class="gift card" :class="{ missing: !r.submission }">
+            <div v-if="isOwnGift(r)" class="gift-cover empty own" :title="'Made for you: hidden until the reveal'">
+              <Gift :size="30" aria-hidden="true" />
+            </div>
             <button
-              v-if="r.submission"
+              v-else-if="r.submission"
               type="button"
               class="gift-cover"
               :aria-label="`View the gift from ${personName(r.match.giver)}`"
@@ -388,7 +417,8 @@ function exportCsv() {
               </div>
               <div class="cell">
                 <span class="cell-label">Verified</span>
-                <label v-if="r.submission" class="switch">
+                <span v-if="r.submission && isOwnGift(r)" class="text-sm text-cocoa">A co-organiser verifies this one</span>
+                <label v-else-if="r.submission" class="switch">
                   <input
                     type="checkbox"
                     role="switch"
@@ -403,8 +433,11 @@ function exportCsv() {
                 <span v-else class="text-cocoa">–</span>
               </div>
               <div class="cell-actions">
+                <span v-if="r.submission && isOwnGift(r)" class="own-note">
+                  <Gift :size="14" aria-hidden="true" /> Made for you, hidden until the reveal
+                </span>
                 <button
-                  v-if="r.submission"
+                  v-else-if="r.submission"
                   type="button"
                   class="btn btn-outline btn-xs"
                   :aria-label="`View the gift from ${personName(r.match.giver)}`"
@@ -428,7 +461,15 @@ function exportCsv() {
       </template>
     </template>
 
-    <SubmissionViewModal :open="Boolean(viewing)" :row="viewing" @close="viewing = null" />
+    <SubmissionViewModal
+      :open="Boolean(viewing)"
+      :row="viewing"
+      :can-verify="status === 'active' || status === 'completed'"
+      :saving="savingId === viewing?.submission?.id"
+      :has-next="Boolean(nextToCheck)"
+      @verify="verifyFromViewer"
+      @close="viewing = null"
+    />
 
     <FindBackupModal
       :open="Boolean(backupFor)"
@@ -449,6 +490,17 @@ function exportCsv() {
 </template>
 
 <style scoped>
+.own-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: right;
+}
+.gift-cover.own {
+  color: var(--pink-dark);
+}
 .toolbar {
   display: flex;
   flex-wrap: wrap;

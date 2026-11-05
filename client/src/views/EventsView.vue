@@ -21,10 +21,10 @@ import ChoiceChips from '@/components/ui/ChoiceChips.vue';
 import ToolbarRow from '@/components/search/ToolbarRow.vue';
 
 const STATUS_FILTERS = [
-  { value: 'open', label: 'Open for sign-ups' },
+  { value: 'open', label: 'Sign-ups open' },
   { value: 'matching', label: 'Matching' },
-  { value: 'active', label: 'Active' },
-  { value: 'completed', label: 'Completed' },
+  { value: 'active', label: 'Making gifts' },
+  { value: 'completed', label: 'Revealed' },
   { value: 'upcoming', label: 'All upcoming' },
   { value: 'all', label: 'Everything' },
 ];

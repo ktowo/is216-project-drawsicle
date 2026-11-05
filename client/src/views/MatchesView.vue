@@ -22,8 +22,7 @@ import {
   Link as LinkIcon,
   CalendarPlus,
   LifeBuoy,
-  HandHeart,
-} from 'lucide-vue-next';
+  HandHeart, HeartHandshake } from 'lucide-vue-next';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import DeadlineChip from '@/components/ui/DeadlineChip.vue';
@@ -271,6 +270,13 @@ async function copyUsername() {
               Keep it secret! {{ recipient.displayName }} won't know who is making their gift until the reveal.
             </span>
           </p>
+          <!-- Why this pair: the same reasons the organiser saw when the match was made -->
+          <div v-if="match.reasons?.length" class="why-match">
+            <p class="why-title"><HeartHandshake :size="17" aria-hidden="true" /> Why you were matched with {{ recipient.displayName }}</p>
+            <ul class="why-list">
+              <li v-for="r in match.reasons" :key="r">{{ r }}</li>
+            </ul>
+          </div>
         </section>
 
         <div class="layout">
@@ -443,6 +449,27 @@ async function copyUsername() {
 </template>
 
 <style scoped>
+.why-match {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--pink-soft);
+}
+.why-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: 700;
+  color: var(--pink-dark);
+}
+.why-list {
+  margin: 8px 0 0;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 .hero {
   padding: 28px 32px;
   background: linear-gradient(135deg, var(--surface) 55%, var(--pink-soft));

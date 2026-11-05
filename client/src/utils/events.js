@@ -47,7 +47,7 @@ export function nextDeadline(event) {
     return event.signupDeadline ? { label: 'Sign-ups close', at: event.signupDeadline } : null;
   }
   if (event.status === 'matching' || event.status === 'active') {
-    return event.submissionDeadline ? { label: 'Submissions close', at: event.submissionDeadline } : null;
+    return event.submissionDeadline ? { label: 'Gifts due', at: event.submissionDeadline } : null;
   }
   return null;
 }
