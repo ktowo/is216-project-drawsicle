@@ -3,7 +3,24 @@ import { CREATION_TYPES, labelFor } from '@shared/constants.mjs';
 import { toLocalInput } from '@/utils/format';
 import { saveFile } from '@/utils/download';
 
-export const MANAGE_TABS = ['overview', 'participants', 'matching', 'styles', 'submissions', 'settings'];
+export const MANAGE_TABS = ['overview', 'participants', 'matching', 'submissions', 'settings'];
+
+// Which tabs make sense at each stage. A draft has nobody to manage yet, and gifts can only come
+// in once matches are out, so those tabs stay hidden until they're useful.
+export const STAGE_TABS = {
+  draft: ['overview', 'matching', 'settings'],
+  open: ['overview', 'participants', 'matching', 'settings'],
+  matching: ['overview', 'participants', 'matching', 'settings'],
+  active: ['overview', 'participants', 'matching', 'submissions', 'settings'],
+  completed: ['overview', 'participants', 'matching', 'submissions', 'settings'],
+};
+
+export function tabsForStatus(status) {
+  return STAGE_TABS[status] || MANAGE_TABS;
+}
+
+// Old links (notifications, bookmarks) may still point at tabs that moved
+export const TAB_ALIASES = { styles: 'matching' };
 
 // Statuses in which organisers can still accept or remove people (before matches are published)
 export const REVIEW_STATUSES = ['open', 'matching'];

@@ -6,7 +6,8 @@ import { can } from '@shared/permissions.mjs';
 //   requiresAuth  - send guests to /login first
 //   guestOnly     - logged-in users go to /dashboard instead
 //   hideChrome    - no navbar/footer (full-page auth screens)
-//   noPets        - screen pets stay away (the museum has its own little people)
+//   noPets        - screen pets stay away (the museum has its own little people; organiser work pages
+//                   stay clear so nothing sits on a button)
 //   title         - browser tab title
 const routes = [
   { path: '/', name: 'home', component: () => import('../views/HomeView.vue'), meta: { title: 'Art exchanges made easy' } },
@@ -24,11 +25,11 @@ const routes = [
 
   // Events (browsing and event pages are public; the rest need an account)
   { path: '/events', name: 'events', component: () => import('../views/EventsView.vue'), meta: { title: 'Browse events' } },
-  { path: '/events/new', name: 'event-new', component: () => import('../views/EventFormView.vue'), meta: { requiresAuth: true, title: 'New event' } },
+  { path: '/events/new', name: 'event-new', component: () => import('../views/EventFormView.vue'), meta: { requiresAuth: true, noPets: true, title: 'New event' } },
   { path: '/events/:id', name: 'event', component: () => import('../views/EventView.vue'), meta: { title: 'Event' } },
-  { path: '/events/:id/edit', name: 'event-edit', component: () => import('../views/EventFormView.vue'), meta: { requiresAuth: true, title: 'Edit event' } },
+  { path: '/events/:id/edit', name: 'event-edit', component: () => import('../views/EventFormView.vue'), meta: { requiresAuth: true, noPets: true, title: 'Edit event' } },
   { path: '/events/:id/apply', name: 'event-apply', component: () => import('../views/EventApplyView.vue'), meta: { requiresAuth: true, title: 'Sign up' } },
-  { path: '/events/:id/manage', name: 'event-manage', component: () => import('../views/EventManageView.vue'), meta: { requiresAuth: true, title: 'Manage event' } },
+  { path: '/events/:id/manage', name: 'event-manage', component: () => import('../views/EventManageView.vue'), meta: { requiresAuth: true, noPets: true, title: 'Manage event' } },
   { path: '/events/:id/matches', name: 'event-matches', component: () => import('../views/MatchesView.vue'), meta: { requiresAuth: true, title: 'Your match' } },
   { path: '/events/:id/submit', name: 'event-submit', component: () => import('../views/EventSubmitView.vue'), meta: { requiresAuth: true, title: 'Submit your gift' } },
   { path: '/events/:id/results', name: 'event-results', component: () => import('../views/EventResultsView.vue'), meta: { requiresAuth: true, title: 'Results' } },

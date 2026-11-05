@@ -364,7 +364,7 @@ const avatarUser = (user) => ({ ...user, avatarUrl: user?.avatarUrl ? assetUrl(u
                   <dt>Gifts due</dt>
                   <dd>
                     <span class="date">{{ formatDateTime(event.submissionDeadline) }}</span>
-                    <DeadlineChip v-if="event.status !== 'completed'" :at="event.submissionDeadline" label="Submissions close" />
+                    <DeadlineChip v-if="event.status !== 'completed'" :at="event.submissionDeadline" label="Gifts due" />
                     <span v-if="timeInZone(event.submissionDeadline, event.timeZone)" class="zone">
                       That's {{ timeInZone(event.submissionDeadline, event.timeZone) }} for the organisers.
                     </span>
