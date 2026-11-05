@@ -48,7 +48,6 @@ const accepted = ref([]); // accepted applications, to spot people left out of t
 const loading = ref(false);
 const error = ref('');
 const search = ref('');
-const expanded = ref(new Set());
 // The pair being hovered or focused, in the list or the loop diagram
 const highlightId = ref(null);
 const highlightHandlers = (id) => ({
@@ -135,13 +134,6 @@ const visible = computed(() => {
   );
 });
 
-function toggleReasons(id) {
-  const next = new Set(expanded.value);
-  if (next.has(id)) next.delete(id);
-  else next.add(id);
-  expanded.value = next;
-}
-
 // ---- Generate ----
 const genMode = ref('best'); // best fit, or names out of a hat
 const seed = ref('');
@@ -182,7 +174,6 @@ async function generate() {
     result.value = data.result || null;
     published.value = false;
     swap.selected = [];
-    expanded.value = new Set();
     regenerateOpen.value = false;
     const left = data.result?.unmatched?.length || 0;
     if (left) toast.info(`Made ${pluralize(matches.value.length, 'match', 'matches')}, but ${pluralize(left, 'person', 'people')} couldn't be placed.`);
@@ -510,18 +501,9 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
                   Mutual
                 </span>
               </div>
-              <button
-                v-if="m.reasons?.length"
-                type="button"
-                class="btn btn-ghost btn-xs why"
-                :aria-expanded="expanded.has(m.id)"
-                :aria-controls="`${uid}-why-${m.id}`"
-                @click="toggleReasons(m.id)"
-              >
-                Why <ChevronDown :size="14" :class="{ 'rotate-180': expanded.has(m.id) }" aria-hidden="true" />
-              </button>
             </div>
-            <ul v-if="expanded.has(m.id)" :id="`${uid}-why-${m.id}`" class="reasons">
+            <!-- How the pair was made, always in view so it can be explained at a glance -->
+            <ul v-if="m.reasons?.length" class="reasons" :aria-label="`Why ${personName(m.giver)} was matched with ${personName(m.recipient)}`">
               <li v-for="(r, i) in m.reasons" :key="i">{{ r }}</li>
             </ul>
           </li>
@@ -576,6 +558,9 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
               <StatusBadge v-if="m.submission?.verified" status="verified" kind="submission" />
             </div>
           </div>
+          <ul v-if="m.reasons?.length" class="reasons" :aria-label="`Why ${personName(m.giver)} was matched with ${personName(m.recipient)}`">
+            <li v-for="(r, i) in m.reasons" :key="i">{{ r }}</li>
+          </ul>
         </li>
       </ul>
       <button v-if="matches.length" type="button" class="btn btn-outline btn-sm self-start" @click="emit('go', 'submissions')">

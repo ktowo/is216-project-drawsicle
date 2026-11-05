@@ -285,6 +285,8 @@ async function myMatchJson(event, match, { asBackup = false } = {}) {
     status: match.status,
     asBackup,
     handedOver: !asBackup && Boolean(match.backupGiver),
+    // Why this pair was made (what they can make, which characters they can draw, shared likes)
+    reasons: (match.reasons || []).filter((r) => !r.startsWith('Heads up')),
     progress: progressJson(match),
     submissionDeadline: event.submissionDeadline,
     recipient: {
