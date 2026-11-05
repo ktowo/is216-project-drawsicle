@@ -134,6 +134,15 @@ const visible = computed(() => {
   );
 });
 
+// "Why" rows: the reasons are open by default; the chevron folds one away
+const collapsedReasons = ref(new Set());
+function toggleReasons(id) {
+  const next = new Set(collapsedReasons.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  collapsedReasons.value = next;
+}
+
 // ---- Generate ----
 const genMode = ref('best'); // best fit, or names out of a hat
 const seed = ref('');
@@ -501,9 +510,24 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
                   Mutual
                 </span>
               </div>
+              <button
+                v-if="m.reasons?.length"
+                type="button"
+                class="btn btn-ghost btn-xs why"
+                :aria-expanded="!collapsedReasons.has(m.id)"
+                :aria-controls="`${uid}-why-${m.id}`"
+                @click="toggleReasons(m.id)"
+              >
+                Why <ChevronDown :size="14" :class="{ 'rotate-180': !collapsedReasons.has(m.id) }" aria-hidden="true" />
+              </button>
             </div>
-            <!-- How the pair was made, always in view so it can be explained at a glance -->
-            <ul v-if="m.reasons?.length" class="reasons" :aria-label="`Why ${personName(m.giver)} was matched with ${personName(m.recipient)}`">
+            <!-- How the pair was made: open by default so it can be explained at a glance, the chevron folds it -->
+            <ul
+              v-if="m.reasons?.length && !collapsedReasons.has(m.id)"
+              :id="`${uid}-why-${m.id}`"
+              class="reasons"
+              :aria-label="`Why ${personName(m.giver)} was matched with ${personName(m.recipient)}`"
+            >
               <li v-for="(r, i) in m.reasons" :key="i">{{ r }}</li>
             </ul>
           </li>
