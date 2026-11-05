@@ -642,12 +642,12 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
         <div v-show="step === 2" class="step-panel">
           <section class="card section" aria-labelledby="step-heading-bef2">
             <h2 id="step-heading-bef2" class="section-title" tabindex="-1">About Event</h2>
-            <p class="pb-4">{{ event.description }}</p>
+            <p class="pb-4 pre">{{ event.description }}</p>
             
             <h2 class="section-title" tabindex="-1">
               <ScrollText :size="22" class="title-icon" aria-hidden="true" /> Rules
             </h2>
-            <p class="pb-1">{{ event.rules }}</p>
+            <p class="pb-1 pre">{{ event.rules }}</p>
 
             <FormField :error="errors.readAboutRules">
               <label class="check">
