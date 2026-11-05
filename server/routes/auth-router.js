@@ -240,9 +240,14 @@ router.post('/supabase', authLimiter, asyncHandler(async (req, res) => {
   if (!user) {
     if (!email) return res.status(400).json({ error: 'Your sign-in did not share an email address.', code: 'EMAIL_REQUIRED' });
     const displayName = (identity.name || localPart(email)).trim().slice(0, DISPLAY_NAME_MAX) || localPart(email);
-    const invite = await reserveInvite(normInvite(req.body.inviteCode || identity.inviteCode), email);
     user = new User({ email, supabaseId: identity.id, displayName, avatarUrl: identity.avatarUrl || undefined });
-    applyAdminList(user);
+    const isAdmin = applyAdminList(user);
+
+    let invite = null;
+    if (!isAdmin) {
+      invite = await reserveInvite(normInvite(req.body.inviteCode || identity.inviteCode), email);
+    }
+
     try {
       await saveNewUser(user, displayName);
       if (invite) {
