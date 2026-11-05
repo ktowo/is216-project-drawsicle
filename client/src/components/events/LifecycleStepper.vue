@@ -9,10 +9,10 @@ const props = defineProps({
 
 const STEPS = [
   { key: 'draft', label: 'Draft', detail: 'The organisers are still planning this event.' },
-  { key: 'open', label: 'Sign-ups', detail: 'Artists are signing up and choosing what to offer.' },
+  { key: 'open', label: 'Sign-ups open', detail: 'Artists are signing up and choosing what to offer.' },
   { key: 'matching', label: 'Matching', detail: 'Sign-ups are closed and everyone is being paired up.' },
   { key: 'active', label: 'Making gifts', detail: 'Everyone knows their recipient and is making their gift.' },
-  { key: 'completed', label: 'Reveal', detail: 'Gifts are revealed and the event is complete.' },
+  { key: 'completed', label: 'Revealed', detail: 'Gifts are revealed and the event is complete.' },
 ];
 
 const current = computed(() => Math.min(statusOrder(props.status), STEPS.length - 1));
