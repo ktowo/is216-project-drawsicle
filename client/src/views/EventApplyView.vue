@@ -19,6 +19,8 @@ import PageHeader from '@/components/ui/PageHeader.vue';
 import FormField from '@/components/ui/FormField.vue';
 import ChoiceChips from '@/components/ui/ChoiceChips.vue';
 import TagInput from '@/components/ui/TagInput.vue';
+import TextSuggestions from '@/components/ui/TextSuggestions.vue';
+import { LIKE_IDEAS, AVOID_IDEAS } from '@/utils/characters';
 import DeadlineChip from '@/components/ui/DeadlineChip.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
@@ -294,7 +296,6 @@ function validate() {
   }
 
   // In preferences page and after, make sure participants read about the event and its rules
-  console.log(step.value, readAboutRules.value)
   if (step.value >= 2 && !readAboutRules.value) {
     e.readAboutRules = "Please read about the event and its rules, then check the box."
   }
@@ -676,6 +677,7 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
                   placeholder="Cosy scenes, soft colours, my character with their cat…"
                 />
               </div>
+              <TextSuggestions v-model="form.likes" :options="LIKE_IDEAS" :max="LIMITS.formText" />
             </FormField>
             <FormField
               v-if="wantsAdopts"
@@ -709,6 +711,7 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
                   placeholder="Horror, gore, heavy shading…"
                 />
               </div>
+              <TextSuggestions v-model="form.avoid" :options="AVOID_IDEAS" :max="LIMITS.formText" />
             </FormField>
             <FormField
               label="What can't you draw?"
