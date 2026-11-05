@@ -69,14 +69,20 @@ async function load() {
 watch(() => [props.event.id, props.event.status], load, { immediate: true });
 
 const total = computed(() => APPLICATION_STATUSES.reduce((sum, s) => sum + (counts.value[s] || 0), 0));
-const tabs = computed(() => [
-  { key: 'all', label: 'All', count: total.value },
-  { key: 'pending', label: 'Pending', count: counts.value.pending },
-  { key: 'accepted', label: 'Accepted', count: counts.value.accepted },
-  ...(counts.value.waitlisted ? [{ key: 'waitlisted', label: 'Waitlist', count: counts.value.waitlisted }] : []),
-  { key: 'rejected', label: 'Rejected', count: counts.value.rejected },
-  { key: 'withdrawn', label: 'Withdrawn', count: counts.value.withdrawn },
-]);
+// Filters only for states that can happen here: with approval off nobody is pending or rejected,
+// so those show up only if someone actually is (e.g. approval was on earlier)
+const tabs = computed(() => {
+  const reviewed = Boolean(props.event.requireApproval);
+  const c = counts.value;
+  return [
+    { key: 'all', label: 'All', count: total.value },
+    ...(reviewed || c.pending ? [{ key: 'pending', label: 'Pending', count: c.pending }] : []),
+    { key: 'accepted', label: 'Accepted', count: c.accepted },
+    ...(c.waitlisted ? [{ key: 'waitlisted', label: 'Waitlist', count: c.waitlisted }] : []),
+    ...(reviewed || c.rejected ? [{ key: 'rejected', label: 'Rejected', count: c.rejected }] : []),
+    ...(c.withdrawn ? [{ key: 'withdrawn', label: 'Withdrawn', count: c.withdrawn }] : []),
+  ];
+});
 
 const visible = computed(() => {
   const q = search.value.trim().toLowerCase();

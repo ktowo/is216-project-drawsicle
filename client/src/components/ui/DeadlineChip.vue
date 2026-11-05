@@ -38,6 +38,8 @@ const wording = computed(() => {
   if (props.pastLabel) return props.pastLabel;
   const words = props.label.split(' ');
   const last = words[words.length - 1];
+  // "Gifts due" becomes "Gifts were due", a lone "Due" becomes "Was due"
+  if (last.toLowerCase() === 'due') return words.length > 1 ? [...words.slice(0, -1), 'were due'].join(' ') : 'Was due';
   const past = PAST_FORMS[last.toLowerCase()];
   if (past) words[words.length - 1] = past;
   return words.join(' ');

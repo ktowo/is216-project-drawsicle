@@ -15,11 +15,10 @@ import OverviewPanel from '@/components/events/manage/OverviewPanel.vue';
 const tabPanel = (loader) => defineAsyncComponent({ loader, loadingComponent: LoadingBlock, delay: 150 });
 const ParticipantsPanel = tabPanel(() => import('@/components/events/manage/ParticipantsPanel.vue'));
 const MatchingPanel = tabPanel(() => import('@/components/events/manage/MatchingPanel.vue'));
-const ArtStylesPanel = tabPanel(() => import('@/components/events/manage/ArtStylesPanel.vue'));
 const SubmissionsPanel = tabPanel(() => import('@/components/events/manage/SubmissionsPanel.vue'));
 const SettingsPanel = tabPanel(() => import('@/components/events/manage/SettingsPanel.vue'));
 import DuplicateEventModal from '@/components/events/manage/DuplicateEventModal.vue';
-import { MANAGE_TABS } from '@/components/events/manage/helpers';
+import { MANAGE_TABS, TAB_ALIASES, tabsForStatus } from '@/components/events/manage/helpers';
 import { api } from '@/api';
 import { seasonLabel, eventLink } from '@/utils/events';
 
@@ -90,15 +89,21 @@ const TAB_LABELS = {
   overview: 'Overview',
   participants: 'Participants',
   matching: 'Matching',
-  styles: 'Art styles',
   submissions: 'Submissions',
   settings: 'Settings',
 };
 
+// Only the tabs that fit the event's current stage
+const stageTabs = computed(() => tabsForStatus(event.value?.status));
+
 const tab = computed({
-  get: () => (MANAGE_TABS.includes(route.query.tab) ? route.query.tab : 'overview'),
+  get: () => {
+    const wanted = TAB_ALIASES[route.query.tab] || route.query.tab;
+    return stageTabs.value.includes(wanted) ? wanted : 'overview';
+  },
   set: (key) => {
     const query = { ...route.query };
+    delete query.filter;
     if (key === 'overview') delete query.tab;
     else query.tab = key;
     router.replace({ query });
@@ -106,15 +111,23 @@ const tab = computed({
 });
 
 const tabs = computed(() =>
-  MANAGE_TABS.map((key) => ({
+  stageTabs.value.map((key) => ({
     key,
     label: TAB_LABELS[key],
     count: key === 'participants' ? event.value?.participantCount ?? undefined : undefined,
   }))
 );
 
+// 'submissions:missing' opens a tab with one of its filters already picked
 function setTab(key) {
-  if (MANAGE_TABS.includes(key)) tab.value = key;
+  const [name, filter] = String(key).split(':');
+  const wanted = TAB_ALIASES[name] || name;
+  if (!MANAGE_TABS.includes(wanted)) return;
+  const query = { ...route.query, tab: wanted };
+  if (filter) query.filter = filter;
+  else delete query.filter;
+  if (wanted === 'overview') delete query.tab;
+  router.replace({ query });
 }
 
 // ---- Panel events ----
@@ -163,8 +176,11 @@ const meta = computed(() => {
           <div class="flex flex-wrap items-center gap-2">
             <StatusBadge :status="event.status" />
             <span class="pill">
-              <component :is="event.publicity === 'private' ? Lock : Globe" :size="14" aria-hidden="true" />
-              {{ event.publicity === 'private' ? 'Private, invite only' : 'Public' }}
+              <component :is="event.status === 'draft' || event.publicity === 'private' ? Lock : Globe" :size="14" aria-hidden="true" />
+              <template v-if="event.status === 'draft'">
+                Only organisers can see it{{ event.publicity === 'private' ? '' : ' (public once sign-ups open)' }}
+              </template>
+              <template v-else>{{ event.publicity === 'private' ? 'Private, invite only' : 'Public' }}</template>
             </span>
             <span class="pill">
               <Users :size="14" aria-hidden="true" />
@@ -214,7 +230,6 @@ const meta = computed(() => {
           @updated="onUpdated"
           @go="setTab"
         />
-        <ArtStylesPanel v-else-if="tab === 'styles'" :key="event.id" :event="event" @updated="onUpdated" />
         <SubmissionsPanel v-else-if="tab === 'submissions'" :key="event.id" :event="event" />
         <SettingsPanel v-else :key="event.id" :event="event" @updated="onUpdated" @left="onLeft" />
       </div>

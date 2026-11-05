@@ -14,7 +14,7 @@ import {
   Search,
   Repeat,
   HeartHandshake,
-  Palette,
+  Settings2,
 } from 'lucide-vue-next';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
@@ -25,6 +25,8 @@ import PersonLink from '@/components/events/PersonLink.vue';
 import StatTile from './StatTile.vue';
 import MatchingRulesCard from './MatchingRulesCard.vue';
 import AutoMatchCard from './AutoMatchCard.vue';
+import { defineAsyncComponent } from 'vue';
+const ArtStylesPanel = defineAsyncComponent(() => import('./ArtStylesPanel.vue'));
 import { STYLE_MODE_LABELS } from '@shared/style.mjs';
 import MatchLoopDiagram from './MatchLoopDiagram.vue';
 import { api } from '@/api';
@@ -38,6 +40,7 @@ const props = defineProps({
 const emit = defineEmits(['updated', 'go']);
 
 const uid = useId();
+const settingsOpen = ref(false);
 const matches = ref([]);
 const published = ref(false);
 const result = ref(null); // from the last generate in this visit: { unmatched, warnings, stats }
@@ -336,22 +339,6 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
                 </button>
               </div>
             </div>
-            <div class="field">
-              <label :for="`${uid}-seed`" class="label text-sm">Seed <span class="text-cocoa font-normal">(optional)</span></label>
-              <div class="input-wrap" :class="{ 'is-invalid': seedInvalid }">
-                <input
-                  :id="`${uid}-seed`"
-                  v-model="seed"
-                  class="input py-2.5"
-                  maxlength="15"
-                  inputmode="numeric"
-                  autocomplete="off"
-                  placeholder="Random"
-                  :aria-invalid="seedInvalid"
-                  :aria-describedby="`${uid}-seed-hint`"
-                />
-              </div>
-            </div>
             <button
               type="submit"
               class="btn btn-sm"
@@ -365,10 +352,33 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
             </button>
           </form>
         </div>
-        <p :id="`${uid}-seed-hint`" class="m-0 mt-3" :class="seedInvalid ? 'field-error' : 'hint'">
-          <template v-if="seedInvalid">A seed is a whole number, like 4821. Leave it empty for a random one.</template>
-          <template v-else>The same seed always gives the same matches. Leave it empty for a fresh shuffle.</template>
-        </p>
+        <!-- Seeds are for repeating a draft exactly. Most organisers never need one, so it stays tucked away. -->
+        <details class="advanced mt-3" :open="seedInvalid || undefined">
+          <summary class="hint">Advanced: repeat an earlier draft</summary>
+          <div class="field mt-2 max-w-60">
+            <label :for="`${uid}-seed`" class="label text-sm">Seed <span class="text-cocoa font-normal">(optional)</span></label>
+            <div class="input-wrap" :class="{ 'is-invalid': seedInvalid }">
+              <input
+                :id="`${uid}-seed`"
+                v-model="seed"
+                class="input py-2.5"
+                maxlength="15"
+                inputmode="numeric"
+                autocomplete="off"
+                placeholder="Random"
+                :aria-invalid="seedInvalid"
+                :aria-describedby="`${uid}-seed-hint`"
+              />
+            </div>
+          </div>
+          <p :id="`${uid}-seed-hint`" class="m-0 mt-2" :class="seedInvalid ? 'field-error' : 'hint'">
+            <template v-if="seedInvalid">A seed is a whole number, like 4821. Leave it empty for a random one.</template>
+            <template v-else>
+              The same seed always gives the same matches.<template v-if="result?.stats?.seed != null">
+                This draft used seed {{ result.stats.seed }}.</template>
+            </template>
+          </p>
+        </details>
         <p v-if="!enoughPeople" class="alert alert-warning m-0 mt-4">
           You have {{ pluralize(acceptedCount, 'accepted artist') }} and need at least {{ minNeeded }}. Accept pending
           sign-ups on the Participants tab, or reopen sign-ups from the Overview tab.
@@ -377,22 +387,17 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
       </div>
 
       <template v-if="matches.length">
-        <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div class="grid grid-cols-2 gap-3 md:grid-cols-3">
           <StatTile label="Pairs" :value="matches.length" :sub="`of ${pluralize(acceptedCount, 'artist')}`" />
           <StatTile
             label="Average fit"
-            :value="result?.stats?.averageScore != null ? Math.round(result.stats.averageScore * 10) / 10 : averageScore"
-            sub="Higher is better"
+            :value="`${result?.stats?.averageScore != null ? Math.round(result.stats.averageScore) : averageScore} / 100`"
+            sub="How well pairs suit each other"
           />
           <StatTile
             label="Loops"
             :value="result?.stats?.cycles ?? '–'"
             :sub="result?.stats?.cycles === 1 ? 'One big loop' : 'Gift chains'"
-          />
-          <StatTile
-            label="Seed"
-            :value="result?.stats?.seed ?? '–'"
-            :sub="result ? 'Reuse it to repeat this draft' : 'Shown after generating'"
           />
         </div>
 
@@ -410,7 +415,7 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
           </p>
           <p class="hint m-0 mt-1.5">
             Usually nobody else can make what they want, or their characters clash with everyone's "can't draw" tags.
-            Remove them on the Participants tab or try another seed. You can't publish until everyone has a match.
+            Remove them on the Participants tab or generate again. You can't publish until everyone has a match.
           </p>
           <ul class="m-0 mt-3 p-0 list-none flex flex-wrap gap-2">
             <li v-for="u in unmatched" :key="u.id" class="person-chip">
@@ -500,7 +505,7 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
               </div>
               <div class="score">
                 <span class="score-bar" aria-hidden="true"><span :style="{ width: `${scorePercent(m)}%` }" /></span>
-                <span class="text-sm font-semibold whitespace-nowrap">Fit {{ m.score }}</span>
+                <span class="text-sm font-semibold whitespace-nowrap">Fit {{ m.score }}<span class="font-normal text-cocoa">/100</span></span>
                 <span v-if="isMutual(m)" class="badge badge-info text-xs px-2 py-0.5" title="These two make gifts for each other">
                   Mutual
                 </span>
@@ -608,16 +613,25 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
       </div>
     </ConfirmDialog>
 
-    <AutoMatchCard v-if="beforeMatching || isDraftStage" :event="event" @updated="emit('updated', $event)" @ran="load" />
-    <MatchingRulesCard v-if="beforeMatching || isDraftStage" :event="event" @updated="emit('updated', $event)" />
-    <section v-if="beforeMatching || isDraftStage" class="card p-5 sm:p-6 styles-pointer">
-      <Palette :size="19" aria-hidden="true" />
-      <p class="m-0">
-        <strong>Art styles:</strong> {{ STYLE_MODE_LABELS[event.matchingRules?.style || 'off'] }}.
-        The vision check and what it found for each artist are on their own tab.
-      </p>
-      <button type="button" class="btn btn-outline btn-sm" @click="emit('go', 'styles')">Open Art styles</button>
-    </section>
+    <!-- Every matching option in one place, closed until someone wants to change one -->
+    <details v-if="beforeMatching || isDraftStage" class="settings-group" :open="settingsOpen || undefined" @toggle="settingsOpen = $event.target.open">
+      <summary class="card settings-summary">
+        <Settings2 :size="19" aria-hidden="true" />
+        <span class="min-w-0 flex-1">
+          <span class="block font-bold">Matching settings</span>
+          <span class="block text-sm text-cocoa">
+            {{ event.autoMatch?.enabled ? 'Matches are made automatically when sign-ups close' : 'You make matches yourself' }}
+            · Art styles: {{ STYLE_MODE_LABELS[event.matchingRules?.style || 'off'].toLowerCase() }}
+          </span>
+        </span>
+        <ChevronDown :size="18" class="settings-chevron" aria-hidden="true" />
+      </summary>
+      <div v-if="settingsOpen" class="flex flex-col gap-5 mt-4">
+        <AutoMatchCard :event="event" @updated="emit('updated', $event)" @ran="load" />
+        <MatchingRulesCard :event="event" @updated="emit('updated', $event)" />
+        <ArtStylesPanel :event="event" @updated="emit('updated', $event)" />
+      </div>
+    </details>
   </section>
 </template>
 
@@ -648,14 +662,30 @@ watch(() => [props.event.id, props.event.status], load, { immediate: true });
   outline: 3px solid var(--pink);
   outline-offset: 1px;
 }
-.styles-pointer {
+.settings-summary {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 10px 14px;
+  gap: 12px;
+  padding: 16px 20px;
+  cursor: pointer;
+  list-style: none;
 }
-.styles-pointer p {
-  flex: 1 1 260px;
+.settings-summary::-webkit-details-marker {
+  display: none;
+}
+.settings-summary:hover {
+  border-color: var(--pink);
+}
+.settings-summary:focus-visible {
+  outline: 3px solid var(--pink);
+  outline-offset: 2px;
+}
+.settings-group[open] .settings-chevron {
+  transform: rotate(180deg);
+}
+.advanced summary {
+  cursor: pointer;
+  width: max-content;
 }
 .pair.is-highlighted {
   border-color: var(--pink);

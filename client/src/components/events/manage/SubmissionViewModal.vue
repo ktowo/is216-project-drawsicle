@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue';
-import { ArrowRight, ExternalLink, ImageOff } from 'lucide-vue-next';
+import { ArrowRight, ExternalLink, ImageOff, Check, Loader2, Undo2 } from 'lucide-vue-next';
 import BaseModal from '@/components/ui/BaseModal.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import PersonLink from '@/components/events/PersonLink.vue';
@@ -13,8 +13,12 @@ import { personName } from './helpers';
 const props = defineProps({
   open: { type: Boolean, default: false },
   row: { type: Object, default: null }, // { match, submission, overdue }
+  // Organisers check gifts right here instead of closing the viewer to find a toggle
+  canVerify: { type: Boolean, default: false },
+  saving: { type: Boolean, default: false },
+  hasNext: { type: Boolean, default: false },
 });
-const emit = defineEmits(['close']);
+const emit = defineEmits(['close', 'verify']);
 
 const sub = computed(() => props.row?.submission || null);
 const giver = computed(() => props.row?.match?.giver || null);
@@ -89,6 +93,30 @@ function imageHref(url) {
         <p class="message">{{ sub.message || 'No message.' }}</p>
       </section>
     </div>
+
+    <template v-if="sub && canVerify" #footer>
+      <template v-if="sub.verified">
+        <button type="button" class="btn btn-ghost" :disabled="saving" @click="emit('verify', { verified: false })">
+          <Undo2 :size="16" aria-hidden="true" /> Mark as not verified
+        </button>
+        <button type="button" class="btn btn-outline" @click="emit('close')">Close</button>
+      </template>
+      <template v-else>
+        <button type="button" class="btn btn-outline" :disabled="saving" @click="emit('verify', { verified: true })">
+          <Check :size="16" aria-hidden="true" /> Looks good
+        </button>
+        <button
+          v-if="hasNext"
+          type="button"
+          class="btn btn-primary"
+          :disabled="saving"
+          @click="emit('verify', { verified: true, next: true })"
+        >
+          <Loader2 v-if="saving" :size="16" class="spin" aria-hidden="true" />
+          <Check v-else :size="16" aria-hidden="true" /> Looks good, next gift
+        </button>
+      </template>
+    </template>
   </BaseModal>
 </template>
 
