@@ -28,6 +28,7 @@ import { api } from '@/api';
 import { toast } from '@/stores/toast';
 import { formatDate, formatDateTime, timeUntil, pluralize } from '@/utils/format';
 import { eventLink, isPast } from '@/utils/events';
+import { personName } from './helpers';
 
 const props = defineProps({
   event: { type: Object, required: true },
@@ -40,6 +41,7 @@ const loadError = ref('');
 const appCounts = ref(null); // { pending, accepted, rejected, withdrawn }
 const matchCount = ref(null);
 const subCounts = ref(null); // { total, submitted, missing, late, verified }
+const subRows = ref([]);
 const overdueCount = ref(0);
 let loadToken = 0;
 
@@ -60,6 +62,7 @@ async function loadStats() {
     appCounts.value = apps.counts || { pending: 0, accepted: 0, rejected: 0, withdrawn: 0 };
     matchCount.value = matches ? (matches.matches || []).length : null;
     subCounts.value = subs ? subs.counts : null;
+    subRows.value = subs ? subs.rows || [] : [];
     overdueCount.value = subs ? (subs.rows || []).filter((r) => r.overdue).length : 0;
   } catch (e) {
     if (token === loadToken) loadError.value = e.message;
@@ -84,11 +87,17 @@ const belowMinimum = computed(() => accepted.value < minNeeded.value);
 const signupPassed = computed(() => isPast(props.event.signupDeadline));
 const submissionPassed = computed(() => isPast(props.event.submissionDeadline));
 const missing = computed(() => subCounts.value?.missing ?? null);
+// People who would get nothing if the event were completed now
+const giftless = computed(() => subRows.value.filter((r) => !r.submission).map((r) => personName(r.match?.recipient)));
+const unverified = computed(() => subRows.value.filter((r) => r.submission && !r.submission.verified).length);
+// Revealing is the main thing to do once gifts are due or all in; before that it's chasing gifts
+const revealIsNext = computed(() => submissionPassed.value || (subCounts.value && subCounts.value.missing === 0));
 
 const tiles = computed(() => {
   const s = status.value;
   const subs = subCounts.value;
   const beforeMatching = s === 'draft' || s === 'open';
+  const giftsStarted = s === 'active' || s === 'completed';
   return [
     {
       key: 'accepted',
@@ -97,6 +106,7 @@ const tiles = computed(() => {
       value: `${accepted.value} / ${props.event.maxParticipants}`,
       sub: `Minimum ${props.event.minParticipants}`,
       tone: (s === 'open' || s === 'matching') && belowMinimum.value ? 'warning' : 'default',
+      show: true,
     },
     {
       key: 'pending',
@@ -105,6 +115,8 @@ const tiles = computed(() => {
       value: loading.value ? '…' : pending.value,
       sub: props.event.requireApproval ? 'Waiting for your decision' : 'Approval is turned off',
       tone: pending.value > 0 ? 'warning' : 'default',
+      // Only worth a tile when sign-ups are reviewed (or someone is somehow still waiting)
+      show: (s === 'open' || s === 'matching') && (props.event.requireApproval || pending.value > 0),
     },
     {
       key: 'matched',
@@ -119,6 +131,7 @@ const tiles = computed(() => {
             : 'Not generated yet'
           : 'Published',
       tone: 'default',
+      show: !beforeMatching,
     },
     {
       key: 'submitted',
@@ -127,16 +140,28 @@ const tiles = computed(() => {
       value: subs ? `${subs.submitted} / ${subs.total}` : s === 'active' || s === 'completed' ? '…' : '–',
       sub: subs ? `${pluralize(subs.missing, 'gift')} missing` : 'Once the event is active',
       tone: subs && subs.total > 0 && subs.missing === 0 ? 'success' : 'default',
+      show: giftsStarted,
     },
-    {
-      key: 'overdue',
-      label: 'Overdue',
-      icon: AlarmClock,
-      value: subs ? overdueCount.value : '–',
-      sub: subs ? 'Past the deadline, no gift yet' : 'Once the event is active',
-      tone: overdueCount.value > 0 ? 'danger' : 'default',
-    },
-  ];
+    s === 'completed'
+      ? {
+          key: 'overdue',
+          label: 'Never sent',
+          icon: AlarmClock,
+          value: subs ? subs.missing : '–',
+          sub: 'Missing at the reveal',
+          tone: subs?.missing ? 'warning' : 'default',
+          show: true,
+        }
+      : {
+          key: 'overdue',
+          label: 'Overdue',
+          icon: AlarmClock,
+          value: subs ? overdueCount.value : '–',
+          sub: 'Past the deadline, no gift yet',
+          tone: overdueCount.value > 0 ? 'danger' : 'default',
+          show: s === 'active' && submissionPassed.value,
+        },
+  ].filter((t) => t.show);
 });
 
 // ---- Status changes ----
@@ -162,7 +187,7 @@ const dialogContent = computed(() => {
       if (belowMinimum.value) {
         notes.push({
           tone: 'warning',
-          text: `You need at least ${minNeeded.value} accepted participants to generate matches, and you have ${accepted.value}. You can reopen sign-ups later.`,
+          text: `Matching needs at least ${minNeeded.value} accepted artists and you have ${accepted.value}, so you would have to reopen sign-ups before you can match anyone.`,
         });
       }
       if (pending.value > 0) {
@@ -171,9 +196,16 @@ const dialogContent = computed(() => {
           text: `${pluralize(pending.value, 'sign-up')} still ${pending.value === 1 ? 'needs' : 'need'} a decision. You can still accept or reject them while matching.`,
         });
       }
+      const autoMatching = ev.autoMatch?.enabled;
       return {
         title: 'Close sign-ups now?',
-        message: `Nobody else can sign up, and you can start matching your ${pluralize(accepted.value, 'accepted artist')}.`,
+        message: belowMinimum.value
+          ? 'Nobody else will be able to sign up.'
+          : `Nobody else will be able to sign up. ${
+              autoMatching
+                ? `Matches for your ${pluralize(accepted.value, 'accepted artist')} are then made automatically.`
+                : `Then you can make matches for your ${pluralize(accepted.value, 'accepted artist')}.`
+            }`,
         notes,
         confirmLabel: 'Close sign-ups',
         status: 'matching',
@@ -222,10 +254,25 @@ const dialogContent = computed(() => {
             ? `${subs.missing} of ${pluralize(subs.total, 'gift')} ${subs.missing === 1 ? 'is' : 'are'} still missing. ${message}`
             : `All ${pluralize(subs.total, 'gift')} are in. ${message}`;
       }
+      const notes = [];
+      if (giftless.value.length) {
+        notes.push({
+          tone: 'warning',
+          text: `${giftless.value.join(', ')} ${giftless.value.length === 1 ? "won't get a gift" : "won't get gifts"}. A backup artist can make ${giftless.value.length === 1 ? 'it' : 'them'} instead.`,
+          backups: true,
+        });
+      }
+      if (unverified.value) {
+        notes.push({
+          tone: 'info',
+          text: `${pluralize(unverified.value, 'gift')} ${unverified.value === 1 ? "hasn't" : "haven't"} been verified yet and will be revealed as ${unverified.value === 1 ? 'it is' : 'they are'}.`,
+        });
+      }
+      notes.push({ tone: 'info', text: "This can't be undone. Missing gifts can't be submitted afterwards." });
       return {
         title: 'Complete the event and reveal gifts?',
         message,
-        notes: [{ tone: 'info', text: "This can't be undone. Missing gifts can't be submitted afterwards." }],
+        notes,
         confirmLabel: 'Complete & reveal',
         danger: Boolean(subs?.missing),
         status: 'completed',
@@ -278,7 +325,7 @@ const reminderOpen = ref(false);
       <button type="button" class="btn btn-outline btn-xs" @click="loadStats">Try again</button>
     </p>
 
-    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3" :class="tiles.length > 3 ? 'lg:grid-cols-4' : ''">
       <StatTile
         v-for="tile in tiles"
         :key="tile.key"
@@ -394,11 +441,32 @@ const reminderOpen = ref(false);
             </template>
             <template v-if="subCounts"> {{ subCounts.submitted }} of {{ subCounts.total }} submitted so far.</template>
           </p>
+          <p v-if="giftless.length && submissionPassed" class="alert alert-warning mt-4 mb-0">
+            {{ pluralize(giftless.length, 'person', 'people') }} still {{ giftless.length === 1 ? 'has' : 'have' }} no gift.
+            Find a backup artist before you reveal, or they get nothing.
+          </p>
           <div class="actions">
-            <button type="button" class="btn btn-primary" @click="ask('complete')">
-              <PartyPopper :size="18" aria-hidden="true" /> Complete event &amp; reveal gifts
+            <button
+              v-if="!revealIsNext"
+              type="button"
+              class="btn btn-primary"
+              @click="reminderOpen = true"
+            >
+              <Send :size="16" aria-hidden="true" /> Send a reminder
             </button>
-            <button type="button" class="btn btn-outline" @click="reminderOpen = true">
+            <button
+              v-if="giftless.length && submissionPassed"
+              type="button"
+              class="btn btn-outline"
+              @click="emit('go', 'submissions:missing')"
+            >
+              Find backup artists
+            </button>
+            <button type="button" class="btn" :class="revealIsNext ? 'btn-primary' : 'btn-ghost'" @click="ask('complete')">
+              <PartyPopper :size="18" aria-hidden="true" />
+              {{ revealIsNext ? 'Complete event & reveal gifts' : 'Reveal early' }}
+            </button>
+            <button v-if="revealIsNext" type="button" class="btn btn-outline" @click="reminderOpen = true">
               <Send :size="16" aria-hidden="true" /> Send a reminder
             </button>
           </div>
@@ -428,14 +496,14 @@ const reminderOpen = ref(false);
             <dt>Sign-ups close</dt>
             <dd>
               <span class="date">{{ formatDateTime(event.signupDeadline) }}</span>
-              <DeadlineChip v-if="status === 'draft' || status === 'open'" :at="event.signupDeadline" label="Sign-ups close" />
+              <DeadlineChip v-if="status === 'draft' || status === 'open'" :at="event.signupDeadline" label="Closes" />
             </dd>
           </div>
           <div>
-            <dt>Submissions close</dt>
+            <dt>Gifts due</dt>
             <dd>
               <span class="date">{{ formatDateTime(event.submissionDeadline) }}</span>
-              <DeadlineChip v-if="status !== 'completed'" :at="event.submissionDeadline" label="Submissions close" />
+              <DeadlineChip v-if="status !== 'completed'" :at="event.submissionDeadline" label="Due" />
             </dd>
           </div>
           <div v-if="event.publishedAt">
@@ -469,9 +537,17 @@ const reminderOpen = ref(false);
       @cancel="closeDialog"
     >
       <div v-if="dialogContent.notes.length || dialog.error" class="flex flex-col gap-2.5">
-        <p v-for="note in dialogContent.notes" :key="note.text" class="alert m-0" :class="`alert-${note.tone}`">
-          {{ note.text }}
-        </p>
+        <div v-for="note in dialogContent.notes" :key="note.text" class="alert m-0" :class="`alert-${note.tone}`">
+          <p class="m-0">{{ note.text }}</p>
+          <button
+            v-if="note.backups && status === 'active'"
+            type="button"
+            class="btn btn-outline btn-xs mt-2"
+            @click="dialog.open = false; emit('go', 'submissions:missing')"
+          >
+            Find backup artists first <ArrowRight :size="14" aria-hidden="true" />
+          </button>
+        </div>
         <p v-if="dialog.error" class="alert alert-error m-0" role="alert">{{ dialog.error }}</p>
       </div>
     </ConfirmDialog>

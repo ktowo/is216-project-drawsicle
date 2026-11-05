@@ -20,6 +20,8 @@ import {
   ArrowRight,
   CircleAlert,
   History,
+  Rocket,
+  ChevronDown,
 } from 'lucide-vue-next';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import FormField from '@/components/ui/FormField.vue';
@@ -85,9 +87,11 @@ function blankForm() {
     requireApproval: false,
     adultOnly: false,
     publicity: 'public',
-    autoMatch: false,
+    // New events match themselves when sign-ups close and wait for the organiser to check them,
+    // so nobody has to remember to come back and press "Generate"
+    autoMatch: true,
     autoMatchMode: 'best',
-    autoMatchPublish: true,
+    autoMatchPublish: false,
   };
 }
 
@@ -589,6 +593,7 @@ async function submit() {
   if (readOnly.value || saving.value) return;
   submitError.value = null;
   if (!validate()) {
+    if (MORE_FIELDS.some((key) => errors.value[key])) showMore.value = true;
     submitError.value = { title: 'Check the highlighted fields', message: 'Some answers need fixing before you can save.' };
     return focusSummary();
   }
@@ -613,7 +618,17 @@ async function submit() {
       const data = await api('/events', { method: 'POST', body: payload });
       saved.value = true;
       clearDraft();
-      toast.success('Draft saved. Open sign-ups when you are ready.');
+      if (openAfterSave.value) {
+        try {
+          await api(`/events/${data.event.id}/status`, { method: 'POST', body: { status: 'open' } });
+          toast.success('Your event is live. Sign-ups are open!');
+        } catch (e) {
+          // The draft is saved either way; the manage page has the Open sign-ups button
+          toast.error(`Saved as a draft, but sign-ups couldn't open: ${e.message}`);
+        }
+      } else {
+        toast.success('Draft saved. Open sign-ups when you are ready.');
+      }
       router.push(eventLink(data.event, '/manage'));
     }
   } catch (e) {
@@ -824,8 +839,18 @@ function onBannerUpdated(updated) {
   if (updated) event.value = { ...event.value, ...updated };
 }
 
+// ---- More options ----
+// A new event only needs the basics, dates, people and visibility. Community links, Discord posts and
+// matching settings have good defaults, so they wait behind "More options" (always shown when editing).
+const showMore = ref(false);
+const MORE_FIELDS = ['platform', 'platformName', 'platformLink', 'discordWebhookUrl', 'autoMatch'];
+const compact = computed(() => !isEdit.value && !showMore.value);
+
+// ---- Publish straight from the form ----
+const openAfterSave = ref(false);
+
 // ---- Section nav ----
-const sections = computed(() => [
+const sectionList = computed(() => [
   { id: 'part-basics', label: 'Basics', fields: ['name', 'theme', 'season', 'description', 'rules', 'tags'] },
   { id: 'part-community', label: 'Community', fields: ['platform', 'platformName', 'platformLink'] },
   { id: 'part-dates', label: 'Dates', fields: ['signupDeadline', 'submissionDeadline'] },
@@ -838,6 +863,9 @@ const sections = computed(() => [
   { id: 'part-visibility', label: 'Visibility', fields: ['publicity'] },
   ...(isEdit.value && event.value ? [{ id: 'part-banner', label: 'Banner', fields: [] }] : []),
 ]);
+const sections = computed(() =>
+  compact.value ? sectionList.value.filter((s) => s.id !== 'part-community' && s.id !== 'part-matching') : sectionList.value
+);
 const currentSection = ref('part-basics');
 
 const sectionHasError = (section) => section.fields.some((key) => errors.value[key]);
@@ -934,7 +962,7 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
     <template v-else-if="step === 'template'">
       <PageHeader
         title="Create an event"
-        subtitle="Pick a starting point. Everything it fills in can be changed before you save, and the event stays a private draft until you open sign-ups."
+        subtitle="Pick a starting point. Everything it fills in can be changed before you publish."
         back="/my-events"
         back-label="My events"
       />
@@ -1002,7 +1030,7 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
         :subtitle="
           isEdit
             ? event?.name || ''
-            : 'Set up the basics now. It stays a private draft until you open sign-ups from the manage page.'
+            : 'Fill in the basics, then publish to open sign-ups. Not ready yet? Save it as a draft only you can see.'
         "
         :back="backLink"
         :back-label="isEdit ? 'Back to manage' : 'My events'"
@@ -1066,10 +1094,29 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
               </li>
             </ul>
             <div v-if="!readOnly" class="aside-save">
-              <button type="submit" form="event-form" class="btn btn-primary btn-sm btn-block" :disabled="saving">
-                <Loader2 v-if="saving" :size="16" class="spin" aria-hidden="true" />
+              <button
+                v-if="!isEdit"
+                type="submit"
+                form="event-form"
+                class="btn btn-primary btn-sm btn-block"
+                :disabled="saving"
+                @click="openAfterSave = true"
+              >
+                <Loader2 v-if="saving && openAfterSave" :size="16" class="spin" aria-hidden="true" />
+                <Rocket v-else :size="16" aria-hidden="true" />
+                Publish &amp; open sign-ups
+              </button>
+              <button
+                type="submit"
+                form="event-form"
+                class="btn btn-sm btn-block"
+                :class="isEdit ? 'btn-primary' : 'btn-outline'"
+                :disabled="saving"
+                @click="openAfterSave = false"
+              >
+                <Loader2 v-if="saving && !openAfterSave" :size="16" class="spin" aria-hidden="true" />
                 <Save v-else :size="16" aria-hidden="true" />
-                {{ saving ? 'Saving…' : isEdit ? 'Save changes' : 'Save draft' }}
+                {{ saving && !openAfterSave ? 'Saving…' : isEdit ? 'Save changes' : 'Save as draft' }}
               </button>
               <p class="hint m-0 text-center">{{ saveNote }}</p>
             </div>
@@ -1231,7 +1278,7 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
             </section>
 
             <!-- Community -->
-            <section id="part-community" class="card section" aria-labelledby="sec-community">
+            <section v-show="!compact" id="part-community" class="card section" aria-labelledby="sec-community">
               <h2 id="sec-community" class="section-title" tabindex="-1">Community</h2>
               <p class="hint section-hint">Where your participants hang out, so they know where to find each other.</p>
 
@@ -1523,7 +1570,7 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
             </section>
 
             <!-- Matching -->
-            <section id="part-matching" class="card section" aria-labelledby="sec-matching">
+            <section v-show="!compact" id="part-matching" class="card section" aria-labelledby="sec-matching">
               <h2 id="sec-matching" class="section-title" tabindex="-1">Matching</h2>
               <p class="hint section-hint">You can always make, check and publish matches yourself from the manage page.</p>
               <div class="toggle-row">
@@ -1577,7 +1624,7 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
             <section id="part-visibility" class="card section" aria-labelledby="sec-visibility">
               <h2 id="sec-visibility" class="section-title" tabindex="-1">Who can see it</h2>
               <p class="hint section-hint">
-                {{ lockedHint || 'New events start as a draft that only organisers can see, whichever you pick here.' }}
+                {{ lockedHint || 'Who can find and join the event once sign-ups are open.' }}
               </p>
 
               <div class="publicity" role="radiogroup" aria-labelledby="sec-visibility">
@@ -1616,6 +1663,23 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
               </div>
               <p v-if="errors.publicity" class="field-error m-0 mt-2" role="alert">{{ errors.publicity }}</p>
             </section>
+
+            <button
+              v-if="!isEdit"
+              type="button"
+              class="card more-options"
+              :aria-expanded="showMore ? 'true' : 'false'"
+              @click="showMore = !showMore"
+            >
+              <span class="min-w-0 flex-1 text-left">
+                <span class="block font-bold">{{ showMore ? 'Fewer options' : 'More options' }}</span>
+                <span class="block text-sm text-cocoa">
+                  Community links, Discord announcements and how matching works. The defaults are fine for most
+                  exchanges: matches are made when sign-ups close, and you check them before anyone is told.
+                </span>
+              </span>
+              <ChevronDown :size="18" :class="{ 'rotate-180': showMore }" aria-hidden="true" />
+            </button>
           </fieldset>
 
           <EventPreview class="preview block lg:hidden" :preview-event="previewEvent" :preview-facts="previewFacts" :form="form"/>
@@ -1631,10 +1695,21 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
           </p>
 
           <div v-if="!readOnly" class="form-actions">
-            <button type="submit" class="btn btn-primary submit" :disabled="saving">
-              <Loader2 v-if="saving" :size="18" class="spin" aria-hidden="true" />
+            <button v-if="!isEdit" type="submit" class="btn btn-primary submit" :disabled="saving" @click="openAfterSave = true">
+              <Loader2 v-if="saving && openAfterSave" :size="18" class="spin" aria-hidden="true" />
+              <Rocket v-else :size="18" aria-hidden="true" />
+              Publish &amp; open sign-ups
+            </button>
+            <button
+              type="submit"
+              class="btn submit"
+              :class="isEdit ? 'btn-primary' : 'btn-outline'"
+              :disabled="saving"
+              @click="openAfterSave = false"
+            >
+              <Loader2 v-if="saving && !openAfterSave" :size="18" class="spin" aria-hidden="true" />
               <Save v-else :size="18" aria-hidden="true" />
-              {{ saving ? 'Saving…' : isEdit ? 'Save changes' : 'Save draft' }}
+              {{ saving && !openAfterSave ? 'Saving…' : isEdit ? 'Save changes' : 'Save as draft' }}
             </button>
             <button type="button" class="btn btn-ghost" :disabled="saving" @click="cancel">Cancel</button>
             <span v-if="dirty" class="hint unsaved" aria-live="polite">{{ saveNote }}</span>
@@ -1649,6 +1724,27 @@ const backLink = computed(() => (isEdit.value && event.value ? eventLink(event.v
 </template>
 
 <style scoped>
+.more-options {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 16px 20px;
+  border-style: dashed;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+.more-options:hover {
+  border-color: var(--pink);
+}
+.more-options:focus-visible {
+  outline: 3px solid var(--pink);
+  outline-offset: 2px;
+}
+.aside-save .btn + .btn {
+  margin-top: 8px;
+}
 .discord-test {
   align-self: flex-start;
   margin-top: 8px;
