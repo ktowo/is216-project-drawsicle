@@ -6,6 +6,8 @@ import PageHeader from '@/components/ui/PageHeader.vue';
 import FormField from '@/components/ui/FormField.vue';
 import ChoiceChips from '@/components/ui/ChoiceChips.vue';
 import TagInput from '@/components/ui/TagInput.vue';
+import TextSuggestions from '@/components/ui/TextSuggestions.vue';
+import { LIKE_IDEAS, AVOID_IDEAS } from '@/utils/characters';
 import UserAvatar from '@/components/UserAvatar.vue';
 import ProfileHeader from '@/components/profile/ProfileHeader.vue';
 import ArtistTagsEditor from '@/components/profile/ArtistTagsEditor.vue';
@@ -617,6 +619,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
                 :aria-describedby="describedby"
               />
             </div>
+            <TextSuggestions v-model="defaults.likes" :options="LIKE_IDEAS" :max="LIMITS.formText" />
           </template>
         </FormField>
         <FormField label="Things to avoid" :for-id="DEFAULT_IDS.avoid" :error="defaultsErrors.avoid">
@@ -636,6 +639,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
                 :aria-describedby="describedby"
               />
             </div>
+            <TextSuggestions v-model="defaults.avoid" :options="AVOID_IDEAS" :max="LIMITS.formText" />
           </template>
         </FormField>
       </div>
@@ -679,6 +683,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
             :id="DEFAULT_IDS.cannotDraw"
             v-model="defaults.cannotDraw"
             :max="LIMITS.tags"
+            :load-suggestion="true"
             placeholder="Type and press Enter"
             :aria-describedby="describedby"
           />

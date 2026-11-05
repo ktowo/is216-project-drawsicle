@@ -3,6 +3,7 @@ import { ref, computed, useId, onMounted } from 'vue';
 import { X, Plus } from 'lucide-vue-next';
 import { normalizeTag } from '@shared/constants.mjs';
 import { TAG_SUGGESTIONS } from '@/utils/characters';
+import { api } from '@/api';
 
 // Chips input for short tags. Enter or comma adds, Backspace on an empty input removes the last one.
 // Tags are normalised (lowercase, trimmed) and de-duplicated.
@@ -10,6 +11,9 @@ const props = defineProps({
   modelValue: { type: Array, default: () => [] },
   placeholder: { type: String, default: 'Type and press Enter' },
   max: { type: Number, default: 20 },
+  // Fixed suggestions to show under the input (the event form passes its own)
+  suggestions: { type: Array, default: () => [] },
+  // Also suggest the person's own character tags, then the common character tags
   loadSuggestion: { type: Boolean, default: false },
   id: { type: String, default: '' },
   disabled: { type: Boolean, default: false },
@@ -38,7 +42,10 @@ async function loadOwnTags() {
   }
 }
 
-const suggestions = ref([]);
+// Own tags first (once they've loaded), then the fixed ones
+const suggestions = computed(() =>
+  props.loadSuggestion ? [...new Set([...ownTags.value, ...props.suggestions, ...TAG_SUGGESTIONS])] : props.suggestions
+);
 
 const visibleSuggestions = computed(() => {
   const typed = normalizeTag(text.value);
@@ -123,11 +130,8 @@ function pickSuggestion(tag) {
 }
 
 onMounted(() => {
-  if (props.loadSuggestion) {
-    suggestions.value = [...new Set([...ownTags.value, ...TAG_SUGGESTIONS])];
-    loadOwnTags();
-  }
-})
+  if (props.loadSuggestion) loadOwnTags();
+});
 
 </script>
 
