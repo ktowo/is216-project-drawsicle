@@ -13,6 +13,7 @@ import {
   Check,
   Pencil,
   History,
+  ScrollText
 } from 'lucide-vue-next';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import FormField from '@/components/ui/FormField.vue';
@@ -70,6 +71,7 @@ const selectedIds = ref([]);
 // Asking for adoptables: show the adopt wishlist
 const wantsAdopts = computed(() => form.wantsTypes.includes('adoptable'));
 const newCharacters = ref([]);
+const readAboutRules = ref(false);
 
 const errors = ref({});
 const newErrors = ref([]);
@@ -91,7 +93,7 @@ const STEPS = [
 ];
 const REVIEW = STEPS.length - 1;
 // Which step each answer is on, for sending people back to fix it
-const STEP_OF = { communityUsername: 0, canCreate: 0, wantsTypes: 0, characters: 1, likes: 2, adoptWishlist: 2, avoid: 2, cannotDraw: 2, notes: 2 };
+const STEP_OF = { communityUsername: 0, canCreate: 0, wantsTypes: 0, characters: 1, readAboutRules: 2, likes: 2, adoptWishlist: 2, avoid: 2, cannotDraw: 2, notes: 2 };
 
 const step = ref(0);
 const reached = ref(0); // furthest step opened so far; the indicator lets you jump back to any of them
@@ -289,6 +291,12 @@ function validate() {
   if (form.cannotDraw.length > LIMITS.tags) e.cannotDraw = `Up to ${LIMITS.tags} tags.`;
   if (event.value.adultOnly && !existing.value && !form.confirmAdult) {
     e.confirmAdult = "This event is for adults. Confirm you're 18 or older to sign up.";
+  }
+
+  // In preferences page and after, make sure participants read about the event and its rules
+  console.log(step.value, readAboutRules.value)
+  if (step.value >= 2 && !readAboutRules.value) {
+    e.readAboutRules = "Please read about the event and its rules, then check the box."
   }
 
   errors.value = e;
@@ -497,10 +505,11 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
     <template v-else-if="event">
       <PageHeader
         :title="existing ? 'Edit your sign-up' : 'Sign up'"
-        :subtitle="event.name"
+        :subtitle="[event.name, event.season, event.theme].join(' ・ ')"
         :back="backTo"
         back-label="Back to event"
       >
+        
         <div class="header-chips">
           <StatusBadge v-if="existing" kind="application" :status="application.status" />
           <DeadlineChip v-if="event.status === 'open'" :at="event.signupDeadline" label="Sign-ups close" />
@@ -631,6 +640,25 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
         </section>
 
         <div v-show="step === 2" class="step-panel">
+          <section class="card section" aria-labelledby="step-heading-bef2">
+            <h2 id="step-heading-bef2" class="section-title" tabindex="-1">About Event</h2>
+            <p class="pb-4">{{ event.description }}</p>
+            
+            <h2 class="section-title" tabindex="-1">
+              <ScrollText :size="22" class="title-icon" aria-hidden="true" /> Rules
+            </h2>
+            <p class="pb-1">{{ event.rules }}</p>
+
+            <FormField :error="errors.readAboutRules">
+              <label class="check">
+                <input aria-labelledby="read-declaration" v-model="readAboutRules" type="checkbox" />
+                <span>
+                  <strong id="read-declaration">I have read about the event and its rules.</strong>
+                </span>
+              </label>
+            </FormField>
+          </section>
+
           <section class="card section" aria-labelledby="step-heading-2">
             <h2 id="step-heading-2" class="section-title" tabindex="-1">Your preferences</h2>
             <FormField
@@ -692,6 +720,7 @@ const counter = (value) => `${value.trim().length} / ${LIMITS.formText}`;
                 id="apply-cannot-draw"
                 v-model="form.cannotDraw"
                 :max="LIMITS.tags"
+                :load-suggestion="true"
                 placeholder="Add a species or tag"
               />
             </FormField>

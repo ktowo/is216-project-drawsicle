@@ -56,6 +56,7 @@ test.describe('Sign-up form', () => {
     await tick(page.getByRole('checkbox', { name: /Fennec/ }));
     await page.getByRole('button', { name: /Next: Preferences/ }).click();
     await page.getByLabel('What would you love to get?').fill('Cosy winter scenes');
+    await page.getByRole('checkbox', {name: /read about/i}).check()
     await page.getByRole('button', { name: /Next: Review and send/ }).click();
 
     // Everything typed so far is on the summary
@@ -108,4 +109,30 @@ test.describe('Sign-up form', () => {
     await expect(page.getByText('You started filling this in earlier')).toBeHidden();
     await expect(page.getByLabel(/Your username on/)).not.toHaveValue('kit#old');
   });
+
+  test('must read the about and rules, check the box, before moving to "Review"', async ({ page }) => {
+    await openSignUp(page);
+
+    // Fill the form from "About you" to "Preferences", except checking the declaration box.
+    await tick(typeGroup(page, /What can you make/).getByRole('checkbox', { name: 'Art' }));
+    await tick(typeGroup(page, /What would you like to receive/).getByRole('checkbox', { name: 'Art' }));
+    await page.getByRole('button', { name: /Next: Characters/ }).click();
+    await tick(page.getByRole('checkbox', { name: /Fennec/ }));
+    await page.getByRole('button', { name: /Next: Preferences/ }).click();
+    await page.getByLabel('What would you love to get?').fill('Cosy winter scenes');
+
+    // It doesn't allow moving to the next page.
+    await page.getByRole('button', { name: /Next: Review/ }).click();
+    await expect(page.getByRole('region', { name: /About Event/ }).locator('.field-error')).toBeVisible();
+
+    // Read about the event and its rules.
+    await page.getByRole('heading', { name: 'About Event' }).click();
+    await page.getByRole('heading', { name: 'Rules' }).click();
+
+    // Check the box, and check if it moves to the next page.
+    await page.getByRole('checkbox', {name: /read about/i}).check()
+    await page.getByRole('button', { name: 'Next: Review and send' }).click();
+    await expect(page.getByRole('heading', { name: 'Review and send' })).toBeVisible();
+
+  })
 });

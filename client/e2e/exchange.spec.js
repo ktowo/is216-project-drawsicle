@@ -18,6 +18,7 @@ test('from sign-up to the reveal', async ({ page }) => {
   await page.getByRole('button', { name: /Next: Characters/ }).click();
   await tick(page.getByRole('checkbox', { name: /Fennec/ }));
   await page.getByRole('button', { name: /Next: Preferences/ }).click();
+  await page.getByRole('checkbox', {name: /read about/i}).check()
   await page.getByRole('button', { name: /Next: Review and send/ }).click();
   await page.getByRole('button', { name: 'Send sign-up' }).click();
   await expect(page.getByText(/signed up|Sign-up sent|You're in/i).first()).toBeVisible();
