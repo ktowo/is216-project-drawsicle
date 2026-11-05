@@ -49,7 +49,7 @@ test('from sign-up to the reveal', async ({ page }) => {
   // Mika reveals the gifts
   await switchTo(page, 'mika');
   await page.goto(eventUrl.replace(/\/?$/, '/manage'));
-  await page.getByRole('button', { name: /Complete event & reveal gifts/ }).click();
+  await page.getByRole('button', { name: /Reveal early/ }).click();
   await confirm(page, 'Complete & reveal');
 
   // The reveal: Kit's gift is there, wrapped until someone opens it
